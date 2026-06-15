@@ -39,6 +39,12 @@ export interface IEstimate extends Omit<IEstimateType, "points"> {
     projectId: string,
     payload: Partial<IEstimatePointType>
   ) => Promise<IEstimatePointType | undefined>;
+  deleteEstimatePoint: (
+    workspaceSlug: string,
+    projectId: string,
+    estimatePointId: string,
+    payload?: { new_estimate_id?: string | null }
+  ) => Promise<IEstimatePointType[] | undefined>;
 }
 
 export class Estimate implements IEstimate {
@@ -83,6 +89,7 @@ export class Estimate implements IEstimate {
       estimatePointIds: computed,
       // actions
       creteEstimatePoint: action,
+      deleteEstimatePoint: action,
     });
     this.id = this.data.id;
     this.name = this.data.name;
@@ -157,5 +164,49 @@ export class Estimate implements IEstimate {
         }
       });
     }
+
+    return estimatePoint;
+  };
+
+  /**
+   * @description delete an estimate point
+   * @param { string } workspaceSlug
+   * @param { string } projectId
+   * @param { string } estimatePointId
+   * @param { { new_estimate_id?: string | null } } payload
+   * @returns { IEstimatePointType[] | undefined }
+   */
+  deleteEstimatePoint = async (
+    workspaceSlug: string,
+    projectId: string,
+    estimatePointId: string,
+    payload?: { new_estimate_id?: string | null }
+  ): Promise<IEstimatePointType[] | undefined> => {
+    if (!this.id || !estimatePointId) return undefined;
+
+    const estimatePoints = await estimateService.deleteEstimatePoint(
+      workspaceSlug,
+      projectId,
+      this.id,
+      estimatePointId,
+      payload
+    );
+
+    runInAction(() => {
+      delete this.estimatePoints[estimatePointId];
+
+      if (estimatePoints?.length) {
+        estimatePoints.forEach((estimatePoint) => {
+          if (estimatePoint.id && this.estimatePoints[estimatePoint.id]) {
+            this.estimatePoints[estimatePoint.id].updateEstimatePointObject({
+              key: estimatePoint.key,
+              value: estimatePoint.value,
+            });
+          }
+        });
+      }
+    });
+
+    return estimatePoints;
   };
 }

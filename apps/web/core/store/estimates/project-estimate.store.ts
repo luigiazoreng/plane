@@ -50,6 +50,12 @@ export interface IProjectEstimateStore {
     projectId: string,
     data: IEstimateFormData
   ) => Promise<IEstimateType | undefined>;
+  updateEstimate: (
+    workspaceSlug: string,
+    projectId: string,
+    estimateId: string,
+    data: IEstimateFormData
+  ) => Promise<IEstimateType | undefined>;
   deleteEstimate: (workspaceSlug: string, projectId: string, estimateId: string) => Promise<void>;
 }
 
@@ -75,6 +81,7 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
       getProjectEstimates: action,
       getEstimateById: action,
       createEstimate: action,
+      updateEstimate: action,
       deleteEstimate: action,
     });
   }
@@ -293,6 +300,45 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
       this.error = {
         status: "error",
         message: "Error creating estimate",
+      };
+      throw error;
+    }
+  };
+
+  /**
+   * @description update an estimate for a project
+   * @param { string } workspaceSlug
+   * @param { string } projectId
+   * @param { string } estimateId
+   * @param { IEstimateFormData } payload
+   * @returns
+   */
+  updateEstimate = async (
+    workspaceSlug: string,
+    projectId: string,
+    estimateId: string,
+    payload: IEstimateFormData
+  ): Promise<IEstimateType | undefined> => {
+    try {
+      this.error = undefined;
+
+      const estimate = await estimateService.updateEstimate(workspaceSlug, projectId, estimateId, payload);
+      if (estimate?.id) {
+        const updatedEstimateId = estimate.id;
+        runInAction(() => {
+          set(
+            this.estimates,
+            [updatedEstimateId],
+            new Estimate(this.store, { ...estimate, type: estimate.type?.toLowerCase() as TEstimateSystemKeys })
+          );
+        });
+      }
+
+      return estimate;
+    } catch (error) {
+      this.error = {
+        status: "error",
+        message: "Error updating estimate",
       };
       throw error;
     }

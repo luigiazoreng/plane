@@ -72,6 +72,23 @@ export class EstimateService extends APIService {
     }
   }
 
+  async updateEstimate(
+    workspaceSlug: string,
+    projectId: string,
+    estimateId: string,
+    payload: IEstimateFormData
+  ): Promise<IEstimate | undefined> {
+    try {
+      const { data } = await this.patch(
+        `/api/workspaces/${workspaceSlug}/projects/${projectId}/estimates/${estimateId}/`,
+        payload
+      );
+      return data || undefined;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   async createEstimatePoint(
     workspaceSlug: string,
     projectId: string,
@@ -98,6 +115,24 @@ export class EstimateService extends APIService {
   ): Promise<IEstimatePoint | undefined> {
     try {
       const { data } = await this.patch(
+        `/api/workspaces/${workspaceSlug}/projects/${projectId}/estimates/${estimateId}/estimate-points/${estimatePointId}/`,
+        payload
+      );
+      return data || undefined;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async deleteEstimatePoint(
+    workspaceSlug: string,
+    projectId: string,
+    estimateId: string,
+    estimatePointId: string,
+    payload?: { new_estimate_id?: string | null }
+  ): Promise<IEstimatePoint[] | undefined> {
+    try {
+      const { data } = await this.delete(
         `/api/workspaces/${workspaceSlug}/projects/${projectId}/estimates/${estimateId}/estimate-points/${estimatePointId}/`,
         payload
       );

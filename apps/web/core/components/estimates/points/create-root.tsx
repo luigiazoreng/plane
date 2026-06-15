@@ -161,6 +161,9 @@ export const EstimatePointCreateRoot = observer(function EstimatePointCreateRoot
             handleEstimatePointValue={(estimatePointValue: string) =>
               handleEstimatePoint("add", { ...estimatePoint, value: estimatePointValue })
             }
+            handleEstimatePointCreateSuccess={(createdEstimatePoint) =>
+              handleEstimatePoint("add", createdEstimatePoint)
+            }
             closeCallBack={() => handleEstimatePointCreate("remove", estimatePoint)}
             handleCreateCallback={() => estimatePointCreate.length === 1 && handleCreate()}
             estimatePointError={estimatePointError?.[estimatePoint.key] || undefined}
