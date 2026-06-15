@@ -6,10 +6,7 @@
 
 import { observer } from "mobx-react";
 import { AlertOctagon, BarChart4, CircleDashed, Folder, Microscope } from "lucide-react";
-// plane imports
-import { MARKETING_PRICING_PAGE_LINK } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
-import { getButtonStyling } from "@plane/propel/button";
 import { SearchIcon } from "@plane/propel/icons";
 import { ContentWrapper } from "@plane/ui";
 import { cn } from "@plane/utils";
@@ -20,8 +17,6 @@ import ctaR1Dark from "@/app/assets/workspace-active-cycles/cta-r-1-dark.webp?ur
 import ctaR1Light from "@/app/assets/workspace-active-cycles/cta-r-1-light.webp?url";
 import ctaR2Dark from "@/app/assets/workspace-active-cycles/cta-r-2-dark.webp?url";
 import ctaR2Light from "@/app/assets/workspace-active-cycles/cta-r-2-light.webp?url";
-// components
-import { ProIcon } from "@/components/common/pro-icon";
 // hooks
 import { useUser } from "@/hooks/store/user";
 
@@ -90,17 +85,7 @@ export const WorkspaceActiveCyclesUpgrade = observer(function WorkspaceActiveCyc
             <h2 className="text-20 font-semibold">{t("on_demand_snapshots_of_all_your_cycles")}</h2>
             <p className="text-14 font-medium text-tertiary">{t("active_cycles_description")}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <a
-              className={`${getButtonStyling("primary", "base")} cursor-pointer`}
-              href={MARKETING_PRICING_PAGE_LINK}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <ProIcon className="h-3.5 w-3.5 text-on-color" />
-              {t("upgrade")}
-            </a>
-          </div>
+          <p className="max-w-80 text-13 text-tertiary">{t("active_cycles_description")}</p>
           <span className="absolute top-0 left-0">
             <img
               src={isDarkMode ? ctaL1Dark : ctaL1Light}

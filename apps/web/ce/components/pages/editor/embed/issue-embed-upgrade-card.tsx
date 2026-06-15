@@ -4,13 +4,22 @@
  * See the LICENSE file for details.
  */
 
-// plane imports
-import { getButtonStyling } from "@plane/propel/button";
+import Link from "next/link";
 import { cn } from "@plane/utils";
-// components
-import { ProIcon } from "@/components/common/pro-icon";
 
-export function IssueEmbedUpgradeCard(props: any) {
+type Props = {
+  issueId?: string;
+  projectId?: string;
+  workspaceSlug?: string;
+  selected?: boolean;
+};
+
+export function IssueEmbedUpgradeCard(props: Props) {
+  const { issueId, projectId, workspaceSlug } = props;
+  const issueLabel = issueId || "Work item";
+  const href =
+    workspaceSlug && projectId && issueId ? `/${workspaceSlug}/projects/${projectId}/issues/${issueId}` : undefined;
+
   return (
     <div
       className={cn(
@@ -21,19 +30,16 @@ export function IssueEmbedUpgradeCard(props: any) {
       )}
     >
       <div className="flex items-center gap-4">
-        <ProIcon className="size-4 flex-shrink-0" />
+        <div className="size-2 rounded-full bg-accent-primary" />
         <p className="!text-14 text-secondary">
-          Embed and access issues in pages seamlessly, upgrade to Plane Pro now.
+          Embedded work item: <span className="font-medium text-primary">{issueLabel}</span>
         </p>
       </div>
-      <a
-        href="https://plane.so/pro"
-        target="_blank"
-        rel="noopener noreferrer"
-        className={cn(getButtonStyling("primary", "base"), "no-underline")}
-      >
-        Upgrade
-      </a>
+      {href ? (
+        <Link href={href} className="text-13 font-medium text-accent-primary hover:underline">
+          Open
+        </Link>
+      ) : null}
     </div>
   );
 }
