@@ -33,22 +33,27 @@ class S3Storage(S3Boto3Storage):
         self.aws_region = os.environ.get("AWS_REGION")
         # Use the AWS_S3_ENDPOINT_URL environment variable for the endpoint URL
         self.aws_s3_endpoint_url = os.environ.get("AWS_S3_ENDPOINT_URL") or os.environ.get("MINIO_ENDPOINT_URL")
+        self.aws_s3_public_endpoint_url = (
+            os.environ.get("AWS_S3_PUBLIC_ENDPOINT_URL")
+            or os.environ.get("MINIO_PUBLIC_ENDPOINT_URL")
+            or self.aws_s3_endpoint_url
+        )
         # Use the SIGNED_URL_EXPIRATION environment variable for the expiration time (default: 3600 seconds)
         self.signed_url_expiration = int(os.environ.get("SIGNED_URL_EXPIRATION", "3600"))
 
         if os.environ.get("USE_MINIO") == "1":
-            # Determine protocol based on environment variable
-            if os.environ.get("MINIO_ENDPOINT_SSL") == "1":
-                endpoint_protocol = "https"
-            else:
-                endpoint_protocol = request.scheme if request else "http"
+            endpoint_url = self.aws_s3_endpoint_url
+
+            # For browser uploads we need a URL reachable from the client, not the API host.
+            if request is not None:
+                endpoint_url = self.aws_s3_public_endpoint_url
             # Create an S3 client for MinIO
             self.s3_client = boto3.client(
                 "s3",
                 aws_access_key_id=self.aws_access_key_id,
                 aws_secret_access_key=self.aws_secret_access_key,
                 region_name=self.aws_region,
-                endpoint_url=(f"{endpoint_protocol}://{request.get_host()}" if request else self.aws_s3_endpoint_url),
+                endpoint_url=endpoint_url,
                 config=boto3.session.Config(signature_version="s3v4"),
             )
         else:

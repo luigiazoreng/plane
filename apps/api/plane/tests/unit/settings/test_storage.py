@@ -204,3 +204,31 @@ class TestS3StorageSignedURLExpiration:
         mock_s3_client.generate_presigned_url.assert_called_once()
         call_kwargs = mock_s3_client.generate_presigned_url.call_args[1]
         assert call_kwargs["ExpiresIn"] == 120
+
+    @patch.dict(
+        os.environ,
+        {
+            "USE_MINIO": "1",
+            "AWS_ACCESS_KEY_ID": "test-key",
+            "AWS_SECRET_ACCESS_KEY": "test-secret",
+            "AWS_S3_BUCKET_NAME": "test-bucket",
+            "AWS_REGION": "us-east-1",
+            "AWS_S3_ENDPOINT_URL": "http://plane-minio:9000",
+            "AWS_S3_PUBLIC_ENDPOINT_URL": "http://127.0.0.1:9000",
+        },
+        clear=True,
+    )
+    @patch("plane.settings.storage.boto3")
+    def test_minio_request_uses_public_endpoint(self, mock_boto3):
+        """Test that browser-facing presigned URLs use the public MinIO endpoint"""
+        mock_s3_client = Mock()
+        mock_boto3.client.return_value = mock_s3_client
+
+        request = Mock()
+        request.scheme = "http"
+        request.get_host.return_value = "127.0.0.1:8000"
+
+        S3Storage(request=request)
+
+        call_kwargs = mock_boto3.client.call_args[1]
+        assert call_kwargs["endpoint_url"] == "http://127.0.0.1:9000"
