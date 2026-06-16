@@ -9,8 +9,11 @@
 import React, { useEffect, useState } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
-import { Headset } from "lucide-react";
+import { Headset, Globe, MessageSquare, Clock, Plus, ExternalLink } from "lucide-react";
 import { Header } from "@plane/ui";
+import { Button } from "@plane/propel/button";
+import { Switch } from "@plane/propel/switch";
+import { Badge } from "@plane/propel/badge";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 
 const HelpdeskPage = observer(() => {
@@ -34,111 +37,198 @@ const HelpdeskPage = observer(() => {
   const portals = Array.isArray(rawPortals) ? rawPortals : [];
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div className="flex h-full w-full flex-col bg-surface-1">
       <Header>
         <div className="flex items-center gap-2">
-          <Headset className="size-5" />
-          <h3 className="text-lg font-semibold">Helpdesk</h3>
+          <div className="bg-primary/10 flex h-6 w-6 items-center justify-center rounded text-primary">
+            <Headset className="size-4" />
+          </div>
+          <h3 className="text-sm text-text-100 font-semibold">Helpdesk</h3>
         </div>
       </Header>
 
-      <div className="flex-1 overflow-y-auto bg-surface-1 p-6">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Helpdesk Dashboard</h1>
-            <p className="text-sm text-tertiary">Manage incoming customer requests and support tickets.</p>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl text-text-100 font-bold">Helpdesk Dashboard</h1>
+              <p className="text-sm text-text-400 mt-1">Manage incoming customer requests and support tickets.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const wSlug = workspaceSlug?.toString();
+                  const pId = projectId?.toString();
+                  if (wSlug && pId) {
+                    helpdeskStore.portals[`${wSlug}_${pId}`] = [
+                      {
+                        id: "p1",
+                        public_slug: "suporte-growatt",
+                        require_login: false,
+                        enable_chat: true,
+                        project_id: pId,
+                      } as any,
+                    ];
+                    helpdeskStore.requests[`${wSlug}_${pId}`] = [
+                      {
+                        id: "req1",
+                        title: "Inversor não liga",
+                        status: "open",
+                        source: "public_form",
+                        created_at: new Date().toISOString(),
+                        project_id: pId,
+                      } as any,
+                      {
+                        id: "req2",
+                        title: "Dúvida sobre configuração WiFi",
+                        status: "waiting",
+                        source: "internal_form",
+                        created_at: new Date(Date.now() - 86400000).toISOString(),
+                        project_id: pId,
+                      } as any,
+                    ];
+                  }
+                }}
+              >
+                Mock Test Data
+              </Button>
+              <Button variant="primary" prependIcon={<Plus className="size-4" />}>
+                New Portal
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {loading ? (
-          <div className="flex h-40 items-center justify-center">
-            <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Active Portals Section */}
-            <section className="rounded-lg border border-subtle bg-surface-2 p-6">
-              <h2 className="text-lg mb-4 font-semibold">Active Portals</h2>
-              {portals.length === 0 ? (
-                <p className="text-sm text-tertiary">No public portals active.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {portals.map((portal) => (
-                    <div
-                      key={portal.id}
-                      className="flex flex-col justify-between rounded border border-subtle bg-surface-1 p-4"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">Public Slug: {portal.public_slug}</p>
-                        <p className="text-xs mt-1 text-tertiary">
-                          Requires Login: {portal.require_login ? "Yes" : "No"}
-                        </p>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between border-t border-subtle pt-3">
-                        <span className="text-xs font-medium text-secondary">Customer Chat</span>
-                        <button
-                          onClick={() => {
-                            if (workspaceSlug && projectId) {
-                              helpdeskStore.updatePortal(workspaceSlug.toString(), projectId.toString(), portal.id, {
-                                enable_chat: !portal.enable_chat,
-                              });
-                            }
-                          }}
-                          className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${portal.enable_chat ? "bg-primary" : "bg-surface-3"}`}
-                        >
-                          <span
-                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${portal.enable_chat ? "translate-x-4" : "translate-x-1"}`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Tickets Section */}
-            <section className="rounded-lg border border-subtle bg-surface-2 p-6">
-              <h2 className="text-lg mb-4 font-semibold">Recent Requests</h2>
-              {requests.length === 0 ? (
-                <p className="text-sm text-tertiary">No tickets found.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="text-sm w-full text-left">
-                    <thead className="bg-surface-1 text-tertiary">
-                      <tr>
-                        <th className="px-4 py-2 font-medium">Title</th>
-                        <th className="px-4 py-2 font-medium">Status</th>
-                        <th className="px-4 py-2 font-medium">Source</th>
-                        <th className="px-4 py-2 font-medium">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-subtle">
-                      {requests.map((req) => (
-                        <tr
-                          key={req.id}
-                          className="cursor-pointer transition-colors hover:bg-surface-2"
-                          onClick={() =>
-                            (window.location.href = `/${workspaceSlug}/projects/${projectId}/helpdesk/${req.id}`)
-                          }
-                        >
-                          <td className="px-4 py-3 font-medium text-primary">{req.title}</td>
-                          <td className="px-4 py-3">
-                            <span className="bg-primary/10 text-xs rounded-full px-2 py-1 text-primary">
-                              {req.status}
+          {loading ? (
+            <div className="flex h-40 items-center justify-center">
+              <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {/* Active Portals Section */}
+              <section>
+                <h2 className="text-lg text-text-100 mb-4 flex items-center gap-2 font-semibold">
+                  <Globe className="text-text-400 size-5" /> Active Portals
+                </h2>
+                {portals.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-subtle py-12 text-center">
+                    <Globe className="text-text-400 mb-4 size-8" />
+                    <p className="text-sm text-text-100 font-medium">No public portals active</p>
+                    <p className="text-xs text-text-400 mt-1">Create a portal to start receiving customer tickets.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {portals.map((portal) => (
+                      <div
+                        key={portal.id}
+                        className="group shadow-sm hover:border-primary/50 hover:shadow-md flex flex-col justify-between rounded-lg border border-subtle bg-surface-2 p-5 transition-all"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-text-100 truncate font-semibold">{portal.public_slug}</h3>
+                            <a
+                              href={`/helpdesk/p/${portal.public_slug}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-text-400 transition-colors hover:text-primary"
+                            >
+                              <ExternalLink className="size-4" />
+                            </a>
+                          </div>
+                          <div className="text-xs text-text-400 mt-4 flex items-center gap-2">
+                            <span className="flex items-center gap-1">
+                              <Clock className="size-3" /> Login Required:
                             </span>
-                          </td>
-                          <td className="px-4 py-3 text-tertiary">{req.source}</td>
-                          <td className="px-4 py-3 text-tertiary">{new Date(req.created_at).toLocaleDateString()}</td>
+                            <Badge variant={portal.require_login ? "brand" : "neutral"} size="sm">
+                              {portal.require_login ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="mt-5 flex items-center justify-between border-t border-subtle pt-4">
+                          <span className="text-sm text-text-300 flex items-center gap-2 font-medium">
+                            <MessageSquare className="size-4" /> Customer Chat
+                          </span>
+                          <Switch
+                            value={portal.enable_chat}
+                            onChange={() => {
+                              if (workspaceSlug && projectId) {
+                                helpdeskStore.updatePortal(workspaceSlug.toString(), projectId.toString(), portal.id, {
+                                  enable_chat: !portal.enable_chat,
+                                });
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Tickets Section */}
+              <section>
+                <h2 className="text-lg text-text-100 mb-4 flex items-center gap-2 font-semibold">
+                  <Headset className="text-text-400 size-5" /> Recent Requests
+                </h2>
+                {requests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-subtle py-12 text-center">
+                    <MessageSquare className="text-text-400 mb-4 size-8" />
+                    <p className="text-sm text-text-100 font-medium">No tickets found</p>
+                    <p className="text-xs text-text-400 mt-1">
+                      Tickets submitted through your portals will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="shadow-sm overflow-hidden rounded-lg border border-subtle bg-surface-2">
+                    <table className="text-sm w-full text-left">
+                      <thead className="text-xs text-text-400 border-b border-subtle bg-surface-1 uppercase">
+                        <tr>
+                          <th className="tracking-wider px-6 py-4 font-medium">Title</th>
+                          <th className="tracking-wider px-6 py-4 font-medium">Status</th>
+                          <th className="tracking-wider px-6 py-4 font-medium">Source</th>
+                          <th className="tracking-wider px-6 py-4 font-medium">Created</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          </div>
-        )}
+                      </thead>
+                      <tbody className="divide-y divide-subtle">
+                        {requests.map((req) => (
+                          <tr
+                            key={req.id}
+                            className="group cursor-pointer transition-colors hover:bg-surface-1"
+                            onClick={() =>
+                              (window.location.href = `/${workspaceSlug}/projects/${projectId}/helpdesk/${req.id}`)
+                            }
+                          >
+                            <td className="text-text-100 px-6 py-4 font-medium transition-colors group-hover:text-primary">
+                              {req.title}
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge
+                                variant={
+                                  req.status === "open" ? "warning" : req.status === "waiting" ? "brand" : "success"
+                                }
+                                size="sm"
+                              >
+                                {req.status.replace("_", " ")}
+                              </Badge>
+                            </td>
+                            <td className="text-text-400 px-6 py-4 capitalize">{req.source}</td>
+                            <td className="text-text-400 px-6 py-4">
+                              {new Date(req.created_at).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
