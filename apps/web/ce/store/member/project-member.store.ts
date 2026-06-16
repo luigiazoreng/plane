@@ -8,19 +8,13 @@ import { computedFn } from "mobx-utils";
 import type { EUserProjectRoles } from "@plane/types";
 // plane imports
 // plane web imports
-import type { RootStore } from "@/plane-web/store/root.store";
-// store
-import type { IMemberRootStore } from "@/store/member";
+
 import type { IBaseProjectMemberStore } from "@/store/member/project/base-project-member.store";
 import { BaseProjectMemberStore } from "@/store/member/project/base-project-member.store";
 
 export type IProjectMemberStore = IBaseProjectMemberStore;
 
 export class ProjectMemberStore extends BaseProjectMemberStore implements IProjectMemberStore {
-  constructor(_memberRoot: IMemberRootStore, rootStore: RootStore) {
-    super(_memberRoot, rootStore);
-  }
-
   /**
    * @description Returns the highest role from the project membership
    * @param { string } userId

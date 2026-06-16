@@ -69,7 +69,7 @@ export const UserImageUploadModal = observer(function UserImageUploadModal(props
         title: "Error!",
         message: error?.toString() ?? "Something went wrong. Please try again.",
       });
-      throw new Error("Error in uploading file.");
+      throw new Error("Error in uploading file.", { cause: error });
     } finally {
       setIsImageUploading(false);
     }
@@ -117,7 +117,7 @@ export const UserImageUploadModal = observer(function UserImageUploadModal(props
                   </button>
                   <img
                     src={image ? URL.createObjectURL(image) : value ? getFileURL(value) : ""}
-                    alt="image"
+                    alt="User avatar"
                     className="absolute top-0 left-0 h-full w-full rounded-md object-cover"
                   />
                 </>

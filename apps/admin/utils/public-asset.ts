@@ -4,4 +4,5 @@
  * See the LICENSE file for details.
  */
 
-export {};
+// placeholder - module reserved for future public asset utilities
+export const PUBLIC_ASSET_PLACEHOLDER = undefined;

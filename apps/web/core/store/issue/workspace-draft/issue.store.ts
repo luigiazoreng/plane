@@ -237,7 +237,7 @@ export class WorkspaceDraftIssues implements IWorkspaceDraftIssues {
           const newIssueIds = issueIds.filter((issueId) => !existingIssueIds.includes(issueId));
           this.addIssue(results);
           // issue map update
-          update(this.issueMapIds, [workspaceSlug], (existingIssueIds = []) => [...newIssueIds, ...existingIssueIds]);
+          update(this.issueMapIds, [workspaceSlug], (currentIds = []) => [...newIssueIds, ...currentIds]);
           this.loader = undefined;
         } else {
           this.loader = "empty-state";
@@ -292,7 +292,7 @@ export class WorkspaceDraftIssues implements IWorkspaceDraftIssues {
         set(this.issuesMap, [issueId], {
           ...issueBeforeUpdate,
           ...payload,
-          ...{ updated_at: getCurrentDateTimeInISO() },
+          updated_at: getCurrentDateTimeInISO(),
         });
       });
       const response = await workspaceDraftService.updateIssue(workspaceSlug, issueId, payload);

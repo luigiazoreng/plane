@@ -21,7 +21,7 @@ import { satisfiesDateFilter } from "./filter";
 export const orderCycles = (cycles: ICycle[], sortByManual: boolean): ICycle[] => {
   if (cycles.length === 0) return [];
 
-  const acceptedStatuses = ["current", "upcoming", "draft"];
+  const acceptedStatuses = new Set(["current", "upcoming", "draft"]);
   const STATUS_ORDER: {
     [key: string]: number;
   } = {
@@ -30,7 +30,7 @@ export const orderCycles = (cycles: ICycle[], sortByManual: boolean): ICycle[] =
     draft: 3,
   };
 
-  let filteredCycles = cycles.filter((c) => acceptedStatuses.includes(c.status?.toLowerCase() ?? ""));
+  let filteredCycles = cycles.filter((c) => acceptedStatuses.has(c.status?.toLowerCase() ?? ""));
   if (sortByManual) filteredCycles = sortBy(filteredCycles, [(c) => c.sort_order]);
   else
     filteredCycles = sortBy(filteredCycles, [
@@ -85,11 +85,11 @@ const scope = (p: any, isTypeIssue: boolean) => (isTypeIssue ? p.total_issues : 
  * @param {ICycle} cycle - Cycle data
  * @returns {number} Ideal progress value
  */
-const ideal = (date: string, scope: number, cycle: ICycle) =>
+const ideal = (date: string, totalScope: number, cycle: ICycle) =>
   Math.floor(
     ((findTotalDaysInRange(date, cycle.end_date) || 0) /
       (findTotalDaysInRange(cycle.start_date, cycle.end_date) || 0)) *
-      scope
+      totalScope
   );
 
 /**
