@@ -4,10 +4,8 @@
  * See the LICENSE file for details.
  */
 
-"use client";
-
 import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useNavigate } from "react-router";
 import { observer } from "mobx-react";
 import { Button } from "@plane/propel/button";
 import { Badge } from "@plane/propel/badge";
@@ -16,6 +14,7 @@ import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.stor
 
 const HelpdeskPublicDashboard = observer(() => {
   const { publicSlug } = useParams();
+  const navigate = useNavigate();
   const pSlug = publicSlug?.toString() || "";
 
   const [loading, setLoading] = useState(true);
@@ -67,7 +66,7 @@ const HelpdeskPublicDashboard = observer(() => {
             variant="primary"
             size="lg"
             prependIcon={<Plus className="size-5" />}
-            onClick={() => (window.location.href = `/helpdesk/p/${pSlug}/new`)}
+            onClick={() => navigate(`/helpdesk/p/${pSlug}/new`)}
             className="shrink-0"
           >
             Submit a Request
@@ -102,7 +101,7 @@ const HelpdeskPublicDashboard = observer(() => {
                     <tr
                       key={req.id}
                       className="group cursor-pointer transition-colors hover:bg-surface-1"
-                      onClick={() => (window.location.href = `/helpdesk/p/${pSlug}/${req.id}`)}
+                      onClick={() => navigate(`/helpdesk/p/${pSlug}/${req.id}`)}
                     >
                       <td className="font-mono text-xs text-text-400 px-6 py-4">#{req.id.split("-")[0]}</td>
                       <td className="text-text-100 px-6 py-4 font-medium transition-colors group-hover:text-primary">

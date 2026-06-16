@@ -4,11 +4,9 @@
  * See the LICENSE file for details.
  */
 
-"use client";
-
 import React, { useEffect, useState } from "react";
 import { observer } from "mobx-react";
-import { useParams } from "next/navigation";
+import { useParams, useNavigate } from "react-router";
 import { Headset, Globe, MessageSquare, Clock, Plus, ExternalLink } from "lucide-react";
 import { Header } from "@plane/ui";
 import { Button } from "@plane/propel/button";
@@ -19,6 +17,7 @@ import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 
 const HelpdeskPage = observer(() => {
   const { workspaceSlug, projectId } = useParams();
+  const navigate = useNavigate();
   const helpdeskStore = useHelpdesk();
   const [loading, setLoading] = useState(true);
 
@@ -56,44 +55,6 @@ const HelpdeskPage = observer(() => {
               <p className="text-sm text-text-400 mt-1">Manage incoming customer requests and support tickets.</p>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  const wSlug = workspaceSlug?.toString();
-                  const pId = projectId?.toString();
-                  if (wSlug && pId) {
-                    helpdeskStore.portals[`${wSlug}_${pId}`] = [
-                      {
-                        id: "p1",
-                        public_slug: "suporte-growatt",
-                        require_login: false,
-                        enable_chat: true,
-                        project_id: pId,
-                      } as any,
-                    ];
-                    helpdeskStore.requests[`${wSlug}_${pId}`] = [
-                      {
-                        id: "req1",
-                        title: "Inversor não liga",
-                        status: "open",
-                        source: "public_form",
-                        created_at: new Date().toISOString(),
-                        project_id: pId,
-                      } as any,
-                      {
-                        id: "req2",
-                        title: "Dúvida sobre configuração WiFi",
-                        status: "waiting",
-                        source: "internal_form",
-                        created_at: new Date(Date.now() - 86400000).toISOString(),
-                        project_id: pId,
-                      } as any,
-                    ];
-                  }
-                }}
-              >
-                Mock Test Data
-              </Button>
               <Button
                 variant="primary"
                 prependIcon={<Plus className="size-4" />}
@@ -217,9 +178,7 @@ const HelpdeskPage = observer(() => {
                           <tr
                             key={req.id}
                             className="group cursor-pointer transition-colors hover:bg-surface-1"
-                            onClick={() =>
-                              (window.location.href = `/${workspaceSlug}/projects/${projectId}/helpdesk/${req.id}`)
-                            }
+                            onClick={() => navigate(`/${workspaceSlug}/projects/${projectId}/helpdesk/${req.id}`)}
                           >
                             <td className="text-text-100 px-6 py-4 font-medium transition-colors group-hover:text-primary">
                               {req.title}

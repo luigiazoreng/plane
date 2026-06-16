@@ -4,10 +4,8 @@
  * See the LICENSE file for details.
  */
 
-"use client";
-
 import React, { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useNavigate, Link } from "react-router";
 import { observer } from "mobx-react";
 import { Input } from "@plane/propel/input";
 import { Button } from "@plane/propel/button";
@@ -16,6 +14,7 @@ import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.stor
 
 const HelpdeskRegisterPage = observer(() => {
   const { publicSlug } = useParams();
+  const navigate = useNavigate();
   const pSlug = publicSlug?.toString() || "";
 
   const [name, setName] = useState("");
@@ -35,7 +34,7 @@ const HelpdeskRegisterPage = observer(() => {
         title: "Welcome",
         message: "Account created successfully",
       });
-      window.location.href = `/helpdesk/p/${pSlug}`;
+      navigate(`/helpdesk/p/${pSlug}`);
     } catch (_err) {
       setToast({
         type: TOAST_TYPE.ERROR,
@@ -63,7 +62,7 @@ const HelpdeskRegisterPage = observer(() => {
             id="name"
             type="text"
             value={name}
-            onChange={(e: any) => setName(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
             placeholder="John Doe"
             className="w-full"
             required
@@ -78,7 +77,7 @@ const HelpdeskRegisterPage = observer(() => {
             id="email"
             type="email"
             value={email}
-            onChange={(e: any) => setEmail(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
             placeholder="name@company.com"
             className="w-full"
             required
@@ -93,7 +92,7 @@ const HelpdeskRegisterPage = observer(() => {
             id="password"
             type="password"
             value={password}
-            onChange={(e: any) => setPassword(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
             placeholder="Create a strong password"
             className="w-full"
             required
@@ -108,9 +107,9 @@ const HelpdeskRegisterPage = observer(() => {
 
       <p className="text-sm text-text-400 mt-6 text-center">
         Already have an account?{" "}
-        <a href={`/helpdesk/p/${pSlug}/login`} className="font-medium text-primary hover:underline">
+        <Link to={`/helpdesk/p/${pSlug}/login`} className="font-medium text-primary hover:underline">
           Sign in
-        </a>
+        </Link>
       </p>
     </div>
   );

@@ -4,10 +4,8 @@
  * See the LICENSE file for details.
  */
 
-"use client";
-
 import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useNavigate } from "react-router";
 import { observer } from "mobx-react";
 import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.store";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
@@ -22,7 +20,7 @@ const HelpdeskPublicNewRequestPage = observer(() => {
   const [submitting, setSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +32,7 @@ const HelpdeskPublicNewRequestPage = observer(() => {
 
     setSubmitting(true);
     try {
-      const response = await publicStore.createPublicRequest(publicSlug.toString(), {
+      const response = await publicStore.createPublicRequest(publicSlug?.toString() || "", {
         title,
         description,
         contact_email: email,
@@ -50,7 +48,7 @@ const HelpdeskPublicNewRequestPage = observer(() => {
       setEmail("");
       // Redirect to the newly created request page if logged in, otherwise show success
       if (publicStore.customerToken) {
-        router.push(`/helpdesk/p/${publicSlug}/${response.id}`);
+        navigate(`/helpdesk/p/${publicSlug}/${response.id}`);
       } else {
         setIsSuccess(true);
       }
@@ -74,7 +72,7 @@ const HelpdeskPublicNewRequestPage = observer(() => {
           We've received your request and will get back to you at{" "}
           <span className="text-text-100 font-semibold">{email}</span> as soon as possible.
         </p>
-        <Button variant="primary" onClick={() => router.push(`/helpdesk/p/${publicSlug}`)}>
+        <Button variant="primary" onClick={() => navigate(`/helpdesk/p/${publicSlug}`)}>
           Return to Portal
         </Button>
       </div>
@@ -99,7 +97,7 @@ const HelpdeskPublicNewRequestPage = observer(() => {
                 id="contact_email"
                 type="email"
                 value={email}
-                onChange={(e: any) => setEmail(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 placeholder="name@example.com"
                 className="w-full"
                 required
@@ -138,7 +136,7 @@ const HelpdeskPublicNewRequestPage = observer(() => {
           </div>
 
           <div className="flex items-center justify-end gap-3 border-t border-subtle pt-6">
-            <Button variant="secondary" onClick={() => router.push(`/helpdesk/p/${publicSlug}`)} type="button">
+            <Button variant="secondary" onClick={() => navigate(`/helpdesk/p/${publicSlug}`)} type="button">
               Cancel
             </Button>
             <Button variant="primary" type="submit" loading={submitting}>

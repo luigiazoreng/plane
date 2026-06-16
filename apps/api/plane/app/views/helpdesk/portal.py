@@ -19,7 +19,11 @@ class HelpdeskPortalViewSet(BaseViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(project_id=self.kwargs.get("project_id"))
+        project_id = self.kwargs.get("project_id")
+        if HelpdeskPortal.objects.filter(project_id=project_id).exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("A portal already exists for this project.")
+        serializer.save(project_id=project_id)
 
 
 class PublicHelpdeskPortalEndpoint(BaseAPIView):

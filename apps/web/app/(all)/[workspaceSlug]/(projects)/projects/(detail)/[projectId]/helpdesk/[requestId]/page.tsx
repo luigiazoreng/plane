@@ -4,13 +4,10 @@
  * See the LICENSE file for details.
  */
 
-"use client";
-
 import React, { useEffect, useState } from "react";
 import { observer } from "mobx-react";
-import { useParams } from "next/navigation";
+import { useParams, Link } from "react-router";
 import { ArrowLeft, Send } from "lucide-react";
-import Link from "next/link";
 import { Header } from "@plane/ui";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
@@ -77,7 +74,7 @@ const RequestDetailPage = observer(() => {
         <Header>
           <div className="flex items-center gap-2">
             <Link
-              href={`/${wSlug}/projects/${pId}/helpdesk`}
+              to={`/${wSlug}/projects/${pId}/helpdesk`}
               className="text-tertiary transition-colors hover:text-primary"
             >
               <ArrowLeft className="size-4" />
@@ -97,7 +94,7 @@ const RequestDetailPage = observer(() => {
       <Header>
         <div className="flex items-center gap-2">
           <Link
-            href={`/${wSlug}/projects/${pId}/helpdesk`}
+            to={`/${wSlug}/projects/${pId}/helpdesk`}
             className="text-tertiary transition-colors hover:text-primary"
           >
             <ArrowLeft className="size-4" />
@@ -227,7 +224,7 @@ const RequestDetailPage = observer(() => {
                   >
                     <span className="text-sm font-medium text-primary">Issue #{ri.issue.substring(0, 8)}</span>
                     <Link
-                      href={`/${wSlug}/projects/${pId}/issues/${ri.issue}`}
+                      to={`/${wSlug}/projects/${pId}/issues/${ri.issue}`}
                       className="text-xs text-primary hover:underline"
                     >
                       View
@@ -237,10 +234,40 @@ const RequestDetailPage = observer(() => {
               </div>
             )}
 
-            {/* TODO: Add Issue linking combobox */}
-            <button className="text-sm border-primary/20 bg-primary/5 hover:bg-primary/10 mt-4 w-full rounded-md border py-2 font-medium text-primary transition-colors">
-              Link Existing Issue
-            </button>
+            <form
+              className="mt-4 flex gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                const issueId = fd.get("issueId") as string;
+                if (!issueId || !wSlug || !pId || !rId) return;
+
+                try {
+                  await helpdeskStore.createRequestIssue(wSlug, pId, rId, { issue: issueId });
+                  setToast({ type: TOAST_TYPE.SUCCESS, title: "Success", message: "Issue linked successfully" });
+                  e.currentTarget.reset();
+                } catch {
+                  setToast({
+                    type: TOAST_TYPE.ERROR,
+                    title: "Error",
+                    message: "Could not link issue. Verify the UUID.",
+                  });
+                }
+              }}
+            >
+              <input
+                name="issueId"
+                placeholder="Issue UUID"
+                className="text-sm flex-1 rounded-md border border-subtle bg-surface-1 px-3 py-2 text-primary"
+                required
+              />
+              <button
+                type="submit"
+                className="bg-primary text-sm hover:bg-primary/90 rounded-md px-3 py-2 font-medium text-white transition-colors"
+              >
+                Link
+              </button>
+            </form>
           </div>
         </div>
       </div>

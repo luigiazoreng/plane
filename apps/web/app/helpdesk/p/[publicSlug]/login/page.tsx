@@ -4,10 +4,8 @@
  * See the LICENSE file for details.
  */
 
-"use client";
-
 import React, { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useNavigate, Link } from "react-router";
 import { observer } from "mobx-react";
 import { Input } from "@plane/propel/input";
 import { Button } from "@plane/propel/button";
@@ -18,6 +16,7 @@ import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.stor
 
 const HelpdeskLoginPage = observer(() => {
   const { publicSlug } = useParams();
+  const navigate = useNavigate();
   const pSlug = publicSlug?.toString() || "";
 
   const [email, setEmail] = useState("");
@@ -36,7 +35,7 @@ const HelpdeskLoginPage = observer(() => {
         title: "Success",
         message: "Logged in successfully",
       });
-      window.location.href = `/helpdesk/p/${pSlug}`;
+      navigate(`/helpdesk/p/${pSlug}`);
     } catch (_err) {
       setToast({
         type: TOAST_TYPE.ERROR,
@@ -64,7 +63,7 @@ const HelpdeskLoginPage = observer(() => {
             id="email"
             type="email"
             value={email}
-            onChange={(e: any) => setEmail(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
             placeholder="name@company.com"
             className="w-full"
             required
@@ -79,7 +78,7 @@ const HelpdeskLoginPage = observer(() => {
             id="password"
             type="password"
             value={password}
-            onChange={(e: any) => setPassword(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
             placeholder="••••••••"
             className="w-full"
             required
@@ -93,9 +92,9 @@ const HelpdeskLoginPage = observer(() => {
 
       <p className="text-sm text-text-400 mt-6 text-center">
         Don't have an account?{" "}
-        <a href={`/helpdesk/p/${pSlug}/register`} className="font-medium text-primary hover:underline">
+        <Link to={`/helpdesk/p/${pSlug}/register`} className="font-medium text-primary hover:underline">
           Create one
-        </a>
+        </Link>
       </p>
     </div>
   );

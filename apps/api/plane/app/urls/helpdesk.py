@@ -7,6 +7,8 @@ from plane.app.views.helpdesk import (
     HelpdeskRequestViewSet,
     PublicHelpdeskRequestEndpoint,
     HelpdeskRequestIssueViewSet,
+    HelpdeskRequestCommentViewSet,
+    PublicHelpdeskCommentEndpoint,
 )
 
 urlpatterns = [
@@ -46,9 +48,17 @@ urlpatterns = [
     path(
         "helpdesk/public/portals/<str:public_slug>/requests/",
         PublicHelpdeskRequestEndpoint.as_view({
+            "get": "list",
             "post": "create"
         }),
         name="public-helpdesk-request",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/requests/<uuid:pk>/",
+        PublicHelpdeskRequestEndpoint.as_view({
+            "get": "retrieve"
+        }),
+        name="public-helpdesk-request-detail",
     ),
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/helpdesk/requests/",
@@ -83,5 +93,20 @@ urlpatterns = [
             "delete": "destroy"
         }),
         name="helpdesk-request-issue-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/helpdesk/requests/<uuid:request_pk>/comments/",
+        HelpdeskRequestCommentViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-request-comment",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/helpdesk/requests/<uuid:request_pk>/comments/<uuid:pk>/",
+        HelpdeskRequestCommentViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
+        name="helpdesk-request-comment-detail",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/requests/<uuid:request_pk>/comments/",
+        PublicHelpdeskCommentEndpoint.as_view(),
+        name="public-helpdesk-comment",
     ),
 ]

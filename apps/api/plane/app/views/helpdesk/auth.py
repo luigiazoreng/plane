@@ -13,6 +13,7 @@ from plane.app.serializers.helpdesk import HelpdeskCustomerSerializer
 def get_customer_token(customer):
     payload = {
         "customer_id": str(customer.id),
+        "workspace_id": str(customer.workspace_id),
         "email": customer.email,
         "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7),
         "iat": datetime.datetime.utcnow(),

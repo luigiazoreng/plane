@@ -26,7 +26,7 @@ export interface IHelpdeskCustomer {
   updated_at: string;
 }
 
-export type THelpdeskRequestStatus = "open" | "waiting" | "closed";
+export type THelpdeskRequestStatus = "open" | "in_progress" | "waiting" | "resolved" | "closed";
 export type THelpdeskRequestSource = "public_form" | "internal_form";
 
 export interface IHelpdeskRequest {

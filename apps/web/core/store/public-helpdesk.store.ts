@@ -8,9 +8,11 @@ import { observable, action, makeObservable, runInAction } from "mobx";
 import { PublicHelpdeskService } from "@plane/services";
 import type { IHelpdeskPortal, IHelpdeskRequest } from "@plane/types";
 
+import type { IHelpdeskCustomer } from "@plane/types";
+
 export class PublicHelpdeskStore {
   customerToken: string | null = null;
-  customerData: any | null = null;
+  customerData: IHelpdeskCustomer | null = null;
   currentPortal: IHelpdeskPortal | null = null;
   myRequests: IHelpdeskRequest[] = [];
 
@@ -40,7 +42,17 @@ export class PublicHelpdeskStore {
     if (typeof window !== "undefined") {
       const storedToken = localStorage.getItem("helpdesk_customer_token");
       if (storedToken && storedToken !== "null" && storedToken !== "undefined") {
-        this.customerToken = storedToken;
+        try {
+          const [, payloadB64] = storedToken.split(".");
+          const payload = JSON.parse(atob(payloadB64)) as { exp?: number };
+          if (payload.exp && payload.exp * 1000 > Date.now()) {
+            this.customerToken = storedToken;
+          } else {
+            localStorage.removeItem("helpdesk_customer_token");
+          }
+        } catch {
+          localStorage.removeItem("helpdesk_customer_token");
+        }
       }
     }
   }

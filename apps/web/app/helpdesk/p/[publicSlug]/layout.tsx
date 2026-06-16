@@ -5,11 +5,14 @@
  */
 
 import React from "react";
-import { Outlet, Link, useParams } from "react-router";
+import { Outlet, Link, useParams, useNavigate } from "react-router";
 import { observer } from "mobx-react";
+import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
 
 const PublicHelpdeskLayout = observer(() => {
   const { publicSlug } = useParams();
+  const navigate = useNavigate();
+  const { customerToken, customerData, logout } = publicHelpdeskStore;
 
   return (
     <div className="flex min-h-screen flex-col bg-surface-1">
@@ -23,13 +26,27 @@ const PublicHelpdeskLayout = observer(() => {
             <span className="text-lg text-text-100 font-semibold">Helpdesk</span>
           </div>
           <div className="text-sm flex items-center gap-4 font-medium">
-            {/* Auth state goes here */}
-            <Link
-              to={`/helpdesk/p/${publicSlug}/login`}
-              className="text-text-300 hover:text-text-100 transition-colors"
-            >
-              Sign in
-            </Link>
+            {customerToken ? (
+              <>
+                <span className="text-text-300 text-sm">{customerData?.name || customerData?.email}</span>
+                <button
+                  onClick={() => {
+                    logout();
+                    navigate(`/helpdesk/p/${publicSlug}`);
+                  }}
+                  className="text-text-300 hover:text-red-400 transition-colors"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <Link
+                to={`/helpdesk/p/${publicSlug}/login`}
+                className="text-text-300 hover:text-text-100 transition-colors"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       </header>

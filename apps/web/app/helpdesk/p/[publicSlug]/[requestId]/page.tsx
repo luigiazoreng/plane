@@ -4,15 +4,13 @@
  * See the LICENSE file for details.
  */
 
-"use client";
-
 import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useParams, Link } from "react-router";
 import { ArrowLeft, Send } from "lucide-react";
 import { PublicHelpdeskService } from "@plane/services";
 import type { IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskPortal } from "@plane/types";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
 
 const publicHelpdeskService = new PublicHelpdeskService();
 
@@ -62,7 +60,8 @@ export default function HelpdeskPublicRequestPage() {
         requestId.toString(),
         {
           content: newComment,
-        }
+        },
+        publicHelpdeskStore.customerToken || undefined
       );
       setComments((prev) => [...prev, response]);
       setNewComment("");
@@ -86,7 +85,7 @@ export default function HelpdeskPublicRequestPage() {
       <div className="py-12 text-center">
         <h2 className="text-xl mb-2 font-semibold text-primary">Request Not Found</h2>
         <p className="mb-6 text-tertiary">The link might be invalid or the request was deleted.</p>
-        <Link href={`/helpdesk/p/${publicSlug}`} className="font-medium text-primary hover:underline">
+        <Link to={`/helpdesk/p/${publicSlug}`} className="font-medium text-primary hover:underline">
           Return to Portal
         </Link>
       </div>
@@ -99,7 +98,7 @@ export default function HelpdeskPublicRequestPage() {
   return (
     <div className="space-y-6">
       <div className="mb-6 flex items-center gap-3">
-        <Link href={`/helpdesk/p/${publicSlug}`} className="text-tertiary transition-colors hover:text-primary">
+        <Link to={`/helpdesk/p/${publicSlug}`} className="text-tertiary transition-colors hover:text-primary">
           <ArrowLeft className="size-5" />
         </Link>
         <h1 className="text-2xl flex-1 font-bold text-primary">{request.title}</h1>

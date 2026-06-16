@@ -2,3 +2,4 @@ from .auth import HelpdeskCustomerLoginEndpoint, HelpdeskCustomerRegisterEndpoin
 from .portal import HelpdeskPortalViewSet, PublicHelpdeskPortalEndpoint
 from .request import HelpdeskRequestViewSet, PublicHelpdeskRequestEndpoint
 from .issue import HelpdeskRequestIssueViewSet
+from .comment import HelpdeskRequestCommentViewSet, PublicHelpdeskCommentEndpoint
