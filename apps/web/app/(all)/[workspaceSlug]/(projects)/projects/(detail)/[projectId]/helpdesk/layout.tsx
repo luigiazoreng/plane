@@ -5,11 +5,8 @@
  */
 
 import React from "react";
+import { Outlet } from "react-router";
 
-type Props = {
-  children: React.ReactNode;
-};
-
-export default function HelpdeskLayout({ children }: Props) {
-  return <>{children}</>;
+export default function HelpdeskLayout() {
+  return <Outlet />;
 }

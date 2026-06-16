@@ -27,8 +27,11 @@ const HelpdeskPage = observer(() => {
     }
   }, [workspaceSlug, projectId, helpdeskStore]);
 
-  const requests = workspaceSlug && projectId ? helpdeskStore.requests[`${workspaceSlug}_${projectId}`] || [] : [];
-  const portals = workspaceSlug && projectId ? helpdeskStore.portals[`${workspaceSlug}_${projectId}`] || [] : [];
+  const rawRequests = workspaceSlug && projectId ? helpdeskStore.requests[`${workspaceSlug}_${projectId}`] : [];
+  const requests = Array.isArray(rawRequests) ? rawRequests : [];
+
+  const rawPortals = workspaceSlug && projectId ? helpdeskStore.portals[`${workspaceSlug}_${projectId}`] : [];
+  const portals = Array.isArray(rawPortals) ? rawPortals : [];
 
   return (
     <div className="flex h-full w-full flex-col">

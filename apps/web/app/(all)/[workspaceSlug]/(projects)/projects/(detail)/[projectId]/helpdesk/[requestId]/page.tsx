@@ -36,10 +36,15 @@ const RequestDetailPage = observer(() => {
   const pId = projectId?.toString() || "";
   const rId = requestId?.toString() || "";
 
-  const requestsList = helpdeskStore.requests[`${wSlug}_${pId}`] || [];
+  const rawRequestsList = helpdeskStore.requests[`${wSlug}_${pId}`];
+  const requestsList = Array.isArray(rawRequestsList) ? rawRequestsList : [];
   const request = requestsList.find((r) => r.id === rId);
-  const comments = helpdeskStore.comments[rId] || [];
-  const requestIssues = helpdeskStore.requestIssues[rId] || [];
+
+  const rawComments = helpdeskStore.comments[rId];
+  const comments = Array.isArray(rawComments) ? rawComments : [];
+
+  const rawRequestIssues = helpdeskStore.requestIssues[rId];
+  const requestIssues = Array.isArray(rawRequestIssues) ? rawRequestIssues : [];
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
