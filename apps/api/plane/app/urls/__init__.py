@@ -22,7 +22,7 @@ from .webhook import urlpatterns as webhook_urls
 from .workspace import urlpatterns as workspace_urls
 from .timezone import urlpatterns as timezone_urls
 from .exporter import urlpatterns as exporter_urls
-
+from .helpdesk import urlpatterns as helpdesk_urls
 urlpatterns = [
     *analytic_urls,
     *asset_urls,
@@ -44,4 +44,5 @@ urlpatterns = [
     *webhook_urls,
     *timezone_urls,
     *exporter_urls,
+    *helpdesk_urls,
 ]

@@ -16,6 +16,7 @@ export * from "./user";
 export * from "./project";
 export * from "./workspace";
 export * from "./file";
+export * from "./helpdesk";
 export * from "./label";
 export * from "./state";
 export * from "./issue";

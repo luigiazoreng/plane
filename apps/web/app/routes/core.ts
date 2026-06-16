@@ -44,6 +44,14 @@ export const coreRoutes: RouteConfigEntry[] = [
   ]),
 
   // ========================================================================
+  // HELPDESK PUBLIC PORTAL ROUTES
+  // ========================================================================
+  layout("./helpdesk/layout.tsx", [
+    route("helpdesk/p/:publicSlug", "./helpdesk/p/[publicSlug]/page.tsx"),
+    route("helpdesk/p/:publicSlug/:requestId", "./helpdesk/p/[publicSlug]/[requestId]/page.tsx"),
+  ]),
+
+  // ========================================================================
   // ALL APP ROUTES
   // ========================================================================
   layout("./(all)/layout.tsx", [
@@ -214,6 +222,17 @@ export const coreRoutes: RouteConfigEntry[] = [
             route(
               ":workspaceSlug/projects/:projectId/intake",
               "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/intake/page.tsx"
+            ),
+          ]),
+          // Helpdesk
+          layout("./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/helpdesk/layout.tsx", [
+            route(
+              ":workspaceSlug/projects/:projectId/helpdesk",
+              "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/helpdesk/page.tsx"
+            ),
+            route(
+              ":workspaceSlug/projects/:projectId/helpdesk/:requestId",
+              "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/helpdesk/[requestId]/page.tsx"
             ),
           ]),
         ]),

@@ -126,6 +126,13 @@ from .exporter import ExporterHistorySerializer
 
 from .webhook import WebhookSerializer, WebhookLogSerializer
 
+from .helpdesk import (
+    HelpdeskCustomerSerializer,
+    HelpdeskPortalSerializer,
+    HelpdeskRequestSerializer,
+    HelpdeskRequestCommentSerializer,
+    HelpdeskRequestIssueSerializer,
+)
 from .favorite import UserFavoriteSerializer
 
 from .draft import (
