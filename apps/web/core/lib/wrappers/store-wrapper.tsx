@@ -5,7 +5,7 @@
  */
 
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -112,10 +112,22 @@ function StoreWrapper(props: TStoreWrapper) {
     changeLanguage(userProfile?.language as TLanguage);
   }, [userProfile?.language, changeLanguage]);
 
-  useEffect(() => {
-    if (!params) return;
+  // ─── Sync route params to MobX store ────────────────────────────
+  // We sync route params synchronously during render to ensure that
+  // the MobX store (e.g. RootIssueStore.projectId) is updated BEFORE
+  // any descendant components (like BaseKanBanRoot) render. This prevents
+  // race conditions where a child renders with stale router state.
+  const prevParamsRef = useRef<Record<string, string | string[] | undefined> | undefined>(undefined);
+  
+  if (JSON.stringify(prevParamsRef.current) !== JSON.stringify(params)) {
+    console.log("[StoreWrapperDebug] syncing params synchronously during render", {
+      old: prevParamsRef.current,
+      new: params
+    });
     setQuery(params);
-  }, [params, setQuery]);
+    prevParamsRef.current = params;
+  }
+  // ────────────────────────────────────────────────────────────────
 
   return <>{children}</>;
 }
