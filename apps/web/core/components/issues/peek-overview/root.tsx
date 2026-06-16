@@ -71,7 +71,10 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
           setError(false);
           await fetchIssue(workspaceSlug, projectId, issueId);
         } catch (error) {
-          setError(true);
+          const isNotFoundError =
+            error instanceof Error && /work item not found|does not exist|not found/i.test(error.message);
+
+          setError(isNotFoundError);
           console.error("Error fetching the parent issue", error);
         }
       },

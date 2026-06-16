@@ -65,6 +65,7 @@ export function IssueBlocksList(props: Props) {
             isLastChild={index === issueIds.length - 1}
             isDragAllowed={isDragAllowed}
             canDropOverIssue={canDropOverIssue}
+            shouldRenderByDefault={index <= 20}
             isEpic={isEpic}
           />
         ))}

@@ -127,7 +127,7 @@ export const IssueBlockRoot = observer(function IssueBlockRoot(props: Props) {
     issueBlockRef?.current?.classList?.remove(HIGHLIGHT_CLASS);
   });
 
-  if (!issueId || !issuesMap[issueId]?.created_at) return null;
+  if (!issueId || !issuesMap[issueId]) return null;
 
   const subIssues = subIssuesStore.subIssuesByIssueId(issueId);
   return (

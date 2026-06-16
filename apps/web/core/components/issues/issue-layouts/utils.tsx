@@ -151,13 +151,12 @@ const getProjectColumns = (): IGroupByColumn[] | undefined => {
     .filter((column) => column !== undefined) as IGroupByColumn[];
 };
 
-const getCycleColumns = (): IGroupByColumn[] | undefined => {
-  const { currentProjectDetails } = store.projectRoot.project;
-  // Check for the current project details
-  if (!currentProjectDetails || !currentProjectDetails?.id) return;
+const getCycleColumns = ({ projectId }: TGetColumns): IGroupByColumn[] | undefined => {
   const { getProjectCycleDetails } = store.cycle;
+  const resolvedProjectId = projectId ?? store.projectRoot.project.currentProjectDetails?.id;
+  if (!resolvedProjectId) return;
   // Get the cycle details for the current project
-  const cycleDetails = currentProjectDetails?.id ? getProjectCycleDetails(currentProjectDetails?.id) : undefined;
+  const cycleDetails = getProjectCycleDetails(resolvedProjectId) ?? undefined;
   // Map the cycle details to the group by columns
   const cycles: IGroupByColumn[] = [];
   cycleDetails?.map((cycle) => {
@@ -181,14 +180,12 @@ const getCycleColumns = (): IGroupByColumn[] | undefined => {
   return cycles;
 };
 
-const getModuleColumns = (): IGroupByColumn[] | undefined => {
-  // get current project details
-  const { currentProjectDetails } = store.projectRoot.project;
-  if (!currentProjectDetails || !currentProjectDetails?.id) return;
-  // get project module ids and module details
+const getModuleColumns = ({ projectId }: TGetColumns): IGroupByColumn[] | undefined => {
   const { getProjectModuleDetails } = store.module;
+  const resolvedProjectId = projectId ?? store.projectRoot.project.currentProjectDetails?.id;
+  if (!resolvedProjectId) return;
   // get module details
-  const moduleDetails = currentProjectDetails?.id ? getProjectModuleDetails(currentProjectDetails?.id) : undefined;
+  const moduleDetails = getProjectModuleDetails(resolvedProjectId) ?? undefined;
   // map module details to group by columns
   const modules: IGroupByColumn[] = [];
   moduleDetails?.map((module) => {

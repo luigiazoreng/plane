@@ -6,6 +6,7 @@
 
 import type { MutableRefObject } from "react";
 import { observer } from "mobx-react";
+import { useParams } from "next/navigation";
 import type {
   GroupByColumnTypes,
   IGroupByColumn,
@@ -99,6 +100,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
   } = props;
   // i18n
   // store hooks
+  const { projectId } = useParams();
   const storeType = useIssueStoreType();
   const issueKanBanView = useKanbanView();
   // derived values
@@ -111,6 +113,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: isEpic,
+    projectId: projectId?.toString(),
   });
 
   if (!list) return null;

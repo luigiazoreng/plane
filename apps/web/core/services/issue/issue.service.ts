@@ -56,6 +56,12 @@ export class IssueService extends APIService {
     )
       .then((response) => response?.data)
       .catch((error) => {
+        // A cancelled request (AbortController) has no `.response`; re-throwing
+        // `error?.response?.data` would surface as `throw undefined` and produce an
+        // "Uncaught (in promise) undefined". Aborts are expected (e.g. when switching
+        // layout triggers a new fetch that clears the previous controller), so keep the
+        // original error to let callers identify/ignore the cancellation.
+        if (error?.code === "ERR_CANCELED") throw error;
         throw error?.response?.data;
       });
   }

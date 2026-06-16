@@ -11,6 +11,7 @@ import useSWR from "swr";
 // plane imports
 import { ISSUE_DISPLAY_FILTERS_BY_PAGE } from "@plane/constants";
 import { EIssuesStoreType } from "@plane/types";
+import { Spinner } from "@plane/ui";
 // components
 import { ProjectLevelWorkItemFiltersHOC } from "@/components/work-item-filters/filters-hoc/project-level";
 // hooks
@@ -41,7 +42,11 @@ export const ArchivedIssueLayoutRoot = observer(function ArchivedIssueLayoutRoot
     { revalidateIfStale: false, revalidateOnFocus: false }
   );
 
-  if (!workspaceSlug || !projectId || !workItemFilters) return <></>;
+  if (!workspaceSlug || !projectId || !workItemFilters) return (
+      <div className="flex h-full w-full items-center justify-center">
+        <Spinner />
+      </div>
+    );
   return (
     <IssuesStoreContext.Provider value={EIssuesStoreType.ARCHIVED}>
       <ProjectLevelWorkItemFiltersHOC

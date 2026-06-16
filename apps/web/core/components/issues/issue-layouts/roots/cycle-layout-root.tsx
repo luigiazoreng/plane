@@ -12,6 +12,7 @@ import useSWR from "swr";
 // plane constants
 import { ISSUE_DISPLAY_FILTERS_BY_PAGE, PROJECT_VIEW_TRACKER_ELEMENTS } from "@plane/constants";
 import { EIssuesStoreType, EIssueLayoutTypes } from "@plane/types";
+import { Spinner } from "@plane/ui";
 // components
 import { TransferIssues } from "@/components/cycles/transfer-issues";
 import { TransferIssuesModal } from "@/components/cycles/transfer-issues-modal";
@@ -83,7 +84,11 @@ export const CycleLayoutRoot = observer(function CycleLayoutRoot() {
     : 0;
   const canTransferIssues = isProgressSnapshotEmpty && transferableIssuesCount > 0;
 
-  if (!workspaceSlug || !projectId || !cycleId || !workItemFilters) return <></>;
+  if (!workspaceSlug || !projectId || !cycleId || !workItemFilters) return (
+      <div className="flex h-full w-full items-center justify-center">
+        <Spinner />
+      </div>
+    );
   return (
     <IssuesStoreContext.Provider value={EIssuesStoreType.CYCLE}>
       <ProjectLevelWorkItemFiltersHOC

@@ -59,7 +59,7 @@ export class IssueSubscriptionStore implements IIssueSubscriptionStore {
 
   addSubscription = (issueId: string, isSubscribed: boolean | undefined | null) => {
     const currentUserId = this.rootIssueDetail.rootIssueStore.currentUserId;
-    if (!currentUserId) throw new Error("user id not available");
+    if (!currentUserId) return;
 
     runInAction(() => {
       set(this.subscriptionMap, [issueId, currentUserId], isSubscribed ?? false);

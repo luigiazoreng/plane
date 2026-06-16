@@ -123,7 +123,7 @@ export const SpreadsheetTable = observer(function SpreadsheetTable(props: Props)
         isEpic={isEpic}
       />
       <tbody>
-        {issueIds.map((id) => (
+        {issueIds.map((id, index) => (
           <SpreadsheetIssueRow
             key={id}
             issueId={id}
@@ -138,6 +138,7 @@ export const SpreadsheetTable = observer(function SpreadsheetTable(props: Props)
             isScrolled={isScrolled}
             spreadsheetColumnsList={spreadsheetColumnsList}
             selectionHelpers={selectionHelpers}
+            shouldRenderByDefault={index <= 20}
             isEpic={isEpic}
           />
         ))}

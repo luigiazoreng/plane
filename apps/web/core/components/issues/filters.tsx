@@ -65,7 +65,9 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
   const handleLayoutChange = useCallback(
     (layout: EIssueLayoutTypes) => {
       if (!workspaceSlug || !projectId) return;
-      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, { layout: layout });
+      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, { layout: layout }).catch(
+        console.error
+      );
     },
     [workspaceSlug, projectId, updateFilters]
   );
@@ -73,7 +75,9 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
   const handleDisplayFilters = useCallback(
     (updatedDisplayFilter: Partial<IIssueDisplayFilterOptions>) => {
       if (!workspaceSlug || !projectId) return;
-      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, updatedDisplayFilter);
+      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, updatedDisplayFilter).catch(
+        console.error
+      );
     },
     [workspaceSlug, projectId, updateFilters]
   );
@@ -81,7 +85,7 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
   const handleDisplayProperties = useCallback(
     (property: Partial<IIssueDisplayProperties>) => {
       if (!workspaceSlug || !projectId) return;
-      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_PROPERTIES, property);
+      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_PROPERTIES, property).catch(console.error);
     },
     [workspaceSlug, projectId, updateFilters]
   );

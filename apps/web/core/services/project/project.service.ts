@@ -114,7 +114,7 @@ export class ProjectService extends APIService {
     return this.patch(`/api/workspaces/${workspaceSlug}/projects/${projectId}/user-properties/`, data)
       .then((response) => response?.data)
       .catch((error) => {
-        throw error?.response?.data;
+        throw error?.response?.data ?? error;
       });
   }
 

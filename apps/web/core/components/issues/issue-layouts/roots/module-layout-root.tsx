@@ -11,6 +11,7 @@ import useSWR from "swr";
 // plane imports
 import { ISSUE_DISPLAY_FILTERS_BY_PAGE, PROJECT_VIEW_TRACKER_ELEMENTS } from "@plane/constants";
 import { EIssuesStoreType, EIssueLayoutTypes } from "@plane/types";
+import { Spinner } from "@plane/ui";
 import { Row, ERowVariant } from "@plane/ui";
 // hooks
 import { ProjectLevelWorkItemFiltersHOC } from "@/components/work-item-filters/filters-hoc/project-level";
@@ -66,7 +67,11 @@ export const ModuleLayoutRoot = observer(function ModuleLayoutRoot() {
     { revalidateIfStale: false, revalidateOnFocus: false }
   );
 
-  if (!workspaceSlug || !projectId || !moduleId || !workItemFilters) return <></>;
+  if (!workspaceSlug || !projectId || !moduleId || !workItemFilters) return (
+      <div className="flex h-full w-full items-center justify-center">
+        <Spinner />
+      </div>
+    );
   return (
     <IssuesStoreContext.Provider value={EIssuesStoreType.MODULE}>
       <ProjectLevelWorkItemFiltersHOC

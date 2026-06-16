@@ -43,7 +43,7 @@ export const WorkItemFiltersHOC = observer(function WorkItemFiltersHOC(props: TW
 type TWorkItemFilterProps = TSharedWorkItemFiltersProps &
   TAdditionalWorkItemFiltersProps & {
     initialWorkItemFilters: IIssueFilters;
-    children: React.ReactNode | ((props: { filter: IWorkItemFilterInstance }) => React.ReactNode);
+    children: React.ReactNode | ((props: { filter: IWorkItemFilterInstance | undefined }) => React.ReactNode);
   };
 
 const WorkItemFilterRoot = observer(function WorkItemFilterRoot(props: TWorkItemFilterProps) {
@@ -73,20 +73,28 @@ const WorkItemFilterRoot = observer(function WorkItemFilterRoot(props: TWorkItem
     allowedFilters: filtersToShowByLayout ? filtersToShowByLayout : [],
     ...entityConfigProps,
   });
-  // get or create filter instance
+  // Create (or fetch) the filter instance synchronously during render so that it is
+  // defined on the very first render. Layouts such as kanban derive `layout`/`group_by`
+  // from this instance, and fetch issues in a mount effect — if the filter were created
+  // later (e.g. in an effect), that first fetch would run with `layout: undefined` and the
+  // board would render mismatched/empty columns.
   const workItemLayoutFilter = useMemo(
     () =>
-      getOrCreateFilter({
-        entityType,
-        entityId: workItemEntityID,
-        initialExpression: initialUserFilters,
-        onExpressionChange: updateFilters,
-        expressionOptions: {
-          saveViewOptions,
-          updateViewOptions,
-        },
-        showOnMount,
-      }),
+      workItemEntityID
+        ? getOrCreateFilter({
+            entityType,
+            entityId: workItemEntityID,
+            initialExpression: initialUserFilters,
+            onExpressionChange: updateFilters,
+            expressionOptions: {
+              saveViewOptions,
+              updateViewOptions,
+            },
+            showOnMount,
+          })
+        : undefined,
+    // initialUserFilters and showOnMount are intentionally excluded: they are only
+    // used on first creation and should not re-create the instance on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [entityType, workItemEntityID, saveViewOptions, updateViewOptions, updateFilters]
   );
@@ -100,12 +108,13 @@ const WorkItemFilterRoot = observer(function WorkItemFilterRoot(props: TWorkItem
   );
 
   useEffect(() => {
+    if (!workItemLayoutFilter) return;
     workItemLayoutFilter.configManager.setAreConfigsReady(workItemFiltersConfig.areAllConfigsInitialized);
     workItemLayoutFilter.configManager.registerAll(workItemFiltersConfig.configs);
   }, [
     workItemFiltersConfig.areAllConfigsInitialized,
     workItemFiltersConfig.configs,
-    workItemLayoutFilter.configManager,
+    workItemLayoutFilter,
   ]);
 
   return <>{typeof children === "function" ? children({ filter: workItemLayoutFilter }) : children}</>;
