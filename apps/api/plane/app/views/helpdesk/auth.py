@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny
 
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Workspace
-from plane.db.models.helpdesk import HelpdeskCustomer
+from plane.db.models.helpdesk import HelpdeskCustomer, HelpdeskPortal
 from plane.app.serializers.helpdesk import HelpdeskCustomerSerializer
 
 def get_customer_token(customer):
@@ -77,3 +77,66 @@ class HelpdeskCustomerLoginEndpoint(BaseAPIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PublicHelpdeskCustomerRegisterEndpoint(BaseAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, public_slug):
+        portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
+        if not portal:
+            return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        workspace = portal.workspace
+        email = request.data.get("email")
+        password = request.data.get("password")
+        name = request.data.get("name")
+
+        if not email or not password or not name:
+            return Response({"error": "Email, password and name are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if HelpdeskCustomer.objects.filter(email=email, workspace=workspace).exists():
+            return Response({"error": "Email already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer = HelpdeskCustomer(email=email, name=name, workspace=workspace)
+        customer.set_password(password)
+        customer.save()
+
+        token = get_customer_token(customer)
+        return Response(
+            {
+                "token": token,
+                "customer": HelpdeskCustomerSerializer(customer).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PublicHelpdeskCustomerLoginEndpoint(BaseAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, public_slug):
+        portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
+        if not portal:
+            return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        workspace = portal.workspace
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response({"error": "Email and password are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer = HelpdeskCustomer.objects.filter(email=email, workspace=workspace).first()
+        if not customer or not customer.check_password(password):
+            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        token = get_customer_token(customer)
+        return Response(
+            {
+                "token": token,
+                "customer": HelpdeskCustomerSerializer(customer).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+

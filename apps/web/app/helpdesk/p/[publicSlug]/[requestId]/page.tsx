@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router";
+import { observer } from "mobx-react";
 import { ArrowLeft, Send } from "lucide-react";
 import { PublicHelpdeskService } from "@plane/services";
 import type { IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskPortal } from "@plane/types";
@@ -14,7 +15,7 @@ import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
 
 const publicHelpdeskService = new PublicHelpdeskService();
 
-export default function HelpdeskPublicRequestPage() {
+const HelpdeskPublicRequestPage = observer(() => {
   const { publicSlug, requestId } = useParams();
 
   const [portal, setPortal] = useState<IHelpdeskPortal | null>(null);
@@ -29,11 +30,12 @@ export default function HelpdeskPublicRequestPage() {
     if (publicSlug && requestId) {
       const pSlug = publicSlug.toString();
       const rId = requestId.toString();
+      const token = publicHelpdeskStore.customerToken || undefined;
 
       Promise.all([
         publicHelpdeskService.getPublicPortal(pSlug),
-        publicHelpdeskService.getPublicRequestById(pSlug, rId),
-        publicHelpdeskService.getPublicRequestComments(pSlug, rId),
+        publicHelpdeskService.getPublicRequestById(pSlug, rId, token),
+        publicHelpdeskService.getPublicRequestComments(pSlug, rId, token),
       ])
         .then(([portalData, reqData, commentsData]) => {
           setPortal(portalData);
@@ -52,12 +54,12 @@ export default function HelpdeskPublicRequestPage() {
   }, [publicSlug, requestId]);
 
   const handleAddComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !publicSlug || !requestId) return;
     setSubmitting(true);
     try {
       const response = await publicHelpdeskService.createPublicRequestComment(
-        publicSlug.toString(),
-        requestId.toString(),
+        publicSlug,
+        requestId,
         {
           content: newComment,
         },
@@ -168,4 +170,6 @@ export default function HelpdeskPublicRequestPage() {
       )}
     </div>
   );
-}
+});
+
+export default HelpdeskPublicRequestPage;

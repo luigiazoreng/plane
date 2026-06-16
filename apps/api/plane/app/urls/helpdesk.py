@@ -2,6 +2,8 @@ from django.urls import path
 from plane.app.views.helpdesk import (
     HelpdeskCustomerLoginEndpoint,
     HelpdeskCustomerRegisterEndpoint,
+    PublicHelpdeskCustomerLoginEndpoint,
+    PublicHelpdeskCustomerRegisterEndpoint,
     HelpdeskPortalViewSet,
     PublicHelpdeskPortalEndpoint,
     HelpdeskRequestViewSet,
@@ -44,6 +46,16 @@ urlpatterns = [
         "helpdesk/public/portals/<str:public_slug>/",
         PublicHelpdeskPortalEndpoint.as_view(),
         name="public-helpdesk-portal",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/auth/login/",
+        PublicHelpdeskCustomerLoginEndpoint.as_view(),
+        name="public-helpdesk-customer-login",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/auth/register/",
+        PublicHelpdeskCustomerRegisterEndpoint.as_view(),
+        name="public-helpdesk-customer-register",
     ),
     path(
         "helpdesk/public/portals/<str:public_slug>/requests/",
