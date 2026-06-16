@@ -4,12 +4,13 @@
  * See the LICENSE file for details.
  */
 
+import { API_BASE_URL } from "@plane/constants";
 import { APIService } from "../api.service";
 import type { IHelpdeskPortal, IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskRequestIssue } from "@plane/types";
 
 export class HelpdeskService extends APIService {
-  constructor() {
-    super("/api/workspaces/");
+  constructor(BASE_URL?: string) {
+    super((BASE_URL || API_BASE_URL) + "/api/workspaces/");
   }
 
   // --- Portal Management (Agent) ---
@@ -107,11 +108,26 @@ export class HelpdeskService extends APIService {
 }
 
 export class PublicHelpdeskService extends APIService {
-  constructor() {
-    super("/api/helpdesk/public/");
+  constructor(BASE_URL?: string) {
+    super((BASE_URL || API_BASE_URL) + "/api/helpdesk/public/");
+  }
+
+  // --- Customer Authentication (Public) ---
+
+  async loginCustomer(publicSlug: string, data: any): Promise<{ token: string; customer: any }> {
+    return this.post(`portals/${publicSlug}/auth/login/`, data).then((res) => res?.data);
+  }
+
+  async registerCustomer(publicSlug: string, data: any): Promise<{ token: string; customer: any }> {
+    return this.post(`portals/${publicSlug}/auth/register/`, data).then((res) => res?.data);
   }
 
   // --- Customer Portal (Public) ---
+
+  async getPublicRequests(publicSlug: string, token?: string): Promise<IHelpdeskRequest[]> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.get(`portals/${publicSlug}/requests/`, config).then((res) => res?.data);
+  }
 
   async getPublicPortal(publicSlug: string): Promise<IHelpdeskPortal> {
     return this.get(`portals/${publicSlug}/`).then((res) => res?.data);

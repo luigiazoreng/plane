@@ -64,11 +64,11 @@ Para evitar vazamento de contexto com os usuários internos do Plane (agentes/me
   - [ ] Implementar Kanban/List View para exibir os `HelpdeskRequests`.
   - [ ] Criar página de detalhes do Request com chat (comentários) e aba lateral para vinculação de Issues.
 
-- [ ] **Fase 4: Frontend (Portal do Cliente)**
-  - [ ] Criar rota pública para acesso ao portal do Helpdesk.
-  - [ ] Implementar fluxo de Login/Cadastro por e-mail para clientes.
-  - [ ] Implementar formulário de envio de tickets.
-  - [ ] Implementar listagem e visualização de tickets do próprio cliente logado.
+- [x] **Fase 4: Frontend (Portal do Cliente)**
+  - [x] Criar rota pública para acesso ao portal do Helpdesk.
+  - [x] Implementar fluxo de Login/Cadastro por e-mail para clientes.
+  - [x] Implementar formulário de envio de tickets.
+  - [x] Implementar listagem e visualização de tickets do próprio cliente logado.
 
 ---
 
@@ -77,3 +77,8 @@ Para evitar vazamento de contexto com os usuários internos do Plane (agentes/me
 - **[2026-06-15]**: Definição da arquitetura e criação deste documento base de planejamento. Aceite do modelo de acesso misto (público e com login via e-mail).
 - **[2026-06-15]**: Conclusão das Fases 1 e 2. Modelos, Serializers, Views e URLs criados em `apps/api/plane/`.
 - **[2026-06-16]**: Criação da suíte completa de testes de contrato para o Helpdesk. Correção do campo `deleted_at` para read-only para evitar erros de validação de unicidade no DRF. Habilitação do campo `request` gravável no serializer de request/issue e inclusão do método `perform_create` nas views para associar `project_id`. Todos os 10 testes de contrato passando com sucesso no ambiente Docker.
+- **[2026-06-16]**: Conclusão da Fase 4 (Portal do Cliente).
+  - Implementada a arquitetura completa no Frontend (Vite/React Router v7) sob a rota `/helpdesk/p/[publicSlug]`.
+  - Construído a store MobX global (`public-helpdesk.store.ts`) utilizando Singleton isolado do estado principal para evitar vazamento de sessões.
+  - Ajuste nas configurações do React Router explícito no projeto Plane (`apps/web/app/routes/core.ts`) garantindo precedência de rotas estáticas (`new`, `login`, `register`) em relação aos identificadores dinâmicos de ticket.
+  - Melhorias de UX no envio anônimo de tickets para bloquear acessos 404 de recursos restritos via mensagens de sucesso diretas no componente.

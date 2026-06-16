@@ -15,6 +15,7 @@ import { Button } from "@plane/propel/button";
 import { Switch } from "@plane/propel/switch";
 import { Badge } from "@plane/propel/badge";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 
 const HelpdeskPage = observer(() => {
   const { workspaceSlug, projectId } = useParams();
@@ -93,7 +94,29 @@ const HelpdeskPage = observer(() => {
               >
                 Mock Test Data
               </Button>
-              <Button variant="primary" prependIcon={<Plus className="size-4" />}>
+              <Button
+                variant="primary"
+                prependIcon={<Plus className="size-4" />}
+                onClick={async () => {
+                  const slug = window.prompt("Enter the public slug for the new portal:");
+                  if (!slug) return;
+                  const wSlug = workspaceSlug?.toString();
+                  const pId = projectId?.toString();
+                  if (!wSlug || !pId) return;
+
+                  try {
+                    await helpdeskStore.createPortal(wSlug, pId, {
+                      public_slug: slug,
+                      require_login: false,
+                      is_public: true,
+                      enable_chat: true,
+                    });
+                    setToast({ type: TOAST_TYPE.SUCCESS, title: "Success", message: "Portal created successfully" });
+                  } catch (_e) {
+                    setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to create portal" });
+                  }
+                }}
+              >
                 New Portal
               </Button>
             </div>
