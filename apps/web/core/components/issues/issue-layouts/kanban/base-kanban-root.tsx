@@ -18,6 +18,9 @@ import { EIssueServiceType, EIssueLayoutTypes } from "@plane/types";
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useKanbanView } from "@/hooks/store/use-kanban-view";
+import { useCycle } from "@/hooks/store/use-cycle";
+import { useModule } from "@/hooks/store/use-module";
+import { useProjectState } from "@/hooks/store/use-project-state";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useGroupIssuesDragNDrop } from "@/hooks/use-group-dragndrop";
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
@@ -67,6 +70,9 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
   const storeType = useIssueStoreType() as KanbanStoreType;
   const { allowPermissions } = useUserPermissions();
   const { issueMap, issuesFilter, issues } = useIssues(storeType);
+  const state = useProjectState();
+  const cycle = useCycle();
+  const module = useModule();
   const {
     issue: { getIssueById },
   } = useIssueDetail(isEpic ? EIssueServiceType.EPICS : EIssueServiceType.ISSUES);
@@ -96,8 +102,29 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
   const orderBy = displayFilters?.order_by;
 
   useEffect(() => {
-    fetchIssues("init-loader", { canGroup: true, perPageCount: sub_group_by ? 10 : 30 }, viewId);
+    const payload = { canGroup: true, perPageCount: sub_group_by ? 10 : 30 };
+    fetchIssues("init-loader", payload, viewId);
   }, [fetchIssues, storeType, group_by, sub_group_by, viewId]);
+
+  useEffect(() => {
+    if (!workspaceSlug || !projectId) return;
+
+    const workspace = workspaceSlug.toString();
+    const project = projectId.toString();
+    const groupings = [group_by, sub_group_by];
+
+    if (groupings.includes("state") && !state.fetchedMap[project]) {
+      void state.fetchProjectStates(workspace, project).catch(console.error);
+    }
+
+    if (groupings.includes("cycle") && !cycle.fetchedMap[project]) {
+      void cycle.fetchAllCycles(workspace, project).catch(console.error);
+    }
+
+    if (groupings.includes("module") && !module.fetchedMap[project]) {
+      void module.fetchModules(workspace, project).catch(console.error);
+    }
+  }, [workspaceSlug, projectId, group_by, sub_group_by, state, cycle, module]);
 
   const fetchMoreIssues = useCallback(
     (groupId?: string, subgroupId?: string) => {
@@ -217,7 +244,7 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
   const handleCollapsedGroups = useCallback(
     (toggle: "group_by" | "sub_group_by", value: string) => {
       if (workspaceSlug) {
-        let collapsedGroups = issuesFilter?.issueFilters?.kanbanFilters?.[toggle] || [];
+        let collapsedGroups = [...(issuesFilter?.issueFilters?.kanbanFilters?.[toggle] || [])];
         if (collapsedGroups.includes(value)) {
           collapsedGroups = collapsedGroups.filter((_value) => _value != value);
         } else {
