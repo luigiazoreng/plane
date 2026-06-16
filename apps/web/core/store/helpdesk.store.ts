@@ -5,6 +5,7 @@
  */
 
 import { action, makeObservable, observable, runInAction } from "mobx";
+import { computedFn } from "mobx-utils";
 import set from "lodash-es/set";
 // types
 import type { IHelpdeskPortal, IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskRequestIssue } from "@plane/types";
@@ -19,11 +20,19 @@ export interface IHelpdeskStore {
   requests: Record<string, IHelpdeskRequest[]>; // workspaceSlug_projectId -> requests
   comments: Record<string, IHelpdeskRequestComment[]>; // requestId -> comments
   requestIssues: Record<string, IHelpdeskRequestIssue[]>; // requestId -> issues
+  loadingState: Record<string, boolean>;
+  errorState: Record<string, string | null>;
 
   // actions
   fetchPortals: (workspaceSlug: string, projectId: string) => Promise<IHelpdeskPortal[]>;
   fetchRequests: (workspaceSlug: string, projectId: string) => Promise<IHelpdeskRequest[]>;
   fetchRequestById: (workspaceSlug: string, projectId: string, requestId: string) => Promise<IHelpdeskRequest>;
+  updateRequest: (
+    workspaceSlug: string,
+    projectId: string,
+    requestId: string,
+    data: Partial<IHelpdeskRequest>
+  ) => Promise<IHelpdeskRequest>;
   createPortal: (workspaceSlug: string, projectId: string, data: Partial<IHelpdeskPortal>) => Promise<IHelpdeskPortal>;
   updatePortal: (
     workspaceSlug: string,
@@ -51,6 +60,16 @@ export interface IHelpdeskStore {
     requestId: string,
     data: Partial<IHelpdeskRequestIssue>
   ) => Promise<IHelpdeskRequestIssue>;
+  hydrateLinkedIssues: (workspaceSlug: string, projectId: string, requestId: string) => Promise<void>;
+  getProjectPortals: (workspaceSlug: string, projectId: string) => IHelpdeskPortal[];
+  getProjectRequests: (workspaceSlug: string, projectId: string) => IHelpdeskRequest[];
+  getRequestComments: (requestId: string) => IHelpdeskRequestComment[];
+  getRequestIssues: (requestId: string) => IHelpdeskRequestIssue[];
+  getRequestsGroupedByStatus: (
+    workspaceSlug: string,
+    projectId: string
+  ) => Record<IHelpdeskRequest["status"], IHelpdeskRequest[]>;
+  getCollectionState: (key: string) => { isLoading: boolean; error: string | null };
 }
 
 export class HelpdeskStore implements IHelpdeskStore {
@@ -59,9 +78,12 @@ export class HelpdeskStore implements IHelpdeskStore {
   requests: Record<string, IHelpdeskRequest[]> = {};
   comments: Record<string, IHelpdeskRequestComment[]> = {};
   requestIssues: Record<string, IHelpdeskRequestIssue[]> = {};
+  loadingState: Record<string, boolean> = {};
+  errorState: Record<string, string | null> = {};
 
   // services
   helpdeskService;
+  rootStore: CoreRootStore;
 
   constructor(_rootStore: CoreRootStore) {
     makeObservable(this, {
@@ -69,34 +91,71 @@ export class HelpdeskStore implements IHelpdeskStore {
       requests: observable,
       comments: observable,
       requestIssues: observable,
+      loadingState: observable,
+      errorState: observable,
       fetchPortals: action,
       fetchRequests: action,
       fetchRequestById: action,
+      updateRequest: action,
       createPortal: action,
       updatePortal: action,
       fetchRequestComments: action,
       createRequestComment: action,
       fetchRequestIssues: action,
       createRequestIssue: action,
+      hydrateLinkedIssues: action,
     });
 
+    this.rootStore = _rootStore;
     this.helpdeskService = new HelpdeskService();
   }
 
-  fetchPortals = async (workspaceSlug: string, projectId: string): Promise<IHelpdeskPortal[]> => {
-    const response = await this.helpdeskService.getPortals(workspaceSlug, projectId);
+  private getProjectKey = (workspaceSlug: string, projectId: string) => `${workspaceSlug}_${projectId}`;
+
+  private startLoading = (key: string) => {
     runInAction(() => {
-      set(this.portals, [`${workspaceSlug}_${projectId}`], response);
+      set(this.loadingState, [key], true);
+      set(this.errorState, [key], null);
     });
-    return response;
+  };
+
+  private stopLoading = (key: string, error?: unknown) => {
+    runInAction(() => {
+      set(this.loadingState, [key], false);
+      set(this.errorState, [key], error instanceof Error ? error.message : error ? String(error) : null);
+    });
+  };
+
+  fetchPortals = async (workspaceSlug: string, projectId: string): Promise<IHelpdeskPortal[]> => {
+    const key = `portals:${this.getProjectKey(workspaceSlug, projectId)}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getPortals(workspaceSlug, projectId);
+      runInAction(() => {
+        set(this.portals, [this.getProjectKey(workspaceSlug, projectId)], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
   };
 
   fetchRequests = async (workspaceSlug: string, projectId: string): Promise<IHelpdeskRequest[]> => {
-    const response = await this.helpdeskService.getRequests(workspaceSlug, projectId);
-    runInAction(() => {
-      set(this.requests, [`${workspaceSlug}_${projectId}`], response);
-    });
-    return response;
+    const key = `requests:${this.getProjectKey(workspaceSlug, projectId)}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getRequests(workspaceSlug, projectId);
+      runInAction(() => {
+        set(this.requests, [this.getProjectKey(workspaceSlug, projectId)], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
   };
 
   createPortal = async (
@@ -131,16 +190,42 @@ export class HelpdeskStore implements IHelpdeskStore {
   };
 
   fetchRequestById = async (workspaceSlug: string, projectId: string, requestId: string): Promise<IHelpdeskRequest> => {
-    const response = await this.helpdeskService.getRequestById(workspaceSlug, projectId, requestId);
+    const key = `request:${requestId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getRequestById(workspaceSlug, projectId, requestId);
+      runInAction(() => {
+        const list = this.requests[this.getProjectKey(workspaceSlug, projectId)] || [];
+        const idx = list.findIndex((r) => r.id === requestId);
+        if (idx !== -1) {
+          list[idx] = response;
+        } else {
+          list.push(response);
+        }
+        set(this.requests, [this.getProjectKey(workspaceSlug, projectId)], [...list]);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  updateRequest = async (
+    workspaceSlug: string,
+    projectId: string,
+    requestId: string,
+    data: Partial<IHelpdeskRequest>
+  ): Promise<IHelpdeskRequest> => {
+    const response = await this.helpdeskService.updateRequest(workspaceSlug, projectId, requestId, data);
     runInAction(() => {
-      const list = this.requests[`${workspaceSlug}_${projectId}`] || [];
-      const idx = list.findIndex((r) => r.id === requestId);
-      if (idx !== -1) {
-        list[idx] = response;
-      } else {
-        list.push(response);
-      }
-      set(this.requests, [`${workspaceSlug}_${projectId}`], [...list]);
+      const requests = this.requests[this.getProjectKey(workspaceSlug, projectId)] || [];
+      set(
+        this.requests,
+        [this.getProjectKey(workspaceSlug, projectId)],
+        requests.map((request) => (request.id === requestId ? response : request))
+      );
     });
     return response;
   };
@@ -150,11 +235,19 @@ export class HelpdeskStore implements IHelpdeskStore {
     projectId: string,
     requestId: string
   ): Promise<IHelpdeskRequestComment[]> => {
-    const response = await this.helpdeskService.getRequestComments(workspaceSlug, projectId, requestId);
-    runInAction(() => {
-      set(this.comments, [requestId], response);
-    });
-    return response;
+    const key = `comments:${requestId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getRequestComments(workspaceSlug, projectId, requestId);
+      runInAction(() => {
+        set(this.comments, [requestId], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
   };
 
   createRequestComment = async (
@@ -174,27 +267,36 @@ export class HelpdeskStore implements IHelpdeskStore {
   fetchRequestIssues = async (
     workspaceSlug: string,
     projectId: string,
-    _requestId: string
+    requestId: string
   ): Promise<IHelpdeskRequestIssue[]> => {
-    // Assuming getRequestIssues fetches issues across all requests. Wait, the endpoint is getRequestIssues for the project.
-    const response = await this.helpdeskService.getRequestIssues(workspaceSlug, projectId);
-    runInAction(() => {
-      // Group by requestId
-      const grouped = response.reduce(
-        (acc, curr) => {
-          if (!acc[curr.request]) acc[curr.request] = [];
-          acc[curr.request].push(curr);
-          return acc;
-        },
-        {} as Record<string, IHelpdeskRequestIssue[]>
-      );
+    const key = `request-issues:${requestId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getRequestIssues(workspaceSlug, projectId);
+      runInAction(() => {
+        const grouped = response.reduce(
+          (acc, curr) => {
+            if (!acc[curr.request]) acc[curr.request] = [];
+            acc[curr.request].push(curr);
+            return acc;
+          },
+          {} as Record<string, IHelpdeskRequestIssue[]>
+        );
 
-      // Only override the ones returned
-      Object.keys(grouped).forEach((reqId) => {
-        set(this.requestIssues, [reqId], grouped[reqId]);
+        Object.keys(grouped).forEach((reqId) => {
+          set(this.requestIssues, [reqId], grouped[reqId]);
+        });
+
+        if (!grouped[requestId]) {
+          set(this.requestIssues, [requestId], []);
+        }
       });
-    });
-    return response;
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
   };
 
   createRequestIssue = async (
@@ -213,4 +315,55 @@ export class HelpdeskStore implements IHelpdeskStore {
     });
     return response;
   };
+
+  hydrateLinkedIssues = async (workspaceSlug: string, projectId: string, requestId: string): Promise<void> => {
+    const issues = this.requestIssues[requestId] || [];
+    const linkedIssueIds = issues.map((issue) => issue.issue).filter(Boolean);
+
+    if (linkedIssueIds.length === 0) return;
+
+    const missingIssueIds = linkedIssueIds.filter((issueId) => !this.rootStore.issue.issues.getIssueById(issueId));
+    if (missingIssueIds.length === 0) return;
+
+    await this.rootStore.issue.issues.getIssues(workspaceSlug, projectId, missingIssueIds);
+  };
+
+  getProjectPortals = computedFn((workspaceSlug: string, projectId: string) => {
+    return this.portals[this.getProjectKey(workspaceSlug, projectId)] || [];
+  });
+
+  getProjectRequests = computedFn((workspaceSlug: string, projectId: string) => {
+    return this.requests[this.getProjectKey(workspaceSlug, projectId)] || [];
+  });
+
+  getRequestComments = computedFn((requestId: string) => {
+    return this.comments[requestId] || [];
+  });
+
+  getRequestIssues = computedFn((requestId: string) => {
+    return this.requestIssues[requestId] || [];
+  });
+
+  getRequestsGroupedByStatus = computedFn((workspaceSlug: string, projectId: string) => {
+    const grouped: Record<IHelpdeskRequest["status"], IHelpdeskRequest[]> = {
+      open: [],
+      in_progress: [],
+      waiting: [],
+      resolved: [],
+      closed: [],
+    };
+
+    this.getProjectRequests(workspaceSlug, projectId).forEach((request) => {
+      grouped[request.status].push(request);
+    });
+
+    return grouped;
+  });
+
+  getCollectionState = computedFn((key: string) => {
+    return {
+      isLoading: this.loadingState[key] ?? false,
+      error: this.errorState[key] ?? null,
+    };
+  });
 }

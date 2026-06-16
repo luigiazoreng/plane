@@ -28,6 +28,7 @@ export interface IHelpdeskCustomer {
 
 export type THelpdeskRequestStatus = "open" | "in_progress" | "waiting" | "resolved" | "closed";
 export type THelpdeskRequestSource = "public_form" | "internal_form";
+export type THelpdeskAgentLayout = "list" | "kanban";
 
 export interface IHelpdeskRequest {
   id: string;
