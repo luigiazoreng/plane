@@ -169,6 +169,27 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] Adicionar seção "Automatic assignment" dentro de `Portal settings`, com toggle, tipo e multiselect de agentes elegíveis.
   - [x] Atualizar testes contratuais para cobrir persistência da configuração e resolução do assignee.
 
+- [x] **Fase 10: Analytics + SLA**
+  - [x] Adicionar `is_terminal: BooleanField(default=False)` em `HelpdeskStatus`.
+  - [x] Adicionar `first_responded_at` e `resolved_at` em `HelpdeskRequest` (DateTimeField nullable).
+  - [x] Adicionar `sla_first_response_hours` e `sla_resolution_hours` em `HelpdeskPortal` (IntegerField nullable).
+  - [x] Criar migração `0130_helpdesk_analytics_fields` com `RunPython` para setar `is_terminal=True` em statuses com nome "resolved" ou "closed".
+  - [x] Popular `first_responded_at` no primeiro comentário de agente (override `perform_create` em `comment.py`).
+  - [x] Popular/limpar `resolved_at` em transições de status terminal (override `partial_update` em `request.py`).
+  - [x] Criar `HelpdeskAnalyticsEndpoint` em `analytics.py` com rota `GET /api/workspaces/<slug>/helpdesk/analytics/`.
+  - [x] Endpoint retorna `kpis`, `sla` e `charts` (time series, by_status, by_source, resolution_trend, top_agents).
+  - [x] Granularidade automática: `TruncDate` para períodos ≤ 30 dias, `TruncMonth` para ≥ 3 meses.
+  - [x] SLA compliance calculado via `ExpressionWrapper` + `DurationField` + `Avg`; retorna `null` quando SLA não configurado no portal.
+  - [x] Adicionar tipos de analytics a `packages/types/src/helpdesk.ts`.
+  - [x] Adicionar `getAnalytics()` ao `HelpdeskService`.
+  - [x] Criar `helpdesk-analytics.store.ts` com cache key `${workspaceSlug}:${dateFilter}:${portalId}`.
+  - [x] Registrar `helpdeskAnalytics` no `RootStore` (constructor + `resetOnSignOut`).
+  - [x] Criar hook `use-helpdesk-analytics.ts`.
+  - [x] Criar componentes em `apps/web/core/components/helpdesk/analytics/`: filtros, KPI cards, SLA card, 5 gráficos, layout.
+  - [x] Criar página `/{wSlug}/helpdesk/analytics` com `AppHeader`, filtros inline e grid de 4 linhas.
+  - [x] Registrar rota `analytics` em `apps/web/app/routes/core.ts` antes do catch-all `:requestId`.
+  - [x] Adicionar botão "Analytics" (BarChart2) no header da listagem de helpdesk.
+
 ---
 
 ## Pendências Técnicas
@@ -179,6 +200,8 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
 - **Typecheck global do app web**: Continua bloqueado por um erro pré-existente fora do escopo do Helpdesk em `apps/web/core/store/pages/base-page.ts(121,11)`.
 - **Auto-assign ainda sem estratégias adicionais**: O contrato já suporta evolução, mas `round_robin`, `capacity`, skills, horários e reassignment continuam fora do v1.
 - **Definição de "ticket ativo"**: Hoje a regra usa status Helpdesk diferentes de `Resolved` e `Closed` (com fallback centralizado no helper). Se o produto quiser tornar isso configurável por portal, a estrutura já comporta `active_status_ids` no config.
+- **Configuração de SLA no portal**: Os campos `sla_first_response_hours`/`sla_resolution_hours` existem no modelo mas ainda não estão expostos na UI de Settings do portal. A tela de Analytics exibe o SLA configurado via API/Django admin por enquanto.
+- **Dados históricos de SLA**: Tickets criados antes da Fase 10 não têm `first_responded_at` nem `resolved_at` populados. O compliance de SLA só é preciso para tickets criados após a migração `0130`.
 
 ---
 
@@ -229,3 +252,9 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - **Fallback:** quando o pool está vazio ou não há membro elegível válido no workspace, o ticket continua sendo criado sem assignee.
   - **Frontend settings:** `Portal settings` ganhou a seção "Automatic assignment", com toggle, select de tipo e `MemberDropdown` para definir o pool de agentes elegíveis por portal.
   - **Testes:** suíte contratual do Helpdesk expandida para validar persistência da configuração, escolha do agente menos carregado, desempate determinístico e fallback sem responsável.
+- **[2026-06-17]**: Analytics + SLA (Fase 10).
+  - **Backend / modelo:** `HelpdeskStatus` ganhou `is_terminal` para identificar estados de resolução sem depender de nomes; `HelpdeskRequest` ganhou `first_responded_at` e `resolved_at` para cálculo de SLA; `HelpdeskPortal` ganhou `sla_first_response_hours` e `sla_resolution_hours` para configurar thresholds de SLA por portal. Migração `0130` aplica dados iniciais com `RunPython`.
+  - **Timestamps automáticos:** `first_responded_at` é populado via `perform_create` no ViewSet de comentários na primeira resposta do agente; `resolved_at` é gerenciado via `partial_update` no ViewSet de requests — setado ao entrar em status terminal, limpo ao reabrir.
+  - **Endpoint de analytics:** `GET /api/workspaces/<slug>/helpdesk/analytics/` aceita `date_filter` e `portal_id` opcional. Retorna `kpis` (5 métricas com comparativo de período anterior), `sla` (compliance % de primeira resposta e resolução), e `charts` (5 séries: volume ao longo do tempo, por status, por origem, tendência de tempo de resolução, top agentes). Granularidade automática por período.
+  - **Frontend:** tipos completos em `@plane/types`, método `getAnalytics` no service, store `helpdesk-analytics.store.ts` com cache por `workspaceSlug:dateFilter:portalId`, hook dedicado. Tela `/[wSlug]/helpdesk/analytics` com KPI cards coloridos (`text-3xl font-bold`), SLA card com barra de progresso, 5 gráficos via `@plane/propel/charts`, filtros no `AppHeader`. Design alinhado com o resto da aplicação: `bg-custom-background-90` na página, `bg-custom-background-100 rounded-xl border-custom-border-200` nas seções.
+  - **Roteamento:** rota `analytics` registrada em `core.ts` antes do catch-all `:requestId` — evita que `/helpdesk/analytics` seja capturado como um `requestId` dinâmico. Botão "Analytics" adicionado ao header da listagem.
