@@ -6,7 +6,6 @@
 
 export interface IHelpdeskPortal {
   id: string;
-  project: string;
   workspace: string;
   public_slug: string;
   is_public: boolean;
@@ -33,7 +32,6 @@ export type THelpdeskAgentLayout = "list" | "kanban";
 export interface IHelpdeskRequest {
   id: string;
   portal: string;
-  project: string;
   workspace: string;
   customer?: string | null;
   contact_email?: string | null;
@@ -41,7 +39,7 @@ export interface IHelpdeskRequest {
   description: string;
   status: THelpdeskRequestStatus;
   source: THelpdeskRequestSource;
-  assignees: string[]; // List of user IDs
+  assignees: string[];
   created_at: string;
   updated_at: string;
 }
@@ -49,8 +47,8 @@ export interface IHelpdeskRequest {
 export interface IHelpdeskRequestComment {
   id: string;
   request: string;
-  actor?: string | null; // internal user id
-  customer?: string | null; // customer id
+  actor?: string | null;
+  customer?: string | null;
   content: string;
   is_internal: boolean;
   created_at: string;
@@ -60,9 +58,26 @@ export interface IHelpdeskRequestComment {
 export interface IHelpdeskRequestIssue {
   id: string;
   request: string;
-  issue: string; // Issue id
+  issue: string;
   created_at: string;
   updated_at: string;
+}
+
+// -2 = pending, -1 = rejected, 1 = accepted, 2 = duplicate
+export type TIntakeIssueStatus = -2 | -1 | 1 | 2;
+
+export interface IHelpdeskRequestIntakeIssue {
+  id: string;
+  request: string;
+  intake_issue: string;
+  forwarded_to_project: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  // computed by serializer
+  intake_status: TIntakeIssueStatus | null;
+  issue_id: string | null;
+  project_identifier: string | null;
 }
 
 export interface IHelpdeskTokenResponse {
