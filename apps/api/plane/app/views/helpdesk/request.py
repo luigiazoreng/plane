@@ -1,10 +1,11 @@
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import ValidationError
 
 from plane.app.views.base import BaseViewSet
-from plane.db.models.helpdesk import HelpdeskForm, HelpdeskFormVisibility, HelpdeskPortal, HelpdeskRequest
+from plane.db.models.helpdesk import HelpdeskForm, HelpdeskFormVisibility, HelpdeskPortal, HelpdeskRequest, HelpdeskStatus
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from .form import get_customer_from_token, validate_form_submission
@@ -20,6 +21,19 @@ class HelpdeskRequestViewSet(BaseViewSet):
             .get_queryset()
             .filter(workspace__slug=self.kwargs.get("slug"))
         )
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        old_status_id = str(instance.status_id) if instance.status_id else None
+        response = super().partial_update(request, *args, **kwargs)
+        new_status_id = request.data.get("status")
+        if new_status_id and new_status_id != old_status_id:
+            new_status = HelpdeskStatus.objects.filter(id=new_status_id).first()
+            if new_status and new_status.is_terminal:
+                HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=timezone.now())
+            elif new_status and not new_status.is_terminal:
+                HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=None)
+        return response
 
     def perform_create(self, serializer):
         from plane.db.models import Workspace

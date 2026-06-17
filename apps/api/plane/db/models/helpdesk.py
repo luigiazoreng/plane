@@ -44,6 +44,8 @@ class HelpdeskPortal(WorkspaceBaseModel):
         default=AutoAssignmentType.LOAD_BALANCE,
     )
     auto_assignment_config = models.JSONField(default=dict, blank=True)
+    sla_first_response_hours = models.IntegerField(null=True, blank=True)
+    sla_resolution_hours = models.IntegerField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Helpdesk Portal"
@@ -132,6 +134,7 @@ class HelpdeskStatus(WorkspaceBaseModel):
     color = models.CharField(max_length=20, default="#60646C")
     sequence = models.FloatField(default=65535)
     is_default = models.BooleanField(default=False)
+    is_terminal = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Helpdesk Status"
@@ -164,6 +167,8 @@ class HelpdeskRequest(WorkspaceBaseModel):
         max_length=50, choices=HelpdeskRequestSource.choices, default=HelpdeskRequestSource.PUBLIC_FORM
     )
     form_responses = models.JSONField(default=dict, blank=True)
+    first_responded_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
     assignees = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,

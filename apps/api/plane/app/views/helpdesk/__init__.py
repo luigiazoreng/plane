@@ -17,3 +17,4 @@ from .issue import HelpdeskRequestIssueViewSet
 from .intake import HelpdeskRequestIntakeIssueViewSet
 from .comment import HelpdeskRequestCommentViewSet, PublicHelpdeskCommentEndpoint
 from .status import HelpdeskStatusViewSet
+from .analytics import HelpdeskAnalyticsEndpoint

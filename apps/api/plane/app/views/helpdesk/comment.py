@@ -25,11 +25,16 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(
-            workspace_id=HelpdeskRequest.objects.get(id=self.kwargs.get("request_pk")).workspace_id,
-            request_id=self.kwargs.get("request_pk"),
+        hd_request = HelpdeskRequest.objects.get(id=self.kwargs.get("request_pk"))
+        comment = serializer.save(
+            workspace_id=hd_request.workspace_id,
+            request_id=hd_request.id,
             actor=self.request.user,
         )
+        if hd_request.first_responded_at is None and comment.actor is not None:
+            HelpdeskRequest.objects.filter(id=hd_request.id).update(
+                first_responded_at=comment.created_at
+            )
 
 
 class PublicHelpdeskCommentEndpoint(BaseAPIView):

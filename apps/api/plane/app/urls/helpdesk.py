@@ -18,6 +18,7 @@ from plane.app.views.helpdesk import (
     HelpdeskRequestCommentViewSet,
     PublicHelpdeskCommentEndpoint,
     HelpdeskStatusViewSet,
+    HelpdeskAnalyticsEndpoint,
 )
 
 urlpatterns = [
@@ -204,6 +205,13 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/requests/<uuid:request_pk>/comments/<uuid:pk>/",
         HelpdeskRequestCommentViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
         name="helpdesk-request-comment-detail",
+    ),
+
+    # --- Analytics ---
+    path(
+        "workspaces/<str:slug>/helpdesk/analytics/",
+        HelpdeskAnalyticsEndpoint.as_view(),
+        name="helpdesk-analytics",
     ),
 
     # --- Public comments ---
