@@ -101,8 +101,12 @@ const HelpdeskSettingsPage = observer(() => {
     if (!wSlug) return;
     helpdeskStore.fetchStatuses(wSlug);
     helpdeskStore.fetchPortals(wSlug);
-    if (!workspaceMemberIds) fetchWorkspaceMembers(wSlug);
-  }, [fetchWorkspaceMembers, helpdeskStore, wSlug, workspaceMemberIds]);
+  }, [helpdeskStore, wSlug]);
+
+  useEffect(() => {
+    if (!wSlug || workspaceMemberIds) return;
+    fetchWorkspaceMembers(wSlug);
+  }, [fetchWorkspaceMembers, wSlug, workspaceMemberIds]);
 
   const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
   const portals = helpdeskStore.getWorkspacePortals(wSlug);

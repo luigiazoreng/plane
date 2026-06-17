@@ -203,6 +203,15 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
 
 ---
 
+## Bugs Corrigidos (pós-Fase 11)
+
+- **[2026-06-17] Portais somem após adicionar membros ao workspace:**
+  - **Root cause 1 (frontend):** `useEffect` na settings page tinha `workspaceMemberIds` como dependência, causando `fetchPortals` e `fetchStatuses` sempre que um novo membro era adicionado. Se a resposta da API fosse inválida nesse momento, a store era sobrescrita.
+  - **Root cause 2 (store):** `fetchPortals`, `fetchStatuses` e `fetchRequests` não validavam se a resposta era um array antes de fazer `set()` na store — `res?.data` podendo ser `undefined` sobrescrevia os dados existentes.
+  - **Fix:** Separado o `useEffect` da settings page em dois effects independentes (fetch de helpdesk ≠ fetch de membros). Adicionado guard `Array.isArray(response)` antes de qualquer `set()` nas três actions de fetch de lista.
+
+---
+
 ## Pendências Técnicas
 
 - **Core compartilhado para outros módulos**: A fundação de forms já foi criada com foco em reuso, mas ainda vive acoplada ao domínio de Helpdesk. O próximo passo natural é extrair o builder/renderers/contratos para um core realmente compartilhado com Intake e outros módulos.

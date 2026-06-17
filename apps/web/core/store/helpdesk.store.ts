@@ -238,11 +238,13 @@ export class HelpdeskStore implements IHelpdeskStore {
     this.startLoading(key);
     try {
       const response = await this.helpdeskService.getStatuses(workspaceSlug);
-      runInAction(() => {
-        set(this.statuses, [workspaceSlug], response);
-      });
+      if (Array.isArray(response)) {
+        runInAction(() => {
+          set(this.statuses, [workspaceSlug], response);
+        });
+      }
       this.stopLoading(key);
-      return response;
+      return response ?? [];
     } catch (error) {
       this.stopLoading(key, error);
       throw error;
@@ -301,7 +303,8 @@ export class HelpdeskStore implements IHelpdeskStore {
         [workspaceSlug],
         current
           .map((s) => (seqMap[s.id] !== undefined ? Object.assign({}, s, { sequence: seqMap[s.id] }) : s))
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+          .slice()
+          .toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     await this.helpdeskService.reorderStatuses(workspaceSlug, items);
@@ -326,11 +329,13 @@ export class HelpdeskStore implements IHelpdeskStore {
     this.startLoading(key);
     try {
       const response = await this.helpdeskService.getPortals(workspaceSlug);
-      runInAction(() => {
-        set(this.portals, [workspaceSlug], response);
-      });
+      if (Array.isArray(response)) {
+        runInAction(() => {
+          set(this.portals, [workspaceSlug], response);
+        });
+      }
       this.stopLoading(key);
-      return response;
+      return response ?? [];
     } catch (error) {
       this.stopLoading(key, error);
       throw error;
@@ -416,7 +421,10 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.forms,
         [portalId],
-        current.map((form) => (form.id === formId ? response : form)).slice().toSorted((a, b) => a.sequence - b.sequence)
+        current
+          .map((form) => (form.id === formId ? response : form))
+          .slice()
+          .toSorted((a, b) => a.sequence - b.sequence)
       );
       set(this.formFields, [response.id], response.fields_detail || this.formFields[response.id] || []);
     });
@@ -451,7 +459,8 @@ export class HelpdeskStore implements IHelpdeskStore {
           .map((form) =>
             seqMap[form.id] !== undefined ? Object.assign({}, form, { sequence: seqMap[form.id] }) : form
           )
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+          .slice()
+          .toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     const response = await this.helpdeskService.reorderForms(workspaceSlug, items);
@@ -522,7 +531,10 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.formFields,
         [response.form],
-        current.map((field) => (field.id === fieldId ? response : field)).slice().toSorted((a, b) => a.sequence - b.sequence)
+        current
+          .map((field) => (field.id === fieldId ? response : field))
+          .slice()
+          .toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     return response;
@@ -555,7 +567,8 @@ export class HelpdeskStore implements IHelpdeskStore {
           .map((field) =>
             seqMap[field.id] !== undefined ? Object.assign({}, field, { sequence: seqMap[field.id] }) : field
           )
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+          .slice()
+          .toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     const response = await this.helpdeskService.reorderFormFields(workspaceSlug, items);
@@ -575,11 +588,13 @@ export class HelpdeskStore implements IHelpdeskStore {
     this.startLoading(key);
     try {
       const response = await this.helpdeskService.getRequests(workspaceSlug);
-      runInAction(() => {
-        set(this.requests, [workspaceSlug], response);
-      });
+      if (Array.isArray(response)) {
+        runInAction(() => {
+          set(this.requests, [workspaceSlug], response);
+        });
+      }
       this.stopLoading(key);
-      return response;
+      return response ?? [];
     } catch (error) {
       this.stopLoading(key, error);
       throw error;
