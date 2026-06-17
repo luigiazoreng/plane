@@ -190,18 +190,25 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] Registrar rota `analytics` em `apps/web/app/routes/core.ts` antes do catch-all `:requestId`.
   - [x] Adicionar botão "Analytics" (BarChart2) no header da listagem de helpdesk.
 
+- [x] **Fase 11: Correção de Pendências e Qualidade**
+  - [x] **hydrateLinkedIssues determinístico:** substituída hidratação "best effort" por fluxo com `linkedIssueProjectMap` auxiliar (`issueId → projectId`) na store; adicionado `HelpdeskLinkedIssueLookupEndpoint` em `GET /helpdesk/linked-issues/lookup/` para resolver issues ausentes sem endpoint novo de workspace-search.
+  - [x] **Polling de Intake:** polling de 20s com Page Visibility API na página de detalhe do ticket — pausa quando aba está oculta, encerra no unmount; ao detectar transição para `Accepted` com `issue_id` novo, dispara `hydrateLinkedIssues` automaticamente.
+  - [x] **Statuses ativos configuráveis por portal:** `getHelpdeskActiveStatusIds` extraído para `apps/api/plane/app/helpdesk/statuses.py` (backend) e `apps/web/helpers/helpdesk/statuses.ts` (frontend); UI de settings ganhou seletor "Active ticket statuses" com fallback por nome quando vazio.
+  - [x] **SLA configurável no portal:** campos `sla_first_response_hours` / `sla_resolution_hours` expostos na UI de Settings com inputs numéricos; validação no serializer (inteiro positivo ou null); aviso `historical_note` exibido no SLA card quando dados pré-migração 0130 são incluídos.
+  - [x] **Auto-assign com estratégias adicionais:** `round_robin` (cursor por portal) e `capacity` (limite por agente) adicionados ao registry em `auto_assignment.py`; `HelpdeskPortal.AutoAssignmentType` expandido com os novos valores; UI de settings libera a seleção das novas estratégias.
+  - [x] **Extração de form_core backend:** `validate_helpdesk_form_submission` e `build_default_helpdesk_system_fields` movidos de `form.py` para `apps/api/plane/app/helpdesk/form_core.py`; `form.py` passa a importar do módulo centralizado.
+  - [x] **Helpers frontend no path correto:** `statuses.ts` e `form-core.ts` criados em `apps/web/helpers/helpdesk/` (alias `@/helpers/*`) para resolver erros de módulo.
+  - [x] **Typecheck zerado:** corrigidos todos os erros TypeScript do módulo helpdesk — `toSorted()` → `.slice().sort()` (ES2022 compat), `showLabel` faltando no `PieChart`, `super()` sem args em `BasePage` (`extended-base-page.ts`).
+  - [x] **Pin do sidebar persiste:** `HELPDESK = "helpdesk"` adicionado à enum `WorkspaceUserPreference.UserPreferenceKeys` em `workspace.py` — o GET de sidebar-preferences agora cria a linha no banco e o PATCH consegue encontrá-la para persistir o estado de pin.
+
 ---
 
 ## Pendências Técnicas
 
-- **`hydrateLinkedIssues` na store**: Implementação simplificada que silenciosamente ignora issues não encontradas na store. Pode ser melhorada para buscar detalhes da issue via search de workspace aceitando o `projectId` como parâmetro adicional.
-- **Atualização em tempo real do status do Intake**: O status refletido no Dev Pipeline só atualiza quando o usuário navega de volta ao ticket (re-fetch no `useEffect`). WebSocket/polling não implementado.
 - **Core compartilhado para outros módulos**: A fundação de forms já foi criada com foco em reuso, mas ainda vive acoplada ao domínio de Helpdesk. O próximo passo natural é extrair o builder/renderers/contratos para um core realmente compartilhado com Intake e outros módulos.
-- **Typecheck global do app web**: Continua bloqueado por um erro pré-existente fora do escopo do Helpdesk em `apps/web/core/store/pages/base-page.ts(121,11)`.
-- **Auto-assign ainda sem estratégias adicionais**: O contrato já suporta evolução, mas `round_robin`, `capacity`, skills, horários e reassignment continuam fora do v1.
-- **Definição de "ticket ativo"**: Hoje a regra usa status Helpdesk diferentes de `Resolved` e `Closed` (com fallback centralizado no helper). Se o produto quiser tornar isso configurável por portal, a estrutura já comporta `active_status_ids` no config.
-- **Configuração de SLA no portal**: Os campos `sla_first_response_hours`/`sla_resolution_hours` existem no modelo mas ainda não estão expostos na UI de Settings do portal. A tela de Analytics exibe o SLA configurado via API/Django admin por enquanto.
-- **Dados históricos de SLA**: Tickets criados antes da Fase 10 não têm `first_responded_at` nem `resolved_at` populados. O compliance de SLA só é preciso para tickets criados após a migração `0130`.
+- **Dados históricos de SLA**: Tickets criados antes da Fase 10 não têm `first_responded_at` nem `resolved_at` populados. O compliance de SLA só é preciso para tickets criados após a migração `0130`. A tela de analytics exibe o aviso `historical_note` retornado pela API, mas não existe script de backfill.
+- **Auto-assign: estratégias avançadas**: `round_robin` e `capacity` estão implementados no backend e selecionáveis na UI, mas `skills`, horários e reassignment automático continuam fora do escopo atual.
+- **Polling vs. WebSocket**: A atualização do Dev Pipeline usa polling de 20s. Quando a infraestrutura de WebSocket do Plane estiver disponível para o módulo, o provider de atualização pode ser trocado sem reescrever a página (a store já separa o contrato).
 
 ---
 
@@ -258,3 +265,12 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - **Endpoint de analytics:** `GET /api/workspaces/<slug>/helpdesk/analytics/` aceita `date_filter` e `portal_id` opcional. Retorna `kpis` (5 métricas com comparativo de período anterior), `sla` (compliance % de primeira resposta e resolução), e `charts` (5 séries: volume ao longo do tempo, por status, por origem, tendência de tempo de resolução, top agentes). Granularidade automática por período.
   - **Frontend:** tipos completos em `@plane/types`, método `getAnalytics` no service, store `helpdesk-analytics.store.ts` com cache por `workspaceSlug:dateFilter:portalId`, hook dedicado. Tela `/[wSlug]/helpdesk/analytics` com KPI cards coloridos (`text-3xl font-bold`), SLA card com barra de progresso, 5 gráficos via `@plane/propel/charts`, filtros no `AppHeader`. Design alinhado com o resto da aplicação: `bg-custom-background-90` na página, `bg-custom-background-100 rounded-xl border-custom-border-200` nas seções.
   - **Roteamento:** rota `analytics` registrada em `core.ts` antes do catch-all `:requestId` — evita que `/helpdesk/analytics` seja capturado como um `requestId` dinâmico. Botão "Analytics" adicionado ao header da listagem.
+- **[2026-06-17]**: Correção de pendências e qualidade (Fase 11).
+  - **hydrateLinkedIssues:** substituída hidratação silenciosa por fluxo determinístico com mapa auxiliar `linkedIssueProjectMap` (`issueId → projectId`) na store; novo `HelpdeskLinkedIssueLookupEndpoint` resolve issues ausentes sem depender do search workspace.
+  - **Polling de Intake:** implementado polling de 20s com Page Visibility API na página de detalhe — pausa em aba oculta, encerra no unmount, dispara `hydrateLinkedIssues` ao detectar nova `issue_id` em intake aceito.
+  - **SLA configurável na UI:** campos SLA expostos em Portal settings com validação de inteiro positivo no serializer; aviso de janela histórica exibido no SLA card quando o endpoint sinaliza dados pré-migração.
+  - **Statuses ativos configuráveis:** helper `getHelpdeskActiveStatusIds` centralizado em módulo próprio (backend e frontend); UI de settings inclui seletor "Active ticket statuses" com fallback por nome.
+  - **Auto-assign expandido:** estratégias `round_robin` (com cursor persistido por portal) e `capacity` (limite por agente) adicionadas ao registry backend e selecionáveis na UI de settings.
+  - **Extração form_core:** lógica de validação e criação de campos extraída de `form.py` para `helpdesk/form_core.py`; helpers frontend movidos para `helpers/helpdesk/` (alias correto `@/helpers/*`).
+  - **Typecheck zerado:** todos os erros TS do módulo helpdesk corrigidos — `toSorted()` → `.slice().sort()`, `showLabel` no PieChart, `super()` sem args em `BasePage`.
+  - **Pin do sidebar persistente:** `HELPDESK` adicionado a `WorkspaceUserPreference.UserPreferenceKeys` — o GET agora cria a linha no banco e o PATCH consegue salvar o estado de pin após reload.
