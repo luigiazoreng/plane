@@ -127,6 +127,15 @@ export const coreRoutes: RouteConfigEntry[] = [
           ),
         ]),
 
+        // Workspace Helpdesk
+        layout("./(all)/[workspaceSlug]/(projects)/helpdesk/layout.tsx", [
+          route(":workspaceSlug/helpdesk", "./(all)/[workspaceSlug]/(projects)/helpdesk/page.tsx"),
+          route(
+            ":workspaceSlug/helpdesk/:requestId",
+            "./(all)/[workspaceSlug]/(projects)/helpdesk/[requestId]/page.tsx"
+          ),
+        ]),
+
         // Archived Projects
         layout("./(all)/[workspaceSlug]/(projects)/projects/(detail)/archives/layout.tsx", [
           route(
@@ -227,17 +236,6 @@ export const coreRoutes: RouteConfigEntry[] = [
             route(
               ":workspaceSlug/projects/:projectId/intake",
               "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/intake/page.tsx"
-            ),
-          ]),
-          // Helpdesk
-          layout("./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/helpdesk/layout.tsx", [
-            route(
-              ":workspaceSlug/projects/:projectId/helpdesk",
-              "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/helpdesk/page.tsx"
-            ),
-            route(
-              ":workspaceSlug/projects/:projectId/helpdesk/:requestId",
-              "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/helpdesk/[requestId]/page.tsx"
             ),
           ]),
         ]),

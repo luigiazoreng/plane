@@ -7,6 +7,6 @@
 import React from "react";
 import { Outlet } from "react-router";
 
-export default function HelpdeskLayout() {
+export default function WorkspaceHelpdeskLayout() {
   return <Outlet />;
 }
