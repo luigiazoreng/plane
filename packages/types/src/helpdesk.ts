@@ -22,6 +22,8 @@ export interface IHelpdeskPortal {
   auto_assignment_enabled: boolean;
   auto_assignment_type: IHelpdeskAutoAssignmentType;
   auto_assignment_config: IHelpdeskAutoAssignmentConfig;
+  sla_first_response_hours: number | null;
+  sla_resolution_hours: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -97,6 +99,7 @@ export interface IHelpdeskStatus {
   color: string;
   sequence: number;
   is_default: boolean;
+  is_terminal: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -164,4 +167,76 @@ export interface IHelpdeskFormSubmission {
   contact_email?: string;
   form: string;
   responses: Record<string, unknown>;
+}
+
+// --- Analytics ---
+
+export type THelpdeskDateFilter = "yesterday" | "last_7_days" | "last_30_days" | "last_3_months";
+
+export interface IHelpdeskKPIMetric {
+  current: number | null;
+  previous?: number | null;
+  pct_change?: number | null;
+}
+
+export interface IHelpdeskKPIs {
+  total_requests: IHelpdeskKPIMetric;
+  open_requests: IHelpdeskKPIMetric;
+  resolved_requests: IHelpdeskKPIMetric;
+  avg_first_response_hours: IHelpdeskKPIMetric;
+  avg_resolution_hours: IHelpdeskKPIMetric;
+}
+
+export interface IHelpdeskSLACompliance {
+  first_response_pct: number | null;
+  resolution_pct: number | null;
+  sla_first_response_hours: number | null;
+  sla_resolution_hours: number | null;
+}
+
+export interface IHelpdeskTimeSeriesPoint {
+  date: string;
+  count: number;
+}
+
+export interface IHelpdeskResolutionTrendPoint {
+  date: string;
+  avg_hours: number | null;
+}
+
+export interface IHelpdeskStatusChartPoint {
+  status_id: string;
+  status_name: string;
+  color: string;
+  count: number;
+}
+
+export interface IHelpdeskSourceChartPoint {
+  source: string;
+  count: number;
+}
+
+export interface IHelpdeskAgentChartPoint {
+  agent_id: string;
+  display_name: string;
+  count: number;
+}
+
+export interface IHelpdeskCharts {
+  requests_over_time: IHelpdeskTimeSeriesPoint[];
+  by_status: IHelpdeskStatusChartPoint[];
+  by_source: IHelpdeskSourceChartPoint[];
+  resolution_time_trend: IHelpdeskResolutionTrendPoint[];
+  top_agents: IHelpdeskAgentChartPoint[];
+}
+
+export interface IHelpdeskAnalyticsResponse {
+  kpis: IHelpdeskKPIs;
+  sla: IHelpdeskSLACompliance;
+  charts: IHelpdeskCharts;
+}
+
+export interface IHelpdeskAnalyticsFilters {
+  date_filter: THelpdeskDateFilter;
+  portal_id?: string;
 }

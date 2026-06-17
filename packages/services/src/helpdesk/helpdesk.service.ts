@@ -7,6 +7,8 @@
 import { API_BASE_URL } from "@plane/constants";
 import { APIService } from "../api.service";
 import type {
+  IHelpdeskAnalyticsFilters,
+  IHelpdeskAnalyticsResponse,
   IHelpdeskForm,
   IHelpdeskFormField,
   IHelpdeskPortal,
@@ -205,6 +207,12 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/request-intake-issues/${requestIntakeIssueId}/`).then(
       (res) => res?.data
     );
+  }
+
+  // --- Analytics ---
+
+  async getAnalytics(workspaceSlug: string, filters: IHelpdeskAnalyticsFilters): Promise<IHelpdeskAnalyticsResponse> {
+    return this.get(`${workspaceSlug}/helpdesk/analytics/`, { params: filters }).then((res) => res?.data);
   }
 }
 

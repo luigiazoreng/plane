@@ -4,14 +4,23 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import { useNavigate, useParams } from "react-router";
 import { useLocalStorage } from "@plane/hooks";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { IBaseLayoutsBaseGroup, IHelpdeskRequest, IHelpdeskStatus } from "@plane/types";
 import { cn } from "@plane/utils";
-import { CalendarDays, Headset, KanbanSquare, LayoutList, MessageSquareText, Settings, UserRound } from "lucide-react";
+import {
+  BarChart2,
+  CalendarDays,
+  Headset,
+  KanbanSquare,
+  LayoutList,
+  MessageSquareText,
+  Settings,
+  UserRound,
+} from "lucide-react";
 import { BaseKanbanLayout } from "@/components/base-layouts/kanban/layout";
 import { AppHeader } from "@/components/core/app-header";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
@@ -77,6 +86,8 @@ const WorkspaceHelpdeskPage = observer(() => {
   const [inlineStatusRequest, setInlineStatusRequest] = useState<string | null>(null);
   const [addingToGroup, setAddingToGroup] = useState<string | null>(null);
   const [newRequestTitle, setNewRequestTitle] = useState("");
+  const kanbanAddInputRef = useRef<HTMLInputElement>(null);
+  const listAddInputRef = useRef<HTMLInputElement>(null);
 
   const wSlug = workspaceSlug?.toString() || "";
   const layout = storedLayout || "list";
@@ -94,10 +105,7 @@ const WorkspaceHelpdeskPage = observer(() => {
   const portals = helpdeskStore.getWorkspacePortals(wSlug);
   const defaultPortalId = portals[0]?.id;
 
-  const statusMap = useMemo(
-    () => Object.fromEntries(statuses.map((s) => [s.id, s])),
-    [statuses]
-  );
+  const statusMap = useMemo(() => Object.fromEntries(statuses.map((s) => [s.id, s])), [statuses]);
 
   const filteredRequests = useMemo(
     () => (statusFilter === "all" ? requests : requests.filter((r) => r.status === statusFilter)),
@@ -146,6 +154,13 @@ const WorkspaceHelpdeskPage = observer(() => {
   }).length;
   const resolvedRequests = totalRequests - activeRequests;
 
+  useEffect(() => {
+    if (addingToGroup) {
+      kanbanAddInputRef.current?.focus();
+      listAddInputRef.current?.focus();
+    }
+  }, [addingToGroup]);
+
   const handleStatusDrop = async (
     sourceId: string,
     _destinationId: string | null,
@@ -189,23 +204,31 @@ const WorkspaceHelpdeskPage = observer(() => {
         header={
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-custom-sidebar-accent/15 text-custom-sidebar-accent">
+              <div className="bg-custom-sidebar-accent/15 text-custom-sidebar-accent flex size-6 shrink-0 items-center justify-center rounded-md">
                 <Headset className="size-3.5" />
               </div>
-              <span className="text-sm font-semibold text-text-100">Helpdesk</span>
+              <span className="text-sm text-text-100 font-semibold">Helpdesk</span>
               <div className="hidden items-center gap-1.5 md:flex">
                 <span className="text-13 text-tertiary">·</span>
                 <span className="rounded-md bg-layer-1 px-2 py-0.5 text-12 text-secondary">{totalRequests} total</span>
-                <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-12 text-orange-500">
+                <span className="bg-orange-500/10 text-orange-500 rounded-md px-2 py-0.5 text-12">
                   {activeRequests} active
                 </span>
-                <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-12 text-emerald-500">
+                <span className="bg-emerald-500/10 text-emerald-500 rounded-md px-2 py-0.5 text-12">
                   {resolvedRequests} resolved
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(`/${wSlug}/helpdesk/analytics`)}
+                className="flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-13 text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
+              >
+                <BarChart2 className="size-3.5" />
+                <span className="hidden sm:inline">Analytics</span>
+              </button>
               <button
                 type="button"
                 onClick={() => navigate(`/${wSlug}/helpdesk/settings`)}
@@ -221,7 +244,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                   className={cn(
                     "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
                     layout === "list"
-                      ? "bg-accent-strong text-white shadow-sm"
+                      ? "bg-accent-strong shadow-sm text-white"
                       : "text-secondary hover:bg-layer-2 hover:text-primary"
                   )}
                 >
@@ -234,7 +257,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                   className={cn(
                     "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
                     layout === "kanban"
-                      ? "bg-accent-strong text-white shadow-sm"
+                      ? "bg-accent-strong shadow-sm text-white"
                       : "text-secondary hover:bg-layer-2 hover:text-primary"
                   )}
                 >
@@ -312,11 +335,14 @@ const WorkspaceHelpdeskPage = observer(() => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setAddingToGroup(group.id); setNewRequestTitle(""); }}
+                    onClick={() => {
+                      setAddingToGroup(group.id);
+                      setNewRequestTitle("");
+                    }}
                     className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-layer-transparent transition-all hover:bg-layer-transparent-hover"
                     title="Add request"
                   >
-                    <span className="text-xs font-semibold leading-none text-secondary">+</span>
+                    <span className="text-xs leading-none font-semibold text-secondary">+</span>
                   </button>
                 </div>
               );
@@ -327,12 +353,15 @@ const WorkspaceHelpdeskPage = observer(() => {
                 return (
                   <div className="rounded-lg border border-accent-strong bg-layer-2 p-2 shadow-raised-100">
                     <input
-                      autoFocus
+                      ref={kanbanAddInputRef}
                       value={newRequestTitle}
                       onChange={(e) => setNewRequestTitle(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleAddRequest(statusId);
-                        if (e.key === "Escape") { setAddingToGroup(null); setNewRequestTitle(""); }
+                        if (e.key === "Escape") {
+                          setAddingToGroup(null);
+                          setNewRequestTitle("");
+                        }
                       }}
                       placeholder="Request title..."
                       className="w-full bg-transparent text-13 font-medium text-primary outline-none placeholder:text-tertiary"
@@ -342,25 +371,29 @@ const WorkspaceHelpdeskPage = observer(() => {
                         type="button"
                         onClick={() => handleAddRequest(statusId)}
                         disabled={!newRequestTitle.trim() || !defaultPortalId}
-                        className="rounded px-2 py-0.5 text-12 font-medium bg-accent-strong text-white disabled:opacity-40 transition-opacity"
+                        className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                       >
                         Add
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setAddingToGroup(null); setNewRequestTitle(""); }}
-                        className="rounded px-2 py-0.5 text-12 text-secondary hover:bg-layer-transparent-hover transition-colors"
+                        onClick={() => {
+                          setAddingToGroup(null);
+                          setNewRequestTitle("");
+                        }}
+                        className="rounded px-2 py-0.5 text-12 text-secondary transition-colors hover:bg-layer-transparent-hover"
                       >
                         Cancel
                       </button>
-                      {!defaultPortalId && <span className="text-11 text-red-400">No portal configured</span>}
+                      {!defaultPortalId && <span className="text-red-400 text-11">No portal configured</span>}
                     </div>
                   </div>
                 );
               }
               return (
-                <div
-                  className="group/kanban-block relative mb-2 cursor-pointer"
+                <button
+                  type="button"
+                  className="group/kanban-block relative mb-2 w-full cursor-pointer text-left"
                   onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
                 >
                   <div className="block w-full rounded-lg border border-subtle bg-layer-2 p-3 text-13 shadow-raised-100 outline-[0.5px] outline-transparent transition-all hover:border-strong hover:shadow-raised-200">
@@ -386,7 +419,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                       </div>
                     </div>
                   </div>
-                </div>
+                </button>
               );
             }}
           />
@@ -407,7 +440,12 @@ const WorkspaceHelpdeskPage = observer(() => {
                 )}
               >
                 All
-                <span className={cn("rounded-full px-1 text-11 font-semibold", statusFilter === "all" ? "opacity-70" : "bg-layer-1 text-tertiary")}>
+                <span
+                  className={cn(
+                    "rounded-full px-1 text-11 font-semibold",
+                    statusFilter === "all" ? "opacity-70" : "bg-layer-1 text-tertiary"
+                  )}
+                >
                   {totalRequests}
                 </span>
               </button>
@@ -421,16 +459,14 @@ const WorkspaceHelpdeskPage = observer(() => {
                     type="button"
                     onClick={() => setStatusFilter(s.id)}
                     className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-12 font-medium transition-colors"
-                    style={
-                      isActive
-                        ? { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.15)`, color: s.color }
-                        : undefined
-                    }
+                    style={isActive ? { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.15)`, color: s.color } : undefined}
                   >
                     {!isActive && (
                       <span className="flex items-center gap-1.5 rounded-full bg-layer-2 px-2.5 py-1 text-12 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary">
                         {s.name}
-                        <span className="rounded-full bg-layer-1 px-1 text-11 font-semibold text-tertiary">{count}</span>
+                        <span className="rounded-full bg-layer-1 px-1 text-11 font-semibold text-tertiary">
+                          {count}
+                        </span>
                       </span>
                     )}
                     {isActive && (
@@ -459,11 +495,10 @@ const WorkspaceHelpdeskPage = observer(() => {
                     return (
                       <div
                         key={request.id}
-                        className="group relative flex cursor-pointer items-center gap-3 border-b border-subtle px-4 py-2.5 transition-colors hover:bg-layer-1"
-                        onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
+                        className="group relative flex items-center gap-3 border-b border-subtle px-4 py-2.5 transition-colors hover:bg-layer-1"
                       >
                         {/* Status badge — clickable inline */}
-                        <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative shrink-0">
                           {statusObj ? (
                             <StatusChip
                               status={statusObj}
@@ -473,7 +508,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                             <span className="rounded px-2 py-1 text-12 text-tertiary">—</span>
                           )}
                           {isStatusOpen && (
-                            <div className="absolute left-0 top-full z-10 mt-1 min-w-40 rounded-lg border border-subtle bg-layer-1 py-1 shadow-lg">
+                            <div className="shadow-lg absolute top-full left-0 z-10 mt-1 min-w-40 rounded-lg border border-subtle bg-layer-1 py-1">
                               {statuses.map((s) => (
                                 <button
                                   key={s.id}
@@ -492,21 +527,23 @@ const WorkspaceHelpdeskPage = observer(() => {
                           )}
                         </div>
 
-                        {/* Title + description */}
-                        <div className="min-w-0 flex-1">
+                        {/* Title + description — navigate on click */}
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 cursor-pointer text-left"
+                          onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
+                        >
                           <p className="truncate text-body-sm-medium text-primary">{request.title}</p>
                           {request.description && (
                             <p className="mt-0.5 truncate text-12 text-tertiary">{request.description}</p>
                           )}
-                        </div>
+                        </button>
 
                         {/* Meta */}
                         <div className="hidden shrink-0 items-center gap-4 text-tertiary md:flex">
                           <div className="flex items-center gap-1.5 text-13">
                             <UserRound className="size-3.5 shrink-0" />
-                            <span className="max-w-[120px] truncate">
-                              {request.contact_email || "Authenticated"}
-                            </span>
+                            <span className="max-w-[120px] truncate">{request.contact_email || "Authenticated"}</span>
                           </div>
                           <div className="flex items-center gap-1 text-13">
                             <CalendarDays className="size-3.5 shrink-0" />
@@ -528,12 +565,15 @@ const WorkspaceHelpdeskPage = observer(() => {
                         <StatusChip status={statusMap[addingToGroup]} showDot className="shrink-0" />
                       )}
                       <input
-                        autoFocus
+                        ref={listAddInputRef}
                         value={newRequestTitle}
                         onChange={(e) => setNewRequestTitle(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleAddRequest(addingToGroup);
-                          if (e.key === "Escape") { setAddingToGroup(null); setNewRequestTitle(""); }
+                          if (e.key === "Escape") {
+                            setAddingToGroup(null);
+                            setNewRequestTitle("");
+                          }
                         }}
                         placeholder="Request title..."
                         className="min-w-0 flex-1 bg-transparent text-body-sm-medium text-primary outline-none placeholder:text-tertiary"
@@ -543,14 +583,17 @@ const WorkspaceHelpdeskPage = observer(() => {
                           type="button"
                           onClick={() => handleAddRequest(addingToGroup)}
                           disabled={!newRequestTitle.trim() || !defaultPortalId}
-                          className="rounded px-2 py-0.5 text-12 font-medium bg-accent-strong text-white disabled:opacity-40 transition-opacity"
+                          className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                         >
                           Add
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setAddingToGroup(null); setNewRequestTitle(""); }}
-                          className="rounded px-2 py-0.5 text-12 text-secondary hover:bg-layer-transparent-hover transition-colors"
+                          onClick={() => {
+                            setAddingToGroup(null);
+                            setNewRequestTitle("");
+                          }}
+                          className="rounded px-2 py-0.5 text-12 text-secondary transition-colors hover:bg-layer-transparent-hover"
                         >
                           Cancel
                         </button>
@@ -565,11 +608,14 @@ const WorkspaceHelpdeskPage = observer(() => {
                 type="button"
                 onClick={() => {
                   const target = statusFilter !== "all" ? statusFilter : (statuses[0]?.id ?? null);
-                  if (target) { setAddingToGroup(target); setNewRequestTitle(""); }
+                  if (target) {
+                    setAddingToGroup(target);
+                    setNewRequestTitle("");
+                  }
                 }}
                 className="flex w-full items-center gap-2 px-4 py-2.5 text-13 text-tertiary transition-colors hover:bg-layer-1 hover:text-secondary"
               >
-                <span className="text-base font-medium leading-none">+</span>
+                <span className="text-base leading-none font-medium">+</span>
                 New request
               </button>
             </div>
