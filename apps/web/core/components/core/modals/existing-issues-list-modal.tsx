@@ -194,7 +194,7 @@ export function ExistingIssuesListModal(props: Props) {
           {workspaceLevelToggle && (
             <Tooltip tooltipContent="Toggle workspace level search" isMobile={isMobile}>
               <div
-                className={`flex flex-shrink-0 cursor-pointer items-center gap-1 text-11 ${
+                className={`flex shrink-0 cursor-pointer items-center gap-1 text-11 ${
                   isWorkspaceLevel ? "text-primary" : "text-secondary"
                 }`}
               >
@@ -202,7 +202,7 @@ export function ExistingIssuesListModal(props: Props) {
                 <button
                   type="button"
                   onClick={() => setIsWorkspaceLevel((prevData) => !prevData)}
-                  className="flex-shrink-0"
+                  className="shrink-0"
                 >
                   {t("common.workspace_level")}
                 </button>
@@ -261,12 +261,12 @@ export function ExistingIssuesListModal(props: Props) {
                         <div className="flex items-center gap-2 truncate">
                           <input type="checkbox" checked={selected} readOnly />
                           <span
-                            className="block h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                            className="block h-1.5 w-1.5 shrink-0 rounded-full"
                             style={{
                               backgroundColor: issue.state__color,
                             }}
                           />
-                          <span className="flex-shrink-0">
+                          <span className="shrink-0">
                             <IssueIdentifier
                               projectId={issue.project_id}
                               issueTypeId={issue.type_id}
@@ -287,7 +287,7 @@ export function ExistingIssuesListModal(props: Props) {
                             sequenceId: issue?.sequence_id,
                           })}
                           target="_blank"
-                          className="relative z-1 hidden flex-shrink-0 text-secondary group-hover:block hover:text-primary"
+                          className="relative z-1 hidden shrink-0 text-secondary group-hover:block hover:text-primary"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
                         >
