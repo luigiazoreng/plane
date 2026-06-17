@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from plane.app.views.base import BaseViewSet
 from plane.db.models.helpdesk import HelpdeskForm, HelpdeskFormVisibility, HelpdeskPortal, HelpdeskRequest
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
+from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from .form import get_customer_from_token, validate_form_submission
 
 
@@ -33,7 +34,8 @@ class HelpdeskRequestViewSet(BaseViewSet):
             form = HelpdeskForm.objects.filter(id=form_id, portal=portal, workspace=workspace).first()
             if not form:
                 raise ValidationError("Form not found for this portal.")
-        serializer.save(workspace=workspace, portal=portal, form=form)
+        helpdesk_request = serializer.save(workspace=workspace, portal=portal, form=form)
+        assign_helpdesk_request_automatically(helpdesk_request, request_payload=self.request.data)
 
 
 class PublicHelpdeskRequestEndpoint(BaseViewSet):
@@ -114,21 +116,23 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                 "form_responses": result["responses"],
             })
             if serializer.is_valid():
-                serializer.save(
+                helpdesk_request = serializer.save(
                     portal=portal,
                     form=form,
                     workspace=portal.workspace,
                     customer=customer,
                 )
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
+                return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = HelpdeskRequestSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(
+            helpdesk_request = serializer.save(
                 portal=portal,
                 workspace=portal.workspace,
                 customer=customer,
             )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
+            return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

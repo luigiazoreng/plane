@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from plane.app.serializers.helpdesk import HelpdeskFormFieldSerializer, HelpdeskFormSerializer, HelpdeskRequestSerializer
 from plane.app.views.base import BaseAPIView, BaseViewSet
+from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import (
     HelpdeskCustomer,
@@ -362,5 +363,6 @@ class PublicHelpdeskFormSubmitEndpoint(BaseAPIView):
             source=HelpdeskRequestSource.PUBLIC_FORM,
             form_responses=result["responses"],
         )
+        assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
         serializer = HelpdeskRequestSerializer(helpdesk_request)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

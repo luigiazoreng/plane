@@ -30,10 +30,20 @@ class HelpdeskCustomer(WorkspaceBaseModel):
 
 
 class HelpdeskPortal(WorkspaceBaseModel):
+    class AutoAssignmentType(models.TextChoices):
+        LOAD_BALANCE = "load_balance", "Load Balance"
+
     is_public = models.BooleanField(default=True)
     require_login = models.BooleanField(default=False)
     enable_chat = models.BooleanField(default=False)
     public_slug = models.SlugField(max_length=255, unique=True)
+    auto_assignment_enabled = models.BooleanField(default=False)
+    auto_assignment_type = models.CharField(
+        max_length=50,
+        choices=AutoAssignmentType.choices,
+        default=AutoAssignmentType.LOAD_BALANCE,
+    )
+    auto_assignment_config = models.JSONField(default=dict, blank=True)
 
     class Meta:
         verbose_name = "Helpdesk Portal"

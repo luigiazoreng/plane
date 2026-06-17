@@ -4,6 +4,14 @@
  * See the LICENSE file for details.
  */
 
+export type IHelpdeskAutoAssignmentType = "load_balance";
+
+export interface IHelpdeskAutoAssignmentConfig {
+  version: number;
+  member_ids: string[];
+  active_status_ids: string[];
+}
+
 export interface IHelpdeskPortal {
   id: string;
   workspace: string;
@@ -11,6 +19,9 @@ export interface IHelpdeskPortal {
   is_public: boolean;
   require_login: boolean;
   enable_chat: boolean;
+  auto_assignment_enabled: boolean;
+  auto_assignment_type: IHelpdeskAutoAssignmentType;
+  auto_assignment_config: IHelpdeskAutoAssignmentConfig;
   created_at: string;
   updated_at: string;
 }

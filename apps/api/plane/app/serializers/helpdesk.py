@@ -14,6 +14,7 @@ from plane.db.models import (
     HelpdeskStatus,
 )
 from plane.app.serializers.base import BaseSerializer
+from plane.app.helpdesk.auto_assignment import normalize_helpdesk_auto_assignment_config
 
 READ_ONLY_BASE = ["workspace", "created_at", "updated_at", "created_by", "updated_by", "deleted_at"]
 
@@ -36,6 +37,29 @@ class HelpdeskStatusSerializer(BaseSerializer):
 
 
 class HelpdeskPortalSerializer(BaseSerializer):
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = getattr(self, "instance", None)
+
+        auto_assignment_enabled = attrs.get(
+            "auto_assignment_enabled",
+            getattr(instance, "auto_assignment_enabled", False),
+        )
+        auto_assignment_type = attrs.get(
+            "auto_assignment_type",
+            getattr(instance, "auto_assignment_type", HelpdeskPortal.AutoAssignmentType.LOAD_BALANCE),
+        )
+        config = normalize_helpdesk_auto_assignment_config(
+            attrs.get("auto_assignment_config", getattr(instance, "auto_assignment_config", {}))
+        )
+
+        if auto_assignment_enabled and not auto_assignment_type:
+            raise serializers.ValidationError({"auto_assignment_type": "Assignment type is required."})
+
+        attrs["auto_assignment_type"] = auto_assignment_type or HelpdeskPortal.AutoAssignmentType.LOAD_BALANCE
+        attrs["auto_assignment_config"] = config
+        return attrs
+
     class Meta:
         model = HelpdeskPortal
         fields = "__all__"

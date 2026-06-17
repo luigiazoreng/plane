@@ -11,7 +11,14 @@ import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
 import { Switch } from "@plane/propel/switch";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IHelpdeskFieldType, IHelpdeskFormField, IHelpdeskPortal, IHelpdeskStatus } from "@plane/types";
+import type {
+  IHelpdeskAutoAssignmentConfig,
+  IHelpdeskAutoAssignmentType,
+  IHelpdeskFieldType,
+  IHelpdeskFormField,
+  IHelpdeskPortal,
+  IHelpdeskStatus,
+} from "@plane/types";
 import { cn } from "@plane/utils";
 import { Sortable } from "@plane/ui";
 import {
@@ -32,6 +39,8 @@ import {
   X,
 } from "lucide-react";
 import { AppHeader } from "@/components/core/app-header";
+import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
+import { useMember } from "@/hooks/store/use-member";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 
 // Simple hex color palette for status creation
@@ -64,10 +73,21 @@ const CUSTOM_FIELD_TYPES: { type: IHelpdeskFieldType; label: string; icon: typeo
 
 type TSettingsTab = "statuses" | "portal-settings" | "forms";
 
+const getAutoAssignmentConfig = (portal: IHelpdeskPortal): IHelpdeskAutoAssignmentConfig => ({
+  version: typeof portal.auto_assignment_config?.version === "number" ? portal.auto_assignment_config.version : 1,
+  member_ids: Array.isArray(portal.auto_assignment_config?.member_ids) ? portal.auto_assignment_config.member_ids : [],
+  active_status_ids: Array.isArray(portal.auto_assignment_config?.active_status_ids)
+    ? portal.auto_assignment_config.active_status_ids
+    : [],
+});
+
 const HelpdeskSettingsPage = observer(() => {
   const { workspaceSlug } = useParams();
   const navigate = useNavigate();
   const helpdeskStore = useHelpdesk();
+  const {
+    workspace: { fetchWorkspaceMembers, workspaceMemberIds },
+  } = useMember();
 
   const wSlug = workspaceSlug?.toString() || "";
 
@@ -94,7 +114,8 @@ const HelpdeskSettingsPage = observer(() => {
     if (!wSlug) return;
     helpdeskStore.fetchStatuses(wSlug);
     helpdeskStore.fetchPortals(wSlug);
-  }, [wSlug, helpdeskStore]);
+    if (!workspaceMemberIds) fetchWorkspaceMembers(wSlug);
+  }, [fetchWorkspaceMembers, helpdeskStore, wSlug, workspaceMemberIds]);
 
   const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
   const portals = helpdeskStore.getWorkspacePortals(wSlug);
@@ -254,6 +275,28 @@ const HelpdeskSettingsPage = observer(() => {
       setToast({ type: TOAST_TYPE.SUCCESS, title: "Portal deleted" });
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to delete portal" });
+    }
+  };
+
+  const handleAutoAssignmentUpdate = async (
+    portal: IHelpdeskPortal,
+    patch: Partial<Pick<IHelpdeskPortal, "auto_assignment_enabled" | "auto_assignment_type">> & {
+      auto_assignment_config?: Partial<IHelpdeskAutoAssignmentConfig>;
+    }
+  ) => {
+    const currentConfig = getAutoAssignmentConfig(portal);
+    try {
+      await helpdeskStore.updatePortal(wSlug, portal.id, {
+        auto_assignment_enabled: patch.auto_assignment_enabled ?? portal.auto_assignment_enabled,
+        auto_assignment_type: (patch.auto_assignment_type ??
+          portal.auto_assignment_type ??
+          "load_balance") as IHelpdeskAutoAssignmentType,
+        auto_assignment_config: patch.auto_assignment_config
+          ? { ...currentConfig, ...patch.auto_assignment_config }
+          : currentConfig,
+      });
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update automatic assignment" });
     }
   };
 
@@ -535,111 +578,198 @@ const HelpdeskSettingsPage = observer(() => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {portals.map((portal) => (
-                    <div key={portal.id} className="rounded-xl border border-subtle bg-layer-2">
-                      <div className="flex items-center justify-between gap-4 border-b border-subtle px-4 py-3">
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                          {editingSlug?.id === portal.id ? (
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
-                              <div className="flex min-w-0 flex-1 items-center gap-1 rounded-md border border-accent-strong bg-layer-1 px-2 py-1 text-13">
-                                <span className="shrink-0 text-tertiary">/helpdesk/p/</span>
-                                <input
-                                  value={editingSlug.value}
+                  {portals.map((portal) => {
+                    const autoAssignmentConfig = getAutoAssignmentConfig(portal);
+                    const isAutoAssignEnabled = portal.auto_assignment_enabled;
+
+                    return (
+                      <div key={portal.id} className="rounded-xl border border-subtle bg-layer-2">
+                        <div className="flex items-center justify-between gap-4 border-b border-subtle px-4 py-3">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            {editingSlug?.id === portal.id ? (
+                              <div className="flex min-w-0 flex-1 items-center gap-2">
+                                <div className="flex min-w-0 flex-1 items-center gap-1 rounded-md border border-accent-strong bg-layer-1 px-2 py-1 text-13">
+                                  <span className="shrink-0 text-tertiary">/helpdesk/p/</span>
+                                  <input
+                                    value={editingSlug.value}
+                                    onChange={(e) =>
+                                      setEditingSlug({
+                                        ...editingSlug,
+                                        value: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                                      })
+                                    }
+                                    className="min-w-0 flex-1 bg-transparent text-primary outline-none"
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleSaveSlug();
+                                      if (e.key === "Escape") setEditingSlug(null);
+                                    }}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleSaveSlug}
+                                  className="bg-accent-strong rounded-md px-2.5 py-1 text-12 font-medium text-white"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingSlug(null)}
+                                  className="text-tertiary hover:text-primary"
+                                >
+                                  <X className="size-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="truncate text-13 font-medium text-primary">
+                                  /helpdesk/p/{portal.public_slug}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingSlug({ id: portal.id, value: portal.public_slug })}
+                                  className="shrink-0 text-tertiary transition-colors hover:text-primary"
+                                  title="Edit slug"
+                                >
+                                  <Pencil className="size-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Badge variant={portal.is_public ? "success" : "neutral"} size="sm">
+                              {portal.is_public ? "Public" : "Private"}
+                            </Badge>
+                            <a
+                              href={`/helpdesk/p/${portal.public_slug}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-tertiary transition-colors hover:text-primary"
+                              title="Open portal"
+                            >
+                              <ExternalLink className="size-4" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingPortalId(portal.id)}
+                              className="hover:text-red-500 text-tertiary transition-colors"
+                              title="Delete portal"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="divide-y divide-subtle">
+                          <SettingRow
+                            label="Public access"
+                            description="Anyone with the link can view and submit requests without logging in."
+                            control={
+                              <Switch value={portal.is_public} onChange={() => handleToggle(portal, "is_public")} />
+                            }
+                          />
+                          <SettingRow
+                            label="Require login"
+                            description="Customers must create an account to submit and track their requests."
+                            control={
+                              <Switch
+                                value={portal.require_login}
+                                onChange={() => handleToggle(portal, "require_login")}
+                              />
+                            }
+                          />
+                          <SettingRow
+                            label="Customer chat"
+                            description="Allow customers to reply to their tickets from the public portal."
+                            control={
+                              <Switch value={portal.enable_chat} onChange={() => handleToggle(portal, "enable_chat")} />
+                            }
+                          />
+                          <div className="space-y-5 px-4 py-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="text-13 font-medium text-primary">Automatic assignment</p>
+                                <p className="mt-1 text-13 text-tertiary">
+                                  Assigns new tickets to the eligible agent with the lowest active Helpdesk load.
+                                </p>
+                              </div>
+                              <Switch
+                                value={isAutoAssignEnabled}
+                                onChange={() =>
+                                  handleAutoAssignmentUpdate(portal, {
+                                    auto_assignment_enabled: !isAutoAssignEnabled,
+                                    auto_assignment_config: autoAssignmentConfig,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div
+                              className={cn(
+                                "grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]",
+                                !isAutoAssignEnabled && "opacity-60"
+                              )}
+                            >
+                              <label className="space-y-1">
+                                <span className="text-12 font-medium text-secondary">Assignment type</span>
+                                <select
+                                  value={portal.auto_assignment_type || "load_balance"}
                                   onChange={(e) =>
-                                    setEditingSlug({
-                                      ...editingSlug,
-                                      value: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                                    handleAutoAssignmentUpdate(portal, {
+                                      auto_assignment_type: e.target.value as IHelpdeskAutoAssignmentType,
                                     })
                                   }
-                                  className="min-w-0 flex-1 bg-transparent text-primary outline-none"
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveSlug();
-                                    if (e.key === "Escape") setEditingSlug(null);
-                                  }}
-                                />
+                                  disabled={!isAutoAssignEnabled}
+                                  className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none disabled:cursor-not-allowed"
+                                >
+                                  <option value="load_balance">Load balance</option>
+                                </select>
+                              </label>
+
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-12 font-medium text-secondary">Eligible agents</span>
+                                  {autoAssignmentConfig.member_ids.length > 0 && (
+                                    <Badge size="sm" variant="neutral">
+                                      {autoAssignmentConfig.member_ids.length}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="min-h-10 rounded-md border border-subtle bg-layer-1 px-3 py-2">
+                                  <MemberDropdown
+                                    value={autoAssignmentConfig.member_ids}
+                                    onChange={(memberIds) =>
+                                      handleAutoAssignmentUpdate(portal, {
+                                        auto_assignment_config: { member_ids: memberIds },
+                                      })
+                                    }
+                                    multiple
+                                    memberIds={workspaceMemberIds ?? undefined}
+                                    buttonVariant={
+                                      autoAssignmentConfig.member_ids.length > 0
+                                        ? "transparent-without-text"
+                                        : "transparent-with-text"
+                                    }
+                                    buttonClassName="min-h-6 px-0 hover:bg-transparent"
+                                    placeholder="Select agents"
+                                    disabled={!isAutoAssignEnabled}
+                                  />
+                                </div>
+                                {autoAssignmentConfig.member_ids.length === 0 ? (
+                                  <p className="text-amber-500 text-12">
+                                    Tickets will remain unassigned until you add agents.
+                                  </p>
+                                ) : (
+                                  <p className="text-12 text-tertiary">
+                                    New tickets will be assigned to the least-loaded eligible agent.
+                                  </p>
+                                )}
                               </div>
-                              <button
-                                type="button"
-                                onClick={handleSaveSlug}
-                                className="bg-accent-strong rounded-md px-2.5 py-1 text-12 font-medium text-white"
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingSlug(null)}
-                                className="text-tertiary hover:text-primary"
-                              >
-                                <X className="size-4" />
-                              </button>
                             </div>
-                          ) : (
-                            <>
-                              <span className="truncate text-13 font-medium text-primary">
-                                /helpdesk/p/{portal.public_slug}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setEditingSlug({ id: portal.id, value: portal.public_slug })}
-                                className="shrink-0 text-tertiary transition-colors hover:text-primary"
-                                title="Edit slug"
-                              >
-                                <Pencil className="size-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Badge variant={portal.is_public ? "success" : "neutral"} size="sm">
-                            {portal.is_public ? "Public" : "Private"}
-                          </Badge>
-                          <a
-                            href={`/helpdesk/p/${portal.public_slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-tertiary transition-colors hover:text-primary"
-                            title="Open portal"
-                          >
-                            <ExternalLink className="size-4" />
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingPortalId(portal.id)}
-                            className="hover:text-red-500 text-tertiary transition-colors"
-                            title="Delete portal"
-                          >
-                            <Trash2 className="size-4" />
-                          </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="divide-y divide-subtle">
-                        <SettingRow
-                          label="Public access"
-                          description="Anyone with the link can view and submit requests without logging in."
-                          control={
-                            <Switch value={portal.is_public} onChange={() => handleToggle(portal, "is_public")} />
-                          }
-                        />
-                        <SettingRow
-                          label="Require login"
-                          description="Customers must create an account to submit and track their requests."
-                          control={
-                            <Switch
-                              value={portal.require_login}
-                              onChange={() => handleToggle(portal, "require_login")}
-                            />
-                          }
-                        />
-                        <SettingRow
-                          label="Customer chat"
-                          description="Allow customers to reply to their tickets from the public portal."
-                          control={
-                            <Switch value={portal.enable_chat} onChange={() => handleToggle(portal, "enable_chat")} />
-                          }
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -946,7 +1076,7 @@ const HelpdeskSettingsPage = observer(() => {
                                       </button>
                                     </div>
                                     <div className="space-y-2">
-                                      {selectedField.options.map((option) => (
+                                      {selectedField.options.map((option, index) => (
                                         <div
                                           key={`${selectedField.id}-${option.value || option.label}`}
                                           className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2"
