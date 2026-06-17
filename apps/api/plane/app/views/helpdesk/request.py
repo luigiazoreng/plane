@@ -18,15 +18,17 @@ class HelpdeskRequestViewSet(BaseViewSet):
         return self.filter_queryset(
             super()
             .get_queryset()
-            .filter(workspace__slug=self.kwargs.get("slug"), project_id=self.kwargs.get("project_id"))
+            .filter(workspace__slug=self.kwargs.get("slug"))
         )
 
     def perform_create(self, serializer):
-        portal = HelpdeskPortal.objects.filter(project_id=self.kwargs.get("project_id")).first()
+        from plane.db.models import Workspace
+        workspace = Workspace.objects.get(slug=self.kwargs.get("slug"))
+        portal_id = self.request.data.get("portal")
+        portal = HelpdeskPortal.objects.filter(id=portal_id, workspace=workspace).first()
         if not portal:
-            raise ValidationError("Please create a Helpdesk Portal for the project first.")
-        serializer.save(project_id=self.kwargs.get("project_id"), portal=portal)
-
+            raise ValidationError("Portal not found for this workspace.")
+        serializer.save(workspace=workspace, portal=portal)
 
 
 class PublicHelpdeskRequestEndpoint(BaseViewSet):
@@ -103,9 +105,8 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
         if serializer.is_valid():
             serializer.save(
                 portal=portal,
-                project=portal.project,
+                workspace=portal.workspace,
                 customer=customer,
             )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-

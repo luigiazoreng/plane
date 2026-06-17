@@ -15,15 +15,13 @@ class HelpdeskPortalViewSet(BaseViewSet):
         return self.filter_queryset(
             super()
             .get_queryset()
-            .filter(workspace__slug=self.kwargs.get("slug"), project_id=self.kwargs.get("project_id"))
+            .filter(workspace__slug=self.kwargs.get("slug"))
         )
 
     def perform_create(self, serializer):
-        project_id = self.kwargs.get("project_id")
-        if HelpdeskPortal.objects.filter(project_id=project_id).exists():
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError("A portal already exists for this project.")
-        serializer.save(project_id=project_id)
+        from plane.db.models import Workspace
+        workspace = Workspace.objects.get(slug=self.kwargs.get("slug"))
+        serializer.save(workspace=workspace)
 
 
 class PublicHelpdeskPortalEndpoint(BaseAPIView):

@@ -12,6 +12,7 @@ from .project import ProjectLiteSerializer
 from .state import StateLiteSerializer
 from .user import UserLiteSerializer
 from plane.db.models import Intake, IntakeIssue, Issue, StateGroup, State
+from plane.db.models.helpdesk import HelpdeskRequestIntakeIssue, HelpdeskRequestIssue
 
 
 class IntakeSerializer(BaseSerializer):
@@ -80,6 +81,17 @@ class IntakeIssueSerializer(BaseSerializer):
                 if default_state:
                     issue.state = default_state
                     issue.save()
+
+            # Auto-link the accepted issue to any Helpdesk tickets that forwarded to this intake
+            hd_links = HelpdeskRequestIntakeIssue.objects.filter(
+                intake_issue=instance
+            ).select_related("request")
+            for hd_link in hd_links:
+                HelpdeskRequestIssue.objects.get_or_create(
+                    request=hd_link.request,
+                    issue=issue,
+                    defaults={"workspace": hd_link.workspace},
+                )
 
         return instance
 

@@ -5,7 +5,7 @@ from django.contrib.auth.hashers import make_password, check_password
 
 # Module imports
 from plane.db.models.workspace import WorkspaceBaseModel
-from plane.db.models.project import ProjectBaseModel
+
 
 class HelpdeskCustomer(WorkspaceBaseModel):
     name = models.CharField(max_length=255)
@@ -29,7 +29,7 @@ class HelpdeskCustomer(WorkspaceBaseModel):
         return self.email
 
 
-class HelpdeskPortal(ProjectBaseModel):
+class HelpdeskPortal(WorkspaceBaseModel):
     is_public = models.BooleanField(default=True)
     require_login = models.BooleanField(default=False)
     enable_chat = models.BooleanField(default=False)
@@ -57,7 +57,7 @@ class HelpdeskRequestSource(models.TextChoices):
     INTERNAL_FORM = "internal_form", "Internal Form"
 
 
-class HelpdeskRequest(ProjectBaseModel):
+class HelpdeskRequest(WorkspaceBaseModel):
     portal = models.ForeignKey(HelpdeskPortal, on_delete=models.CASCADE, related_name="requests")
     customer = models.ForeignKey(
         HelpdeskCustomer, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests"
@@ -88,7 +88,7 @@ class HelpdeskRequest(ProjectBaseModel):
         return self.title
 
 
-class HelpdeskRequestComment(ProjectBaseModel):
+class HelpdeskRequestComment(WorkspaceBaseModel):
     request = models.ForeignKey(HelpdeskRequest, on_delete=models.CASCADE, related_name="comments")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="helpdesk_comments"
@@ -105,7 +105,7 @@ class HelpdeskRequestComment(ProjectBaseModel):
         db_table = "helpdesk_request_comments"
 
 
-class HelpdeskRequestIssue(ProjectBaseModel):
+class HelpdeskRequestIssue(WorkspaceBaseModel):
     request = models.ForeignKey(HelpdeskRequest, on_delete=models.CASCADE, related_name="issue_links")
     issue = models.ForeignKey("db.Issue", on_delete=models.CASCADE, related_name="helpdesk_requests")
 
@@ -116,7 +116,7 @@ class HelpdeskRequestIssue(ProjectBaseModel):
         db_table = "helpdesk_request_issues"
 
 
-class HelpdeskRequestAssignee(ProjectBaseModel):
+class HelpdeskRequestAssignee(WorkspaceBaseModel):
     request = models.ForeignKey(HelpdeskRequest, on_delete=models.CASCADE, related_name="request_assignees")
     assignee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -132,3 +132,27 @@ class HelpdeskRequestAssignee(ProjectBaseModel):
 
     def __str__(self):
         return f"{self.request.title} -> {self.assignee.email}"
+
+
+class HelpdeskRequestIntakeIssue(WorkspaceBaseModel):
+    request = models.ForeignKey(HelpdeskRequest, on_delete=models.CASCADE, related_name="intake_links")
+    intake_issue = models.ForeignKey("db.IntakeIssue", on_delete=models.CASCADE, related_name="helpdesk_requests")
+    forwarded_to_project = models.ForeignKey(
+        "db.Project", on_delete=models.CASCADE, related_name="helpdesk_intake_forwards"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="helpdesk_intake_forwards",
+    )
+
+    class Meta:
+        unique_together = ["request", "intake_issue", "deleted_at"]
+        verbose_name = "Helpdesk Request Intake Issue"
+        verbose_name_plural = "Helpdesk Request Intake Issues"
+        db_table = "helpdesk_request_intake_issues"
+
+    def __str__(self):
+        return f"{self.request.title} -> {self.intake_issue_id}"

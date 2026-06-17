@@ -20,14 +20,13 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
             .get_queryset()
             .filter(
                 workspace__slug=self.kwargs.get("slug"),
-                project_id=self.kwargs.get("project_id"),
                 request_id=self.kwargs.get("request_pk"),
             )
         )
 
     def perform_create(self, serializer):
         serializer.save(
-            project_id=self.kwargs.get("project_id"),
+            workspace_id=HelpdeskRequest.objects.get(id=self.kwargs.get("request_pk")).workspace_id,
             request_id=self.kwargs.get("request_pk"),
             actor=self.request.user,
         )
@@ -53,7 +52,6 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
         if not portal:
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Retornar apenas comentários não-internos
         comments = HelpdeskRequestComment.objects.filter(
             request_id=request_pk,
             request__portal=portal,
@@ -84,7 +82,7 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
 
         comment = HelpdeskRequestComment.objects.create(
             request=hd_request,
-            project=portal.project,
+            workspace=portal.workspace,
             customer=customer,
             content=content,
             is_internal=False,
