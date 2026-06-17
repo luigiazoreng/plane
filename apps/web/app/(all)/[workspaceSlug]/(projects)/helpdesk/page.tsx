@@ -8,134 +8,143 @@ import { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import { useNavigate, useParams } from "react-router";
 import { useLocalStorage } from "@plane/hooks";
-import { Badge } from "@plane/propel/badge";
-import { Button } from "@plane/propel/button";
-import { Switch } from "@plane/propel/switch";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IBaseLayoutsBaseGroup, IHelpdeskRequest } from "@plane/types";
-import { Header } from "@plane/ui";
+import type { IBaseLayoutsBaseGroup, IHelpdeskRequest, IHelpdeskStatus } from "@plane/types";
 import { cn } from "@plane/utils";
-import { ExternalLink, Globe, Headset, KanbanSquare, LayoutList, MessageSquareText, Plus } from "lucide-react";
+import { CalendarDays, Headset, KanbanSquare, LayoutList, MessageSquareText, Settings, UserRound } from "lucide-react";
 import { BaseKanbanLayout } from "@/components/base-layouts/kanban/layout";
+import { AppHeader } from "@/components/core/app-header";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 
 type THelpdeskAgentLayout = "list" | "kanban";
 type THelpdeskKanbanItem = IHelpdeskRequest & Record<string, unknown>;
 
-const STATUS_META: Record<
-  IHelpdeskRequest["status"],
-  {
-    label: string;
-    badgeVariant: "warning" | "brand" | "success" | "neutral";
-    chipClassName: string;
-  }
-> = {
-  open: {
-    label: "Open",
-    badgeVariant: "warning",
-    chipClassName: "bg-orange-500/10 text-orange-500",
-  },
-  in_progress: {
-    label: "In progress",
-    badgeVariant: "brand",
-    chipClassName: "bg-blue-500/10 text-blue-500",
-  },
-  waiting: {
-    label: "Waiting",
-    badgeVariant: "brand",
-    chipClassName: "bg-violet-500/10 text-violet-500",
-  },
-  resolved: {
-    label: "Resolved",
-    badgeVariant: "success",
-    chipClassName: "bg-emerald-500/10 text-emerald-500",
-  },
-  closed: {
-    label: "Closed",
-    badgeVariant: "neutral",
-    chipClassName: "bg-slate-500/10 text-slate-500",
-  },
-};
+// Derive a stable color set from the status color (hex → tint bg + text)
+function hexToRgb(hex: string) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return { r, g, b };
+}
 
-const KANBAN_GROUPS: IBaseLayoutsBaseGroup[] = [
-  { id: "open", name: "Open" },
-  { id: "in_progress", name: "In progress" },
-  { id: "waiting", name: "Waiting" },
-  { id: "resolved", name: "Resolved" },
-  { id: "closed", name: "Closed" },
-];
+function StatusDot({ color, className }: { color: string; className?: string }) {
+  return <span className={cn("inline-block rounded-full", className)} style={{ backgroundColor: color }} />;
+}
+
+function StatusChip({
+  status,
+  className,
+  onClick,
+  showDot = true,
+}: {
+  status: IHelpdeskStatus;
+  className?: string;
+  onClick?: () => void;
+  showDot?: boolean;
+}) {
+  const { r, g, b } = hexToRgb(status.color);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded px-2 py-1 text-12 font-medium transition-colors",
+        onClick ? "hover:opacity-90" : "cursor-default",
+        className
+      )}
+      style={{
+        backgroundColor: `rgba(${r}, ${g}, ${b}, 0.12)`,
+        color: status.color,
+      }}
+    >
+      {showDot && <StatusDot color={status.color} className="h-1.5 w-1.5 shrink-0" />}
+      {status.name}
+    </button>
+  );
+}
 
 const WorkspaceHelpdeskPage = observer(() => {
   const { workspaceSlug } = useParams();
   const navigate = useNavigate();
   const helpdeskStore = useHelpdesk();
-  const [newPortalSlug, setNewPortalSlug] = useState("");
   const storageKey = workspaceSlug ? `helpdesk-layout:${workspaceSlug}` : "helpdesk-layout";
   const { storedValue: storedLayout, setValue: setStoredLayout } = useLocalStorage<THelpdeskAgentLayout>(
     storageKey,
     "list"
   );
-
-  useEffect(() => {
-    if (!workspaceSlug) return;
-    const wSlug = workspaceSlug.toString();
-    helpdeskStore.fetchPortals(wSlug);
-    helpdeskStore.fetchRequests(wSlug);
-  }, [workspaceSlug, helpdeskStore]);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [inlineStatusRequest, setInlineStatusRequest] = useState<string | null>(null);
+  const [addingToGroup, setAddingToGroup] = useState<string | null>(null);
+  const [newRequestTitle, setNewRequestTitle] = useState("");
 
   const wSlug = workspaceSlug?.toString() || "";
   const layout = storedLayout || "list";
+
+  useEffect(() => {
+    if (!wSlug) return;
+    helpdeskStore.fetchStatuses(wSlug);
+    helpdeskStore.fetchPortals(wSlug);
+    helpdeskStore.fetchRequests(wSlug);
+  }, [wSlug, helpdeskStore]);
+
+  const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
   const requests = helpdeskStore.getWorkspaceRequests(wSlug);
-  const portals = helpdeskStore.getWorkspacePortals(wSlug);
   const groupedRequests = helpdeskStore.getRequestsGroupedByStatus(wSlug);
+  const portals = helpdeskStore.getWorkspacePortals(wSlug);
+  const defaultPortalId = portals[0]?.id;
 
-  const requestItems = useMemo(
-    () =>
-      requests.reduce(
-        (acc, request) => {
-          acc[request.id] = request as THelpdeskKanbanItem;
-          return acc;
-        },
-        {} as Record<string, THelpdeskKanbanItem>
-      ),
-    [requests]
+  const statusMap = useMemo(
+    () => Object.fromEntries(statuses.map((s) => [s.id, s])),
+    [statuses]
   );
 
-  const requestGroups = useMemo(
-    () =>
-      KANBAN_GROUPS.reduce(
-        (acc, group) => {
-          acc[group.id] = groupedRequests[group.id as IHelpdeskRequest["status"]].map((r) => r.id);
-          return acc;
-        },
-        {} as Record<string, string[]>
-      ),
-    [groupedRequests]
+  const filteredRequests = useMemo(
+    () => (statusFilter === "all" ? requests : requests.filter((r) => r.status === statusFilter)),
+    [requests, statusFilter]
   );
 
-  const portalsState = helpdeskStore.getCollectionState(`portals:${wSlug}`);
-  const requestsState = helpdeskStore.getCollectionState(`requests:${wSlug}`);
-  const isLoading = portalsState.isLoading || requestsState.isLoading;
-  const totalRequests = requests.length;
-  const activeRequests =
-    groupedRequests.open.length + groupedRequests.in_progress.length + groupedRequests.waiting.length;
-  const resolvedRequests = groupedRequests.resolved.length + groupedRequests.closed.length;
+  const kanbanGroups = useMemo<IBaseLayoutsBaseGroup[]>(
+    () => statuses.map((s) => ({ id: s.id, name: s.name })),
+    [statuses]
+  );
 
-  const handleCreatePortal = async () => {
-    if (!newPortalSlug.trim() || !wSlug) return;
-    try {
-      await helpdeskStore.createPortal(wSlug, {
-        public_slug: newPortalSlug.trim(),
-        require_login: false,
-        is_public: true,
-        enable_chat: true,
-      });
-      setNewPortalSlug("");
-      setToast({ type: TOAST_TYPE.SUCCESS, title: "Success", message: "Portal created successfully" });
-    } catch (_error) {
-      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to create portal" });
+  const requestItems = useMemo(() => {
+    const map = requests.reduce(
+      (acc, request) => {
+        acc[request.id] = request as THelpdeskKanbanItem;
+        return acc;
+      },
+      {} as Record<string, THelpdeskKanbanItem>
+    );
+    if (addingToGroup) {
+      const sentinelId = `__add__:${addingToGroup}`;
+      map[sentinelId] = { id: sentinelId, status: addingToGroup } as unknown as THelpdeskKanbanItem;
     }
-  };
+    return map;
+  }, [requests, addingToGroup]);
+
+  const requestGroups = useMemo(() => {
+    return statuses.reduce(
+      (acc, s) => {
+        const ids = (groupedRequests[s.id] || []).map((r) => r.id);
+        if (addingToGroup === s.id) ids.push(`__add__:${s.id}`);
+        acc[s.id] = ids;
+        return acc;
+      },
+      {} as Record<string, string[]>
+    );
+  }, [statuses, groupedRequests, addingToGroup]);
+
+  const statusesState = helpdeskStore.getCollectionState(`statuses:${wSlug}`);
+  const requestsState = helpdeskStore.getCollectionState(`requests:${wSlug}`);
+  const isLoading = statusesState.isLoading || requestsState.isLoading;
+  const totalRequests = requests.length;
+  const activeRequests = requests.filter((r) => {
+    const s = r.status ? statusMap[r.status] : null;
+    return s && !s.name.toLowerCase().includes("resolv") && !s.name.toLowerCase().includes("clos");
+  }).length;
+  const resolvedRequests = totalRequests - activeRequests;
 
   const handleStatusDrop = async (
     sourceId: string,
@@ -145,281 +154,427 @@ const WorkspaceHelpdeskPage = observer(() => {
   ) => {
     if (sourceGroupId === destinationGroupId) return;
     try {
-      await helpdeskStore.updateRequest(wSlug, sourceId, {
-        status: destinationGroupId as IHelpdeskRequest["status"],
-      });
-      setToast({ type: TOAST_TYPE.SUCCESS, title: "Status updated", message: "Request moved successfully" });
+      await helpdeskStore.updateRequest(wSlug, sourceId, { status: destinationGroupId });
+      setToast({ type: TOAST_TYPE.SUCCESS, title: "Status updated" });
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to move request" });
       await helpdeskStore.fetchRequests(wSlug);
     }
   };
 
+  const handleInlineStatusChange = async (requestId: string, newStatusId: string) => {
+    setInlineStatusRequest(null);
+    try {
+      await helpdeskStore.updateRequest(wSlug, requestId, { status: newStatusId });
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update status" });
+    }
+  };
+
+  const handleAddRequest = async (statusId: string) => {
+    const title = newRequestTitle.trim();
+    if (!title || !defaultPortalId) return;
+    setAddingToGroup(null);
+    setNewRequestTitle("");
+    try {
+      await helpdeskStore.createRequest(wSlug, { title, status: statusId, portal: defaultPortalId, description: "" });
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to create request" });
+    }
+  };
+
   return (
     <div className="flex h-full w-full flex-col bg-surface-1">
-      <Header>
-        <div className="flex w-full items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="bg-custom-sidebar-accent/15 text-custom-sidebar-accent flex size-8 shrink-0 items-center justify-center rounded-md">
-              <Headset className="size-4" />
+      <AppHeader
+        header={
+          <div className="flex w-full items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-custom-sidebar-accent/15 text-custom-sidebar-accent">
+                <Headset className="size-3.5" />
+              </div>
+              <span className="text-sm font-semibold text-text-100">Helpdesk</span>
+              <div className="hidden items-center gap-1.5 md:flex">
+                <span className="text-13 text-tertiary">·</span>
+                <span className="rounded-md bg-layer-1 px-2 py-0.5 text-12 text-secondary">{totalRequests} total</span>
+                <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-12 text-orange-500">
+                  {activeRequests} active
+                </span>
+                <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-12 text-emerald-500">
+                  {resolvedRequests} resolved
+                </span>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h3 className="text-sm text-text-100 truncate font-semibold">Helpdesk</h3>
-              <p className="text-xs text-text-400 truncate">Customer requests, replies, and linked product work</p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-1 rounded-md border border-subtle bg-surface-2 p-1">
-            <Button variant={layout === "list" ? "primary" : "ghost"} size="sm" onClick={() => setStoredLayout("list")}>
-              <span className="flex items-center gap-2">
-                <LayoutList className="size-4" />
-                List
-              </span>
-            </Button>
-            <Button
-              variant={layout === "kanban" ? "primary" : "ghost"}
-              size="sm"
-              onClick={() => setStoredLayout("kanban")}
-            >
-              <span className="flex items-center gap-2">
-                <KanbanSquare className="size-4" />
-                Kanban
-              </span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(`/${wSlug}/helpdesk/settings`)}
+                className="flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-13 text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
+              >
+                <Settings className="size-3.5" />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+              <div className="flex items-center gap-0.5 rounded-md border border-subtle bg-layer-1 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setStoredLayout("list")}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
+                    layout === "list"
+                      ? "bg-accent-strong text-white shadow-sm"
+                      : "text-secondary hover:bg-layer-2 hover:text-primary"
+                  )}
+                >
+                  <LayoutList className="size-3.5" />
+                  <span className="hidden sm:inline">List</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStoredLayout("kanban")}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
+                    layout === "kanban"
+                      ? "bg-accent-strong text-white shadow-sm"
+                      : "text-secondary hover:bg-layer-2 hover:text-primary"
+                  )}
+                >
+                  <KanbanSquare className="size-3.5" />
+                  <span className="hidden sm:inline">Kanban</span>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </Header>
+        }
+      />
 
       <div className="flex-1 overflow-hidden">
-        <div className="mx-auto flex h-full w-full max-w-[1600px] flex-col gap-4 p-4 md:p-6">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="rounded-xl border border-subtle bg-surface-2">
-              <div className="border-b border-subtle px-4 py-4">
-                <h2 className="text-sm text-text-100 font-semibold">Portal quick settings</h2>
-                <p className="text-xs text-text-400 mt-1">Lightweight intake config without leaving triage.</p>
-              </div>
-
-              <div className="space-y-4 p-4">
-                <div className="rounded-lg border border-subtle bg-surface-1 p-3">
-                  <label
-                    htmlFor="new-portal-slug"
-                    className="text-text-400 mb-2 block text-[11px] font-medium uppercase"
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-accent-strong" />
+          </div>
+        ) : requestsState.error ? (
+          <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+            <p className="text-13 font-medium text-primary">We couldn&apos;t load the Helpdesk queue.</p>
+            <p className="mt-1 text-13 text-tertiary">{requestsState.error}</p>
+          </div>
+        ) : statuses.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+            <MessageSquareText className="mb-4 size-8 text-tertiary" />
+            <p className="text-13 font-medium text-primary">No statuses configured</p>
+            <p className="mt-1 max-w-sm text-13 text-tertiary">Go to Settings to set up your Helpdesk statuses.</p>
+            <button
+              type="button"
+              className="mt-4 flex items-center gap-2 rounded-md border border-subtle bg-layer-2 px-3 py-1.5 text-13 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
+              onClick={() => navigate(`/${wSlug}/helpdesk/settings`)}
+            >
+              <Settings className="size-3.5" />
+              Configure
+            </button>
+          </div>
+        ) : requests.length === 0 && !addingToGroup ? (
+          <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+            <MessageSquareText className="mb-4 size-8 text-tertiary" />
+            <p className="text-13 font-medium text-primary">No requests yet</p>
+            <p className="mt-1 max-w-sm text-13 text-tertiary">
+              Requests submitted through your portal will appear here for triage.
+            </p>
+            <button
+              type="button"
+              className="mt-4 flex items-center gap-2 rounded-md border border-subtle bg-layer-2 px-3 py-1.5 text-13 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
+              onClick={() => navigate(`/${wSlug}/helpdesk/settings`)}
+            >
+              <Settings className="size-3.5" />
+              Configure portal
+            </button>
+          </div>
+        ) : layout === "kanban" ? (
+          <BaseKanbanLayout<THelpdeskKanbanItem>
+            items={requestItems}
+            groups={kanbanGroups}
+            groupedItemIds={requestGroups}
+            enableDragDrop
+            onDrop={handleStatusDrop}
+            renderGroupHeader={({ group, itemCount }) => {
+              const statusObj = statusMap[group.id];
+              if (!statusObj) return null;
+              const realCount = itemCount - (addingToGroup === group.id ? 1 : 0);
+              return (
+                <div className="relative flex w-full flex-row items-center gap-1 py-1.5">
+                  <div
+                    className="flex size-5 shrink-0 items-center justify-center rounded-xs"
+                    style={{ backgroundColor: `${statusObj.color}1a` }}
                   >
-                    New portal slug
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="new-portal-slug"
-                      value={newPortalSlug}
-                      onChange={(e) => setNewPortalSlug(e.target.value)}
-                      placeholder="support-acme"
-                      className="text-sm text-text-100 focus:border-primary min-w-0 flex-1 rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
-                    />
-                    <Button variant="primary" size="base" onClick={handleCreatePortal} disabled={!newPortalSlug.trim()}>
-                      <Plus className="size-4" />
-                    </Button>
+                    <StatusDot color={statusObj.color} className="h-2 w-2" />
                   </div>
+                  <div className="flex w-full flex-row items-baseline gap-1 overflow-hidden">
+                    <span className="line-clamp-1 inline-block truncate font-medium text-primary">{group.name}</span>
+                    <span className="shrink-0 pl-2 text-13 font-medium text-tertiary">{realCount}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setAddingToGroup(group.id); setNewRequestTitle(""); }}
+                    className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-layer-transparent transition-all hover:bg-layer-transparent-hover"
+                    title="Add request"
+                  >
+                    <span className="text-xs font-semibold leading-none text-secondary">+</span>
+                  </button>
                 </div>
-
-                {portals.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-subtle px-4 py-8 text-center">
-                    <Globe className="text-text-300 mx-auto mb-3 size-6" />
-                    <p className="text-sm text-text-100 font-medium">No portal configured</p>
-                    <p className="text-xs text-text-400 mt-1">Create one to start receiving external requests.</p>
+              );
+            }}
+            renderItem={(request) => {
+              if (request.id.startsWith("__add__:")) {
+                const statusId = request.status as string;
+                return (
+                  <div className="rounded-lg border border-accent-strong bg-layer-2 p-2 shadow-raised-100">
+                    <input
+                      autoFocus
+                      value={newRequestTitle}
+                      onChange={(e) => setNewRequestTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddRequest(statusId);
+                        if (e.key === "Escape") { setAddingToGroup(null); setNewRequestTitle(""); }
+                      }}
+                      placeholder="Request title..."
+                      className="w-full bg-transparent text-13 font-medium text-primary outline-none placeholder:text-tertiary"
+                    />
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleAddRequest(statusId)}
+                        disabled={!newRequestTitle.trim() || !defaultPortalId}
+                        className="rounded px-2 py-0.5 text-12 font-medium bg-accent-strong text-white disabled:opacity-40 transition-opacity"
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAddingToGroup(null); setNewRequestTitle(""); }}
+                        className="rounded px-2 py-0.5 text-12 text-secondary hover:bg-layer-transparent-hover transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      {!defaultPortalId && <span className="text-11 text-red-400">No portal configured</span>}
+                    </div>
                   </div>
-                ) : (
-                  portals.map((portal) => (
-                    <div key={portal.id} className="rounded-lg border border-subtle bg-surface-1 p-4">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-text-100 truncate font-medium">{portal.public_slug}</span>
-                            <a
-                              href={`/helpdesk/p/${portal.public_slug}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-text-300 transition-colors hover:text-primary"
-                            >
-                              <ExternalLink className="size-4" />
-                            </a>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Badge variant={portal.is_public ? "success" : "neutral"} size="sm">
-                              {portal.is_public ? "Public" : "Private"}
-                            </Badge>
-                            <Badge variant={portal.require_login ? "brand" : "neutral"} size="sm">
-                              {portal.require_login ? "Login required" : "Open access"}
-                            </Badge>
-                          </div>
-                        </div>
+                );
+              }
+              return (
+                <div
+                  className="group/kanban-block relative mb-2 cursor-pointer"
+                  onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
+                >
+                  <div className="block w-full rounded-lg border border-subtle bg-layer-2 p-3 text-13 shadow-raised-100 outline-[0.5px] outline-transparent transition-all hover:border-strong hover:shadow-raised-200">
+                    <div className="line-clamp-1 w-full text-body-sm-medium text-primary">{request.title}</div>
+                    {request.description && (
+                      <p className="mt-1 line-clamp-2 text-12 text-tertiary">{request.description}</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2 pt-1 text-tertiary">
+                      <div className="flex items-center gap-1.5 text-13">
+                        <UserRound className="size-3 shrink-0" />
+                        <span className="max-w-[120px] truncate text-12">
+                          {request.contact_email || "Authenticated"}
+                        </span>
                       </div>
-
-                      <div className="flex items-center justify-between rounded-md border border-subtle bg-surface-2 px-3 py-2">
-                        <div>
-                          <p className="text-sm text-text-100 font-medium">Customer chat</p>
-                          <p className="text-xs text-text-400">Allow replies from the public portal.</p>
-                        </div>
-                        <Switch
-                          value={portal.enable_chat}
-                          onChange={() =>
-                            helpdeskStore.updatePortal(wSlug, portal.id, { enable_chat: !portal.enable_chat })
-                          }
-                        />
+                      <div className="flex items-center gap-1 text-13">
+                        <CalendarDays className="size-3 shrink-0" />
+                        <span className="text-12">
+                          {new Date(request.created_at).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
                       </div>
                     </div>
-                  ))
+                  </div>
+                </div>
+              );
+            }}
+          />
+        ) : (
+          /* List view */
+          <div className="flex h-full flex-col overflow-hidden">
+            {/* Status filter chips */}
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-subtle bg-layer-1 px-4 py-2">
+              <button
+                key="all"
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-12 font-medium transition-colors",
+                  statusFilter === "all"
+                    ? "bg-accent-strong/10 text-accent-strong"
+                    : "bg-layer-2 text-secondary hover:bg-layer-1 hover:text-primary"
                 )}
-              </div>
-            </aside>
-
-            <section className="flex min-h-0 flex-col rounded-xl border border-subtle bg-surface-2">
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-subtle px-5 py-4">
-                <div>
-                  <h2 className="text-sm text-text-100 font-semibold">Agent queue</h2>
-                  <p className="text-xs text-text-400 mt-1">
-                    Triage incoming requests, move status, and jump into the conversation.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <div className="rounded-md border border-subtle bg-surface-1 px-3 py-2">
-                    <p className="text-text-400 text-[11px] uppercase">Total</p>
-                    <p className="text-sm text-text-100 mt-1 font-medium">{totalRequests}</p>
-                  </div>
-                  <div className="rounded-md border border-subtle bg-surface-1 px-3 py-2">
-                    <p className="text-text-400 text-[11px] uppercase">Active</p>
-                    <p className="text-sm text-text-100 mt-1 font-medium">{activeRequests}</p>
-                  </div>
-                  <div className="rounded-md border border-subtle bg-surface-1 px-3 py-2">
-                    <p className="text-text-400 text-[11px] uppercase">Resolved</p>
-                    <p className="text-sm text-text-100 mt-1 font-medium">{resolvedRequests}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-hidden">
-                {isLoading ? (
-                  <div className="flex h-full min-h-[420px] items-center justify-center">
-                    <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2" />
-                  </div>
-                ) : requestsState.error ? (
-                  <div className="flex h-full min-h-[420px] flex-col items-center justify-center px-6 text-center">
-                    <p className="text-sm text-text-100 font-medium">We couldn&apos;t load the Helpdesk queue.</p>
-                    <p className="text-xs text-text-400 mt-1">{requestsState.error}</p>
-                  </div>
-                ) : requests.length === 0 ? (
-                  <div className="flex h-full min-h-[420px] flex-col items-center justify-center px-6 text-center">
-                    <MessageSquareText className="text-text-300 mb-4 size-8" />
-                    <p className="text-sm text-text-100 font-medium">No requests yet</p>
-                    <p className="text-xs text-text-400 mt-1 max-w-sm">
-                      Requests submitted through your portal will appear here for triage.
-                    </p>
-                  </div>
-                ) : layout === "kanban" ? (
-                  <BaseKanbanLayout<THelpdeskKanbanItem>
-                    items={requestItems}
-                    groups={KANBAN_GROUPS}
-                    groupedItemIds={requestGroups}
-                    enableDragDrop
-                    onDrop={handleStatusDrop}
-                    groupClassName="w-[320px] border-r border-subtle last:border-r-0 rounded-none bg-surface-2"
-                    className="h-full gap-0 overflow-x-auto overflow-y-hidden p-0"
-                    renderGroupHeader={({ group, itemCount }) => (
-                      <div className="flex items-center justify-between border-b border-subtle bg-surface-2 px-3 py-3">
-                        <span className="text-sm text-text-100 font-medium">{group.name}</span>
-                        <Badge variant={STATUS_META[group.id as IHelpdeskRequest["status"]].badgeVariant} size="sm">
-                          {itemCount}
-                        </Badge>
-                      </div>
+              >
+                All
+                <span className={cn("rounded-full px-1 text-11 font-semibold", statusFilter === "all" ? "opacity-70" : "bg-layer-1 text-tertiary")}>
+                  {totalRequests}
+                </span>
+              </button>
+              {statuses.map((s) => {
+                const isActive = statusFilter === s.id;
+                const count = (groupedRequests[s.id] || []).length;
+                const { r, g, b } = hexToRgb(s.color);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setStatusFilter(s.id)}
+                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-12 font-medium transition-colors"
+                    style={
+                      isActive
+                        ? { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.15)`, color: s.color }
+                        : undefined
+                    }
+                  >
+                    {!isActive && (
+                      <span className="flex items-center gap-1.5 rounded-full bg-layer-2 px-2.5 py-1 text-12 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary">
+                        {s.name}
+                        <span className="rounded-full bg-layer-1 px-1 text-11 font-semibold text-tertiary">{count}</span>
+                      </span>
                     )}
-                    renderItem={(request) => {
-                      const statusMeta = STATUS_META[request.status];
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
-                          className="hover:border-primary/40 w-full rounded-lg border border-subtle bg-surface-1 p-3 text-left transition-colors hover:bg-surface-2"
-                        >
-                          <div className="mb-2 flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm text-text-100 truncate font-medium">{request.title}</p>
-                              <p className="text-xs text-text-400 mt-1 line-clamp-2">{request.description}</p>
+                    {isActive && (
+                      <>
+                        <StatusDot color={s.color} className="h-1.5 w-1.5 shrink-0" />
+                        {s.name}
+                        <span className="rounded-full px-1 text-11 font-semibold opacity-70">{count}</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {filteredRequests.length === 0 && !addingToGroup ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <MessageSquareText className="mb-3 size-7 text-tertiary" />
+                  <p className="text-13 font-medium text-primary">No requests with this status</p>
+                </div>
+              ) : (
+                <div>
+                  {filteredRequests.map((request) => {
+                    const statusObj = request.status ? statusMap[request.status] : null;
+                    const isStatusOpen = inlineStatusRequest === request.id;
+                    return (
+                      <div
+                        key={request.id}
+                        className="group relative flex cursor-pointer items-center gap-3 border-b border-subtle px-4 py-2.5 transition-colors hover:bg-layer-1"
+                        onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
+                      >
+                        {/* Status badge — clickable inline */}
+                        <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {statusObj ? (
+                            <StatusChip
+                              status={statusObj}
+                              onClick={() => setInlineStatusRequest(isStatusOpen ? null : request.id)}
+                            />
+                          ) : (
+                            <span className="rounded px-2 py-1 text-12 text-tertiary">—</span>
+                          )}
+                          {isStatusOpen && (
+                            <div className="absolute left-0 top-full z-10 mt-1 min-w-40 rounded-lg border border-subtle bg-layer-1 py-1 shadow-lg">
+                              {statuses.map((s) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => handleInlineStatusChange(request.id, s.id)}
+                                  className={cn(
+                                    "flex w-full items-center gap-2 px-3 py-1.5 text-13 transition-colors hover:bg-layer-2",
+                                    s.id === request.status ? "font-medium text-primary" : "text-secondary"
+                                  )}
+                                >
+                                  <StatusDot color={s.color} className="h-2 w-2 shrink-0" />
+                                  {s.name}
+                                </button>
+                              ))}
                             </div>
-                            <span
-                              className={cn("rounded px-1.5 py-0.5 text-[11px] font-medium", statusMeta.chipClassName)}
-                            >
-                              {statusMeta.label}
+                          )}
+                        </div>
+
+                        {/* Title + description */}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-body-sm-medium text-primary">{request.title}</p>
+                          {request.description && (
+                            <p className="mt-0.5 truncate text-12 text-tertiary">{request.description}</p>
+                          )}
+                        </div>
+
+                        {/* Meta */}
+                        <div className="hidden shrink-0 items-center gap-4 text-tertiary md:flex">
+                          <div className="flex items-center gap-1.5 text-13">
+                            <UserRound className="size-3.5 shrink-0" />
+                            <span className="max-w-[120px] truncate">
+                              {request.contact_email || "Authenticated"}
                             </span>
                           </div>
-                          <div className="text-xs text-text-400 flex flex-wrap items-center gap-2">
-                            <span>{request.contact_email || "Authenticated customer"}</span>
-                            <span>•</span>
-                            <span>{request.source === "public_form" ? "Public form" : "Internal form"}</span>
-                            <span>•</span>
-                            <span>{request.assignees.length} assignees</span>
+                          <div className="flex items-center gap-1 text-13">
+                            <CalendarDays className="size-3.5 shrink-0" />
+                            {new Date(request.created_at).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
                           </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Inline add row */}
+                  {addingToGroup && (
+                    <div className="flex items-center gap-3 border-b border-subtle px-4 py-2.5">
+                      {statusMap[addingToGroup] && (
+                        <StatusChip status={statusMap[addingToGroup]} showDot className="shrink-0" />
+                      )}
+                      <input
+                        autoFocus
+                        value={newRequestTitle}
+                        onChange={(e) => setNewRequestTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAddRequest(addingToGroup);
+                          if (e.key === "Escape") { setAddingToGroup(null); setNewRequestTitle(""); }
+                        }}
+                        placeholder="Request title..."
+                        className="min-w-0 flex-1 bg-transparent text-body-sm-medium text-primary outline-none placeholder:text-tertiary"
+                      />
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleAddRequest(addingToGroup)}
+                          disabled={!newRequestTitle.trim() || !defaultPortalId}
+                          className="rounded px-2 py-0.5 text-12 font-medium bg-accent-strong text-white disabled:opacity-40 transition-opacity"
+                        >
+                          Add
                         </button>
-                      );
-                    }}
-                  />
-                ) : (
-                  <div className="h-full overflow-auto">
-                    <table className="text-sm w-full text-left">
-                      <thead className="text-xs tracking-wider text-text-400 sticky top-0 z-[1] border-b border-subtle bg-surface-2 uppercase">
-                        <tr>
-                          <th className="px-5 py-3 font-medium">Request</th>
-                          <th className="px-5 py-3 font-medium">Status</th>
-                          <th className="px-5 py-3 font-medium">Source</th>
-                          <th className="px-5 py-3 font-medium">Contact</th>
-                          <th className="px-5 py-3 font-medium">Assignees</th>
-                          <th className="px-5 py-3 font-medium">Created</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-subtle">
-                        {requests.map((request) => {
-                          const statusMeta = STATUS_META[request.status];
-                          return (
-                            <tr
-                              key={request.id}
-                              className="cursor-pointer transition-colors hover:bg-surface-1"
-                              onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
-                            >
-                              <td className="px-5 py-4">
-                                <div className="min-w-0">
-                                  <p className="text-text-100 truncate font-medium">{request.title}</p>
-                                  <p className="text-xs text-text-400 mt-1 line-clamp-1">{request.description}</p>
-                                </div>
-                              </td>
-                              <td className="px-5 py-4">
-                                <Badge variant={statusMeta.badgeVariant} size="sm">
-                                  {statusMeta.label}
-                                </Badge>
-                              </td>
-                              <td className="text-text-400 px-5 py-4">
-                                {request.source === "public_form" ? "Public form" : "Internal form"}
-                              </td>
-                              <td className="text-text-400 px-5 py-4">
-                                {request.contact_email || "Authenticated customer"}
-                              </td>
-                              <td className="text-text-400 px-5 py-4">{request.assignees.length}</td>
-                              <td className="text-text-400 px-5 py-4">
-                                {new Date(request.created_at).toLocaleDateString(undefined, {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                })}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </section>
+                        <button
+                          type="button"
+                          onClick={() => { setAddingToGroup(null); setNewRequestTitle(""); }}
+                          className="rounded px-2 py-0.5 text-12 text-secondary hover:bg-layer-transparent-hover transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* + New request */}
+              <button
+                type="button"
+                onClick={() => {
+                  const target = statusFilter !== "all" ? statusFilter : (statuses[0]?.id ?? null);
+                  if (target) { setAddingToGroup(target); setNewRequestTitle(""); }
+                }}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-13 text-tertiary transition-colors hover:bg-layer-1 hover:text-secondary"
+              >
+                <span className="text-base font-medium leading-none">+</span>
+                New request
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

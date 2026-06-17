@@ -131,6 +131,10 @@ export const coreRoutes: RouteConfigEntry[] = [
         layout("./(all)/[workspaceSlug]/(projects)/helpdesk/layout.tsx", [
           route(":workspaceSlug/helpdesk", "./(all)/[workspaceSlug]/(projects)/helpdesk/page.tsx"),
           route(
+            ":workspaceSlug/helpdesk/settings",
+            "./(all)/[workspaceSlug]/(projects)/helpdesk/settings/page.tsx"
+          ),
+          route(
             ":workspaceSlug/helpdesk/:requestId",
             "./(all)/[workspaceSlug]/(projects)/helpdesk/[requestId]/page.tsx"
           ),

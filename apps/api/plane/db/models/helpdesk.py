@@ -44,12 +44,29 @@ class HelpdeskPortal(WorkspaceBaseModel):
         return self.public_slug
 
 
-class HelpdeskRequestStatus(models.TextChoices):
-    OPEN = "open", "Open"
-    IN_PROGRESS = "in_progress", "In Progress"
-    WAITING = "waiting", "Waiting for Customer"
-    RESOLVED = "resolved", "Resolved"
-    CLOSED = "closed", "Closed"
+DEFAULT_HELPDESK_STATUSES = [
+    {"name": "Open", "color": "#F97316", "sequence": 10000, "is_default": True},
+    {"name": "In Progress", "color": "#3B82F6", "sequence": 20000, "is_default": False},
+    {"name": "Waiting", "color": "#8B5CF6", "sequence": 30000, "is_default": False},
+    {"name": "Resolved", "color": "#10B981", "sequence": 40000, "is_default": False},
+    {"name": "Closed", "color": "#64748B", "sequence": 50000, "is_default": False},
+]
+
+
+class HelpdeskStatus(WorkspaceBaseModel):
+    name = models.CharField(max_length=255)
+    color = models.CharField(max_length=20, default="#60646C")
+    sequence = models.FloatField(default=65535)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Helpdesk Status"
+        verbose_name_plural = "Helpdesk Statuses"
+        db_table = "helpdesk_statuses"
+        ordering = ["sequence"]
+
+    def __str__(self):
+        return self.name
 
 
 class HelpdeskRequestSource(models.TextChoices):
@@ -65,8 +82,8 @@ class HelpdeskRequest(WorkspaceBaseModel):
     title = models.CharField(max_length=255)
     description = models.TextField()
     contact_email = models.EmailField(max_length=255, null=True, blank=True)
-    status = models.CharField(
-        max_length=50, choices=HelpdeskRequestStatus.choices, default=HelpdeskRequestStatus.OPEN
+    status = models.ForeignKey(
+        HelpdeskStatus, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests"
     )
     source = models.CharField(
         max_length=50, choices=HelpdeskRequestSource.choices, default=HelpdeskRequestSource.PUBLIC_FORM

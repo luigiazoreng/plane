@@ -12,11 +12,41 @@ import type {
   IHelpdeskRequestComment,
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
+  IHelpdeskStatus,
 } from "@plane/types";
 
 export class HelpdeskService extends APIService {
   constructor(BASE_URL?: string) {
     super((BASE_URL || API_BASE_URL) + "/api/workspaces/");
+  }
+
+  // --- Status Management ---
+
+  async getStatuses(workspaceSlug: string): Promise<IHelpdeskStatus[]> {
+    return this.get(`${workspaceSlug}/helpdesk/statuses/`).then((res) => res?.data);
+  }
+
+  async createStatus(workspaceSlug: string, data: Partial<IHelpdeskStatus>): Promise<IHelpdeskStatus> {
+    return this.post(`${workspaceSlug}/helpdesk/statuses/`, data).then((res) => res?.data);
+  }
+
+  async updateStatus(workspaceSlug: string, statusId: string, data: Partial<IHelpdeskStatus>): Promise<IHelpdeskStatus> {
+    return this.patch(`${workspaceSlug}/helpdesk/statuses/${statusId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteStatus(workspaceSlug: string, statusId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/statuses/${statusId}/`).then((res) => res?.data);
+  }
+
+  async reorderStatuses(
+    workspaceSlug: string,
+    items: { id: string; sequence: number }[]
+  ): Promise<IHelpdeskStatus[]> {
+    return this.post(`${workspaceSlug}/helpdesk/statuses/reorder/`, items).then((res) => res?.data);
+  }
+
+  async setDefaultStatus(workspaceSlug: string, statusId: string): Promise<IHelpdeskStatus> {
+    return this.post(`${workspaceSlug}/helpdesk/statuses/${statusId}/set-default/`, {}).then((res) => res?.data);
   }
 
   // --- Portal Management ---
@@ -49,6 +79,10 @@ export class HelpdeskService extends APIService {
 
   async getRequestById(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequest> {
     return this.get(`${workspaceSlug}/helpdesk/requests/${requestId}/`).then((res) => res?.data);
+  }
+
+  async createRequest(workspaceSlug: string, data: Partial<IHelpdeskRequest>): Promise<IHelpdeskRequest> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/`, data).then((res) => res?.data);
   }
 
   async updateRequest(

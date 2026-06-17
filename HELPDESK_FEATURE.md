@@ -123,6 +123,15 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] Dev Pipeline card mostra badge de status (Pending / Accepted / Rejected / Duplicate).
   - [x] Quando aceito, card exibe link "View issue →" direto para o work item no projeto.
 
+- [x] **Fase 7: UI Polish + Bug Fixes + Página de Settings**
+  - [x] **Bug fix crítico:** páginas do Helpdesk usavam `<Header>` do `@plane/ui` (puro Row estilizado) — substituído por `AppHeader` do core em `page.tsx` e `[requestId]/page.tsx`. O `AppHeader` injeta o `ExtendedAppHeader` que renderiza o `AppSidebarToggleButton` quando a sidebar está collapsed, restaurando o botão de expandir.
+  - [x] Dashboard refatorado: layout full-width sem sidebar de portal embutida, `AppHeader` com stats inline (total/active/resolved) e botão "Settings".
+  - [x] Kanban card redesenhado: `border-l-2` colorida por status, título, descrição truncada, footer com avatar/email e data.
+  - [x] List view redesenhada: chips de filtro por status no topo, rows com border-left colorida, badge de status clicável com dropdown inline para alteração sem navegar para o detalhe.
+  - [x] `deletePortal` adicionado à interface e implementação do `helpdesk.store.ts`.
+  - [x] Nova página `/{wSlug}/helpdesk/settings` com gestão completa de portais: criar, editar slug inline, toggles de visibilidade/login/chat, deletar com confirmação.
+  - [x] Rota `helpdesk/settings` registrada em `apps/web/app/routes/core.ts` antes do catch-all `:requestId`.
+
 ---
 
 ## Pendências Técnicas
@@ -160,3 +169,7 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - `HelpdeskRequestIntakeIssueSerializer` passou a expor `intake_status` (int: -2 pending, -1 rejected, 1 accepted, 2 duplicate), `issue_id` (UUID da issue criada ao aceitar) e `project_identifier` via `SerializerMethodField`.
   - `IntakeIssueSerializer.update` agora detecta quando o status muda para ACCEPTED (1) e auto-cria um `HelpdeskRequestIssue` ligando a issue ao(s) ticket(s) do Helpdesk que encaminharam para esse Intake Issue — aparece automaticamente em "Linked Issues".
   - Dev Pipeline card redesenhado: exibe badge de status colorido (Pending/Accepted/Rejected/Duplicate) e, quando aceito, link "View issue →" direto para o work item no projeto de destino.
+- **[2026-06-17]**: UI Polish + Bug Fixes + Página de Settings (Fase 7).
+  - **Bug fix:** `<Header>` do `@plane/ui` substituído por `AppHeader` do core nas duas páginas do Helpdesk. Isso faz o `AppSidebarToggleButton` aparecer quando a sidebar está minimizada, restaurando o fluxo de expandir a sidebar.
+  - **Dashboard redesenhado:** layout full-width sem sidebar de portal embutida; header com stats inline (total/active/resolved) e botão "Settings"; kanban card com `border-l-2` colorida por status, footer com email e data; list view com chips de filtro por status e dropdown inline de alteração de status por row.
+  - **Página de Settings** (`/{wSlug}/helpdesk/settings`): gestão completa de portais — criar com slug sanitizado, editar slug inline, toggles individuais para is_public/require_login/enable_chat, botão de deletar com modal de confirmação. `deletePortal` adicionado à store e registrado nas actions do MobX.

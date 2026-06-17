@@ -9,6 +9,7 @@ from plane.db.models import (
     HelpdeskRequestComment,
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
+    HelpdeskStatus,
 )
 from plane.app.serializers.base import BaseSerializer
 
@@ -25,6 +26,13 @@ class HelpdeskCustomerSerializer(BaseSerializer):
         }
 
 
+class HelpdeskStatusSerializer(BaseSerializer):
+    class Meta:
+        model = HelpdeskStatus
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE
+
+
 class HelpdeskPortalSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskPortal
@@ -33,6 +41,8 @@ class HelpdeskPortalSerializer(BaseSerializer):
 
 
 class HelpdeskRequestSerializer(BaseSerializer):
+    status_detail = HelpdeskStatusSerializer(source="status", read_only=True)
+
     class Meta:
         model = HelpdeskRequest
         fields = "__all__"

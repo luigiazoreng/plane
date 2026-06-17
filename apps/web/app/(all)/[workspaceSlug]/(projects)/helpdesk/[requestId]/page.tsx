@@ -12,8 +12,8 @@ import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
 import { Switch } from "@plane/propel/switch";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IHelpdeskRequest, ISearchIssueResponse } from "@plane/types";
-import { Header } from "@plane/ui";
+import type { IHelpdeskRequest, IHelpdeskStatus, ISearchIssueResponse } from "@plane/types";
+import { AppHeader } from "@/components/core/app-header";
 import { generateWorkItemLink } from "@plane/utils";
 import {
   ArrowLeft,
@@ -33,17 +33,6 @@ import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useProject } from "@/hooks/store/use-project";
 import { IssueIdentifier } from "@/plane-web/components/issues/issue-details/issue-identifier";
-
-const STATUS_META: Record<
-  IHelpdeskRequest["status"],
-  { label: string; variant: "warning" | "brand" | "success" | "neutral" }
-> = {
-  open: { label: "Open", variant: "warning" },
-  in_progress: { label: "In progress", variant: "brand" },
-  waiting: { label: "Waiting", variant: "brand" },
-  resolved: { label: "Resolved", variant: "success" },
-  closed: { label: "Closed", variant: "neutral" },
-};
 
 const INTAKE_STATUS_META: Record<
   TIntakeIssueStatus,
@@ -77,6 +66,7 @@ const WorkspaceRequestDetailPage = observer(() => {
     const rId = requestId.toString();
 
     Promise.all([
+      helpdeskStore.fetchStatuses(wSlug),
       helpdeskStore.fetchRequestById(wSlug, rId),
       helpdeskStore.fetchRequestComments(wSlug, rId),
       helpdeskStore.fetchRequestIssues(wSlug, rId).then(() => helpdeskStore.hydrateLinkedIssues(wSlug, rId)),
@@ -86,6 +76,11 @@ const WorkspaceRequestDetailPage = observer(() => {
 
   const wSlug = workspaceSlug?.toString() || "";
   const rId = requestId?.toString() || "";
+  const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
+  const statusMap = useMemo(
+    () => Object.fromEntries(statuses.map((s) => [s.id, s])) as Record<string, IHelpdeskStatus>,
+    [statuses]
+  );
   const request = helpdeskStore.getWorkspaceRequests(wSlug).find((r) => r.id === rId);
   const comments = helpdeskStore.getRequestComments(rId);
   const linkedIssues = helpdeskStore.getRequestIssues(rId);
@@ -193,17 +188,19 @@ const WorkspaceRequestDetailPage = observer(() => {
   if (!request) {
     return (
       <div className="flex h-full w-full flex-col bg-surface-1">
-        <Header>
-          <div className="flex items-center gap-3">
-            <Link to={`/${wSlug}/helpdesk`} className="text-tertiary transition-colors hover:text-primary">
-              <ArrowLeft className="size-4" />
-            </Link>
-            <div>
-              <h3 className="text-sm text-text-100 font-semibold">Request not found</h3>
-              <p className="text-xs text-text-400">The selected request is unavailable or was removed.</p>
+        <AppHeader
+          header={
+            <div className="flex items-center gap-3">
+              <Link to={`/${wSlug}/helpdesk`} className="text-tertiary transition-colors hover:text-primary">
+                <ArrowLeft className="size-4" />
+              </Link>
+              <div>
+                <h3 className="text-sm text-text-100 font-semibold">Request not found</h3>
+                <p className="text-xs text-text-400">The selected request is unavailable or was removed.</p>
+              </div>
             </div>
-          </div>
-        </Header>
+          }
+        />
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-text-400">No request data available.</p>
         </div>
@@ -214,36 +211,44 @@ const WorkspaceRequestDetailPage = observer(() => {
   return (
     <>
       <div className="flex h-full w-full flex-col bg-surface-1">
-        <Header>
-          <div className="flex w-full items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="mb-1 flex items-center gap-3">
+        <AppHeader
+          header={
+            <div className="flex w-full items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
                 <Link to={`/${wSlug}/helpdesk`} className="text-tertiary transition-colors hover:text-primary">
                   <ArrowLeft className="size-4" />
                 </Link>
-                <span className="text-xs tracking-wider text-text-400 uppercase">Helpdesk</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-sm text-text-100 truncate font-semibold">{request.title}</h1>
+                    {request.status && statusMap[request.status] && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-11 font-medium"
+                        style={{
+                          backgroundColor: `${statusMap[request.status].color}22`,
+                          color: statusMap[request.status].color,
+                        }}
+                      >
+                        {statusMap[request.status].name}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-400 truncate">
+                    {request.contact_email || "Authenticated customer"} ·{" "}
+                    {request.source === "public_form" ? "Public form" : "Internal form"} ·{" "}
+                    {new Date(request.created_at).toLocaleString()}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-lg text-text-100 truncate font-semibold">{request.title}</h1>
-                <Badge variant={STATUS_META[request.status].variant} size="sm">
-                  {STATUS_META[request.status].label}
-                </Badge>
-              </div>
-              <p className="text-sm text-text-400 mt-1">
-                {request.contact_email || "Authenticated customer"} submitted this via{" "}
-                {request.source === "public_form" ? "public form" : "internal form"} on{" "}
-                {new Date(request.created_at).toLocaleString()}.
-              </p>
+              <Button variant="secondary" size="sm" onClick={() => setIsIssueModalOpen(true)}>
+                <span className="flex items-center gap-2">
+                  <Link2 className="size-4" />
+                  Link issue
+                </span>
+              </Button>
             </div>
-
-            <Button variant="secondary" size="base" onClick={() => setIsIssueModalOpen(true)}>
-              <span className="flex items-center gap-2">
-                <Link2 className="size-4" />
-                Link issue
-              </span>
-            </Button>
-          </div>
-        </Header>
+          }
+        />
 
         <div className="flex flex-1 overflow-hidden">
           {/* Main content — conversation */}
@@ -386,19 +391,16 @@ const WorkspaceRequestDetailPage = observer(() => {
                   <div>
                     <p className="text-xs text-text-400 mb-1">Status</p>
                     <select
-                      value={request.status}
-                      onChange={(e) =>
-                        helpdeskStore.updateRequest(wSlug, rId, {
-                          status: e.target.value as IHelpdeskRequest["status"],
-                        })
-                      }
+                      value={request.status ?? ""}
+                      onChange={(e) => helpdeskStore.updateRequest(wSlug, rId, { status: e.target.value })}
                       className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-2 px-2 py-1.5 transition-colors outline-none"
                     >
-                      <option value="open">Open</option>
-                      <option value="in_progress">In progress</option>
-                      <option value="waiting">Waiting</option>
-                      <option value="resolved">Resolved</option>
-                      <option value="closed">Closed</option>
+                      <option value="">— No status —</option>
+                      {statuses.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>

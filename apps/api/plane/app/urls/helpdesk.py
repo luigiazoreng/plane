@@ -12,6 +12,7 @@ from plane.app.views.helpdesk import (
     HelpdeskRequestIntakeIssueViewSet,
     HelpdeskRequestCommentViewSet,
     PublicHelpdeskCommentEndpoint,
+    HelpdeskStatusViewSet,
 )
 
 urlpatterns = [
@@ -25,6 +26,32 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/register/",
         HelpdeskCustomerRegisterEndpoint.as_view(),
         name="helpdesk-customer-register",
+    ),
+
+    # --- Status management (workspace-level) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/statuses/",
+        HelpdeskStatusViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-status",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/statuses/<uuid:pk>/",
+        HelpdeskStatusViewSet.as_view({
+            "get": "retrieve",
+            "patch": "partial_update",
+            "delete": "destroy",
+        }),
+        name="helpdesk-status-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/statuses/reorder/",
+        HelpdeskStatusViewSet.as_view({"post": "reorder"}),
+        name="helpdesk-status-reorder",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/statuses/<uuid:pk>/set-default/",
+        HelpdeskStatusViewSet.as_view({"post": "set_default"}),
+        name="helpdesk-status-set-default",
     ),
 
     # --- Portal management (workspace-level) ---

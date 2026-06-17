@@ -25,9 +25,19 @@ export interface IHelpdeskCustomer {
   updated_at: string;
 }
 
-export type THelpdeskRequestStatus = "open" | "in_progress" | "waiting" | "resolved" | "closed";
 export type THelpdeskRequestSource = "public_form" | "internal_form";
 export type THelpdeskAgentLayout = "list" | "kanban";
+
+export interface IHelpdeskStatus {
+  id: string;
+  workspace: string;
+  name: string;
+  color: string;
+  sequence: number;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface IHelpdeskRequest {
   id: string;
@@ -37,7 +47,8 @@ export interface IHelpdeskRequest {
   contact_email?: string | null;
   title: string;
   description: string;
-  status: THelpdeskRequestStatus;
+  status: string | null; // FK UUID to IHelpdeskStatus
+  status_detail: IHelpdeskStatus | null;
   source: THelpdeskRequestSource;
   assignees: string[];
   created_at: string;

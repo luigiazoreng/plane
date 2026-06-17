@@ -99,4 +99,5 @@ from .helpdesk import (
     HelpdeskRequestComment,
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
+    HelpdeskStatus,
 )

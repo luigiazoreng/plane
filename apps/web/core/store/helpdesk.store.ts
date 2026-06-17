@@ -14,6 +14,7 @@ import type {
   IHelpdeskRequestComment,
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
+  IHelpdeskStatus,
 } from "@plane/types";
 // services
 import { HelpdeskService } from "@plane/services";
@@ -22,6 +23,7 @@ import type { CoreRootStore } from "./root.store";
 
 export interface IHelpdeskStore {
   // observables
+  statuses: Record<string, IHelpdeskStatus[]>; // workspaceSlug -> statuses (ordered by sequence)
   portals: Record<string, IHelpdeskPortal[]>; // workspaceSlug -> portals
   requests: Record<string, IHelpdeskRequest[]>; // workspaceSlug -> requests
   comments: Record<string, IHelpdeskRequestComment[]>; // requestId -> comments
@@ -30,14 +32,24 @@ export interface IHelpdeskStore {
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
 
+  // status actions
+  fetchStatuses: (workspaceSlug: string) => Promise<IHelpdeskStatus[]>;
+  createStatus: (workspaceSlug: string, data: Partial<IHelpdeskStatus>) => Promise<IHelpdeskStatus>;
+  updateStatus: (workspaceSlug: string, statusId: string, data: Partial<IHelpdeskStatus>) => Promise<IHelpdeskStatus>;
+  deleteStatus: (workspaceSlug: string, statusId: string) => Promise<void>;
+  reorderStatuses: (workspaceSlug: string, items: { id: string; sequence: number }[]) => Promise<void>;
+  setDefaultStatus: (workspaceSlug: string, statusId: string) => Promise<void>;
+
   // portal actions
   fetchPortals: (workspaceSlug: string) => Promise<IHelpdeskPortal[]>;
   createPortal: (workspaceSlug: string, data: Partial<IHelpdeskPortal>) => Promise<IHelpdeskPortal>;
   updatePortal: (workspaceSlug: string, portalId: string, data: Partial<IHelpdeskPortal>) => Promise<IHelpdeskPortal>;
+  deletePortal: (workspaceSlug: string, portalId: string) => Promise<void>;
 
   // request actions
   fetchRequests: (workspaceSlug: string) => Promise<IHelpdeskRequest[]>;
   fetchRequestById: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequest>;
+  createRequest: (workspaceSlug: string, data: Partial<IHelpdeskRequest>) => Promise<IHelpdeskRequest>;
   updateRequest: (
     workspaceSlug: string,
     requestId: string,
@@ -72,16 +84,19 @@ export interface IHelpdeskStore {
   deleteRequestIntakeIssue: (workspaceSlug: string, requestIntakeIssueId: string, requestId: string) => Promise<void>;
 
   // computed getters
+  getWorkspaceStatuses: (workspaceSlug: string) => IHelpdeskStatus[];
+  getDefaultStatus: (workspaceSlug: string) => IHelpdeskStatus | undefined;
   getWorkspacePortals: (workspaceSlug: string) => IHelpdeskPortal[];
   getWorkspaceRequests: (workspaceSlug: string) => IHelpdeskRequest[];
   getRequestComments: (requestId: string) => IHelpdeskRequestComment[];
   getRequestIssues: (requestId: string) => IHelpdeskRequestIssue[];
   getRequestIntakeIssues: (requestId: string) => IHelpdeskRequestIntakeIssue[];
-  getRequestsGroupedByStatus: (workspaceSlug: string) => Record<IHelpdeskRequest["status"], IHelpdeskRequest[]>;
+  getRequestsGroupedByStatus: (workspaceSlug: string) => Record<string, IHelpdeskRequest[]>;
   getCollectionState: (key: string) => { isLoading: boolean; error: string | null };
 }
 
 export class HelpdeskStore implements IHelpdeskStore {
+  statuses: Record<string, IHelpdeskStatus[]> = {};
   portals: Record<string, IHelpdeskPortal[]> = {};
   requests: Record<string, IHelpdeskRequest[]> = {};
   comments: Record<string, IHelpdeskRequestComment[]> = {};
@@ -95,6 +110,7 @@ export class HelpdeskStore implements IHelpdeskStore {
 
   constructor(_rootStore: CoreRootStore) {
     makeObservable(this, {
+      statuses: observable,
       portals: observable,
       requests: observable,
       comments: observable,
@@ -102,11 +118,19 @@ export class HelpdeskStore implements IHelpdeskStore {
       requestIntakeIssues: observable,
       loadingState: observable,
       errorState: observable,
+      fetchStatuses: action,
+      createStatus: action,
+      updateStatus: action,
+      deleteStatus: action,
+      reorderStatuses: action,
+      setDefaultStatus: action,
       fetchPortals: action,
       createPortal: action,
       updatePortal: action,
+      deletePortal: action,
       fetchRequests: action,
       fetchRequestById: action,
+      createRequest: action,
       updateRequest: action,
       fetchRequestComments: action,
       createRequestComment: action,
@@ -134,6 +158,89 @@ export class HelpdeskStore implements IHelpdeskStore {
     runInAction(() => {
       set(this.loadingState, [key], false);
       set(this.errorState, [key], error instanceof Error ? error.message : error ? String(error) : null);
+    });
+  };
+
+  // --- Statuses ---
+
+  fetchStatuses = async (workspaceSlug: string): Promise<IHelpdeskStatus[]> => {
+    const key = `statuses:${workspaceSlug}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getStatuses(workspaceSlug);
+      runInAction(() => {
+        set(this.statuses, [workspaceSlug], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  createStatus = async (workspaceSlug: string, data: Partial<IHelpdeskStatus>): Promise<IHelpdeskStatus> => {
+    const response = await this.helpdeskService.createStatus(workspaceSlug, data);
+    runInAction(() => {
+      const current = this.statuses[workspaceSlug] || [];
+      set(this.statuses, [workspaceSlug], [...current, response].sort((a, b) => a.sequence - b.sequence));
+    });
+    return response;
+  };
+
+  updateStatus = async (
+    workspaceSlug: string,
+    statusId: string,
+    data: Partial<IHelpdeskStatus>
+  ): Promise<IHelpdeskStatus> => {
+    const response = await this.helpdeskService.updateStatus(workspaceSlug, statusId, data);
+    runInAction(() => {
+      const current = this.statuses[workspaceSlug] || [];
+      set(
+        this.statuses,
+        [workspaceSlug],
+        current.map((s) => (s.id === statusId ? response : s))
+      );
+    });
+    return response;
+  };
+
+  deleteStatus = async (workspaceSlug: string, statusId: string): Promise<void> => {
+    await this.helpdeskService.deleteStatus(workspaceSlug, statusId);
+    runInAction(() => {
+      const current = this.statuses[workspaceSlug] || [];
+      set(
+        this.statuses,
+        [workspaceSlug],
+        current.filter((s) => s.id !== statusId)
+      );
+    });
+  };
+
+  reorderStatuses = async (workspaceSlug: string, items: { id: string; sequence: number }[]): Promise<void> => {
+    // Optimistic update
+    runInAction(() => {
+      const current = this.statuses[workspaceSlug] || [];
+      const seqMap = Object.fromEntries(items.map((i) => [i.id, i.sequence]));
+      set(
+        this.statuses,
+        [workspaceSlug],
+        current.map((s) => (seqMap[s.id] !== undefined ? { ...s, sequence: seqMap[s.id] } : s))
+          .sort((a, b) => a.sequence - b.sequence)
+      );
+    });
+    await this.helpdeskService.reorderStatuses(workspaceSlug, items);
+  };
+
+  setDefaultStatus = async (workspaceSlug: string, statusId: string): Promise<void> => {
+    await this.helpdeskService.setDefaultStatus(workspaceSlug, statusId);
+    runInAction(() => {
+      const current = this.statuses[workspaceSlug] || [];
+      set(
+        this.statuses,
+        [workspaceSlug],
+        current.map((s) => ({ ...s, is_default: s.id === statusId }))
+      );
     });
   };
 
@@ -181,6 +288,18 @@ export class HelpdeskStore implements IHelpdeskStore {
     return response;
   };
 
+  deletePortal = async (workspaceSlug: string, portalId: string): Promise<void> => {
+    await this.helpdeskService.deletePortal(workspaceSlug, portalId);
+    runInAction(() => {
+      const current = this.portals[workspaceSlug] || [];
+      set(
+        this.portals,
+        [workspaceSlug],
+        current.filter((p) => p.id !== portalId)
+      );
+    });
+  };
+
   // --- Requests ---
 
   fetchRequests = async (workspaceSlug: string): Promise<IHelpdeskRequest[]> => {
@@ -220,6 +339,15 @@ export class HelpdeskStore implements IHelpdeskStore {
       this.stopLoading(key, error);
       throw error;
     }
+  };
+
+  createRequest = async (workspaceSlug: string, data: Partial<IHelpdeskRequest>): Promise<IHelpdeskRequest> => {
+    const response = await this.helpdeskService.createRequest(workspaceSlug, data);
+    runInAction(() => {
+      const current = this.requests[workspaceSlug] || [];
+      set(this.requests, [workspaceSlug], [...current, response]);
+    });
+    return response;
   };
 
   updateRequest = async (
@@ -389,6 +517,14 @@ export class HelpdeskStore implements IHelpdeskStore {
 
   // --- Computed getters ---
 
+  getWorkspaceStatuses = computedFn((workspaceSlug: string) => {
+    return this.statuses[workspaceSlug] || [];
+  });
+
+  getDefaultStatus = computedFn((workspaceSlug: string) => {
+    return (this.statuses[workspaceSlug] || []).find((s) => s.is_default);
+  });
+
   getWorkspacePortals = computedFn((workspaceSlug: string) => {
     return this.portals[workspaceSlug] || [];
   });
@@ -410,16 +546,20 @@ export class HelpdeskStore implements IHelpdeskStore {
   });
 
   getRequestsGroupedByStatus = computedFn((workspaceSlug: string) => {
-    const grouped: Record<IHelpdeskRequest["status"], IHelpdeskRequest[]> = {
-      open: [],
-      in_progress: [],
-      waiting: [],
-      resolved: [],
-      closed: [],
-    };
+    const grouped: Record<string, IHelpdeskRequest[]> = {};
+    const statuses = this.getWorkspaceStatuses(workspaceSlug);
+
+    // Init empty arrays for every known status
+    statuses.forEach((s) => {
+      grouped[s.id] = [];
+    });
+    // Bucket "no status" fallback
+    grouped["__none__"] = [];
 
     this.getWorkspaceRequests(workspaceSlug).forEach((request) => {
-      grouped[request.status].push(request);
+      const key = request.status ?? "__none__";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(request);
     });
 
     return grouped;
