@@ -8,7 +8,8 @@ from plane.app.views.base import BaseViewSet
 from plane.db.models.helpdesk import HelpdeskForm, HelpdeskFormVisibility, HelpdeskPortal, HelpdeskRequest, HelpdeskStatus
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
-from .form import get_customer_from_token, validate_form_submission
+from .form import get_customer_from_token
+from plane.app.helpdesk.form_core import validate_helpdesk_form_submission
 
 
 class HelpdeskRequestViewSet(BaseViewSet):
@@ -118,7 +119,7 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
             if not customer and not request.data.get("contact_email"):
                 return Response({"contact_email": "Contact email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-            result = validate_form_submission(form, request.data)
+            result = validate_helpdesk_form_submission(form, request.data)
             if result["errors"]:
                 return Response(result["errors"], status=status.HTTP_400_BAD_REQUEST)
 

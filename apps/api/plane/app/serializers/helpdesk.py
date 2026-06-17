@@ -57,7 +57,15 @@ class HelpdeskPortalSerializer(BaseSerializer):
             raise serializers.ValidationError({"auto_assignment_type": "Assignment type is required."})
 
         attrs["auto_assignment_type"] = auto_assignment_type or HelpdeskPortal.AutoAssignmentType.LOAD_BALANCE
-        attrs["auto_assignment_config"] = config
+        attrs["auto_assignment_config"] = normalize_helpdesk_auto_assignment_config(
+            config,
+            attrs["auto_assignment_type"],
+        )
+
+        for field_name in ("sla_first_response_hours", "sla_resolution_hours"):
+            value = attrs.get(field_name, getattr(instance, field_name, None))
+            if value is not None and int(value) <= 0:
+                raise serializers.ValidationError({field_name: "SLA must be a positive integer or null."})
         return attrs
 
     class Meta:

@@ -1,5 +1,3 @@
-from datetime import date
-
 import jwt
 from django.conf import settings
 from rest_framework import status
@@ -10,17 +8,14 @@ from rest_framework.response import Response
 from plane.app.serializers.helpdesk import HelpdeskFormFieldSerializer, HelpdeskFormSerializer, HelpdeskRequestSerializer
 from plane.app.views.base import BaseAPIView, BaseViewSet
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
+from plane.app.helpdesk.form_core import build_default_helpdesk_system_fields, validate_helpdesk_form_submission
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import (
     HelpdeskCustomer,
     HelpdeskForm,
     HelpdeskFormField,
-    HelpdeskFormFieldType,
     HelpdeskFormVisibility,
     HelpdeskPortal,
-    HelpdeskRequest,
-    HelpdeskRequestSource,
-    HelpdeskStatus,
 )
 
 
@@ -51,97 +46,6 @@ def get_visible_forms_queryset(portal, customer):
     return queryset.filter(visibility=HelpdeskFormVisibility.PUBLIC)
 
 
-def validate_form_submission(form, payload):
-    fields = list(form.fields.filter(deleted_at__isnull=True).order_by("sequence", "created_at"))
-    errors = {}
-    title = ""
-    description = ""
-    responses = {}
-
-    for field in fields:
-        value = payload.get(field.key)
-        missing = value is None or (isinstance(value, str) and value.strip() == "")
-
-        if field.required and missing and field.field_type != HelpdeskFormFieldType.CHECKBOX:
-            errors[field.key] = "This field is required."
-            continue
-
-        if field.field_type in {
-            HelpdeskFormFieldType.SYSTEM_TITLE,
-            HelpdeskFormFieldType.SYSTEM_DESCRIPTION,
-            HelpdeskFormFieldType.SHORT_TEXT,
-            HelpdeskFormFieldType.LONG_TEXT,
-        }:
-            if missing:
-                normalized = ""
-            elif not isinstance(value, str):
-                errors[field.key] = "This field must be a string."
-                continue
-            else:
-                normalized = value.strip()
-        elif field.field_type == HelpdeskFormFieldType.SELECT:
-            if missing:
-                normalized = ""
-            elif not isinstance(value, str):
-                errors[field.key] = "This field must be a string."
-                continue
-            else:
-                allowed_values = {
-                    str(option.get("value"))
-                    for option in field.options
-                    if isinstance(option, dict) and option.get("value") is not None
-                }
-                normalized = value.strip()
-                if normalized and normalized not in allowed_values:
-                    errors[field.key] = "Please select a valid option."
-                    continue
-        elif field.field_type == HelpdeskFormFieldType.CHECKBOX:
-            if value is None:
-                normalized = False
-            elif not isinstance(value, bool):
-                errors[field.key] = "This field must be a boolean."
-                continue
-            else:
-                normalized = value
-            if field.required and normalized is not True:
-                errors[field.key] = "This field must be checked."
-                continue
-        elif field.field_type == HelpdeskFormFieldType.DATE:
-            if missing:
-                normalized = ""
-            elif not isinstance(value, str):
-                errors[field.key] = "This field must be a date string."
-                continue
-            else:
-                normalized = value.strip()
-                try:
-                    date.fromisoformat(normalized)
-                except ValueError:
-                    errors[field.key] = "Please provide a valid date in YYYY-MM-DD format."
-                    continue
-        else:
-            continue
-
-        if field.field_type == HelpdeskFormFieldType.SYSTEM_TITLE:
-            title = normalized
-        elif field.field_type == HelpdeskFormFieldType.SYSTEM_DESCRIPTION:
-            description = normalized
-        else:
-            responses[field.key] = normalized
-
-    if not title:
-        errors["title"] = "A title is required."
-    if not description:
-        errors["description"] = "A description is required."
-
-    return {
-        "errors": errors,
-        "title": title,
-        "description": description,
-        "responses": responses,
-    }
-
-
 class HelpdeskFormViewSet(BaseViewSet):
     serializer_class = HelpdeskFormSerializer
     model = HelpdeskForm
@@ -163,28 +67,7 @@ class HelpdeskFormViewSet(BaseViewSet):
         if not portal:
             raise ValidationError({"portal": "Portal not found for this workspace."})
         form = serializer.save(workspace=workspace, portal=portal)
-        HelpdeskFormField.objects.create(
-            workspace=workspace,
-            project=portal.project,
-            form=form,
-            key="title",
-            label="Subject",
-            field_type=HelpdeskFormFieldType.SYSTEM_TITLE,
-            required=True,
-            sequence=10000,
-            is_system=True,
-        )
-        HelpdeskFormField.objects.create(
-            workspace=workspace,
-            project=portal.project,
-            form=form,
-            key="description",
-            label="Description",
-            field_type=HelpdeskFormFieldType.SYSTEM_DESCRIPTION,
-            required=True,
-            sequence=20000,
-            is_system=True,
-        )
+        HelpdeskFormField.objects.bulk_create(build_default_helpdesk_system_fields(workspace, form))
 
     def reorder(self, request, slug):
         items = request.data

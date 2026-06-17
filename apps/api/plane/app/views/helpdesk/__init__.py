@@ -13,7 +13,7 @@ from .form import (
     PublicHelpdeskFormSubmitEndpoint,
 )
 from .request import HelpdeskRequestViewSet, PublicHelpdeskRequestEndpoint
-from .issue import HelpdeskRequestIssueViewSet
+from .issue import HelpdeskLinkedIssueLookupEndpoint, HelpdeskRequestIssueViewSet
 from .intake import HelpdeskRequestIntakeIssueViewSet
 from .comment import HelpdeskRequestCommentViewSet, PublicHelpdeskCommentEndpoint
 from .status import HelpdeskStatusViewSet

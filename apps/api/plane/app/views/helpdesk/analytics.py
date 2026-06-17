@@ -1,11 +1,13 @@
 from datetime import timedelta
 
 from django.db.models import Avg, Count, ExpressionWrapper, F, fields
-from django.db.models.functions import TruncDate, TruncMonth, TruncWeek
+from django.db.models.functions import TruncDate, TruncMonth
 from rest_framework.response import Response
 
 from plane.app.views.base import BaseAPIView
+from plane.db.models import Workspace
 from plane.db.models.helpdesk import HelpdeskPortal, HelpdeskRequest, HelpdeskRequestAssignee, HelpdeskStatus
+from plane.app.helpdesk.statuses import get_helpdesk_active_status_ids
 from plane.utils.date_utils import get_analytics_date_range, get_chart_period_range
 
 
@@ -28,6 +30,7 @@ def _get_trunc_fn(date_filter):
 
 
 class HelpdeskAnalyticsEndpoint(BaseAPIView):
+    SLA_HISTORY_CUTOFF = "2026-06-17"
 
     def get(self, request, slug):
         date_filter = request.query_params.get("date_filter", "last_30_days")
@@ -53,9 +56,15 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         )
         total_current = current_qs.count()
 
-        terminal_ids = list(HelpdeskStatus.objects.filter(workspace__slug=slug, is_terminal=True).values_list("id", flat=True))
+        terminal_ids = list(
+            HelpdeskStatus.objects.filter(workspace__slug=slug, is_terminal=True).values_list("id", flat=True)
+        )
         resolved_current = current_qs.filter(status_id__in=terminal_ids).count()
-        open_current = total_current - resolved_current
+        workspace = Workspace.objects.filter(slug=slug).only("id").first()
+        active_status_ids = get_helpdesk_active_status_ids(workspace, []) if workspace else []
+        open_current = current_qs.filter(status_id__in=active_status_ids).count() + current_qs.filter(
+            status__isnull=True
+        ).count()
 
         total_previous = None
         pct_change = None
@@ -95,11 +104,24 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             "resolution_pct": None,
             "sla_first_response_hours": None,
             "sla_resolution_hours": None,
+            "scope": "ambiguous",
+            "historical_cutoff": self.SLA_HISTORY_CUTOFF,
+            "historical_note": (
+                f"SLA compliance is reliable for requests created on or after {self.SLA_HISTORY_CUTOFF} "
+                "or when response/resolution timestamps are present."
+            ),
         }
         if portal_id:
             portal = HelpdeskPortal.objects.filter(id=portal_id, workspace__slug=slug).first()
+            sla_data["scope"] = "portal"
         else:
-            portal = HelpdeskPortal.objects.filter(workspace__slug=slug).first()
+            workspace_portals = list(HelpdeskPortal.objects.filter(workspace__slug=slug))
+            if len(workspace_portals) == 1:
+                portal = workspace_portals[0]
+                sla_data["scope"] = "workspace_default"
+            elif len(workspace_portals) > 1:
+                portal = None
+                sla_data["scope"] = "ambiguous"
 
         if portal:
             sla_data["sla_first_response_hours"] = portal.sla_first_response_hours

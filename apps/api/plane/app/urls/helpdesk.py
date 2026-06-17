@@ -14,6 +14,7 @@ from plane.app.views.helpdesk import (
     HelpdeskRequestViewSet,
     PublicHelpdeskRequestEndpoint,
     HelpdeskRequestIssueViewSet,
+    HelpdeskLinkedIssueLookupEndpoint,
     HelpdeskRequestIntakeIssueViewSet,
     HelpdeskRequestCommentViewSet,
     PublicHelpdeskCommentEndpoint,
@@ -181,6 +182,11 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/request-issues/<uuid:pk>/",
         HelpdeskRequestIssueViewSet.as_view({"get": "retrieve", "delete": "destroy"}),
         name="helpdesk-request-issue-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/linked-issues/lookup/",
+        HelpdeskLinkedIssueLookupEndpoint.as_view(),
+        name="helpdesk-linked-issue-lookup",
     ),
 
     # --- Request → Intake Issue links (forwarding to dev) ---

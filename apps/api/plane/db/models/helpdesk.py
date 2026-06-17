@@ -32,6 +32,8 @@ class HelpdeskCustomer(WorkspaceBaseModel):
 class HelpdeskPortal(WorkspaceBaseModel):
     class AutoAssignmentType(models.TextChoices):
         LOAD_BALANCE = "load_balance", "Load Balance"
+        ROUND_ROBIN = "round_robin", "Round Robin"
+        CAPACITY = "capacity", "Capacity"
 
     is_public = models.BooleanField(default=True)
     require_login = models.BooleanField(default=False)
