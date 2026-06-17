@@ -49,6 +49,10 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
 
 - `HelpdeskPortal`: Configuração do helpdesk a nível de workspace.
   - Campos: `workspace` (FK), `is_public` (Boolean), `require_login` (Boolean), `public_slug` (SlugField).
+  - Auto-assign v1:
+    - `auto_assignment_enabled` (Boolean)
+    - `auto_assignment_type` (`load_balance` no v1, com contrato aberto para novos tipos)
+    - `auto_assignment_config` (JSON) com payload versionável, hoje usando principalmente `member_ids`
 
 ### 3. Modelos de Formulários Customizados
 
@@ -153,6 +157,18 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] Evoluir `/{wSlug}/helpdesk/settings` para um builder visual com sub-abas internas (`Portal settings`, `Form builder`, `Statuses`).
   - [x] Adicionar suporte a campo `Dropdown` no builder com gestão explícita de opções (`label` / `value`).
 
+- [x] **Fase 9: Automatic Assignment v1**
+  - [x] Estender `HelpdeskPortal` com configuração de atribuição automática por portal.
+  - [x] Criar migração `0129_helpdeskportal_auto_assignment`.
+  - [x] Modelar o contrato de estratégia com tipo `load_balance` e `auto_assignment_config` versionável.
+  - [x] Implementar resolver backend dedicado para auto-assign fora das views, preparado para futuras estratégias.
+  - [x] Aplicar auto-assign apenas na criação de tickets públicos, autenticados e internos.
+  - [x] Definir comportamento de `load_balance` como "agente elegível com menor número de tickets Helpdesk ativos atribuídos".
+  - [x] Definir desempate determinístico por menor `member_id` no v1.
+  - [x] Manter fallback seguro: se não houver agentes elegíveis, o ticket é criado sem assignee.
+  - [x] Adicionar seção "Automatic assignment" dentro de `Portal settings`, com toggle, tipo e multiselect de agentes elegíveis.
+  - [x] Atualizar testes contratuais para cobrir persistência da configuração e resolução do assignee.
+
 ---
 
 ## Pendências Técnicas
@@ -161,6 +177,8 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
 - **Atualização em tempo real do status do Intake**: O status refletido no Dev Pipeline só atualiza quando o usuário navega de volta ao ticket (re-fetch no `useEffect`). WebSocket/polling não implementado.
 - **Core compartilhado para outros módulos**: A fundação de forms já foi criada com foco em reuso, mas ainda vive acoplada ao domínio de Helpdesk. O próximo passo natural é extrair o builder/renderers/contratos para um core realmente compartilhado com Intake e outros módulos.
 - **Typecheck global do app web**: Continua bloqueado por um erro pré-existente fora do escopo do Helpdesk em `apps/web/core/store/pages/base-page.ts(121,11)`.
+- **Auto-assign ainda sem estratégias adicionais**: O contrato já suporta evolução, mas `round_robin`, `capacity`, skills, horários e reassignment continuam fora do v1.
+- **Definição de "ticket ativo"**: Hoje a regra usa status Helpdesk diferentes de `Resolved` e `Closed` (com fallback centralizado no helper). Se o produto quiser tornar isso configurável por portal, a estrutura já comporta `active_status_ids` no config.
 
 ---
 
@@ -203,3 +221,11 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - **Frontend portal:** `/helpdesk/p/[publicSlug]/new` virou seletor de formulários; nova rota `/helpdesk/p/[publicSlug]/forms/[formSlug]` renderiza forms dinâmicos e redireciona forms privados para login.
   - **Frontend agent:** detalhe do request agora mostra `Submitted via form` e renderiza `form_responses`.
   - **Settings / Builder:** a página `/{wSlug}/helpdesk/settings` ganhou sub-abas internas (`Portal settings`, `Form builder`, `Statuses`), layout responsivo mais largo para o builder e suporte explícito a `Dropdown` com edição de opções `label/value`.
+- **[2026-06-17]**: Automatic Assignment v1 (Fase 9).
+  - **Backend / modelo:** `HelpdeskPortal` passou a armazenar `auto_assignment_enabled`, `auto_assignment_type` e `auto_assignment_config`; migração `0129_helpdeskportal_auto_assignment` criada.
+  - **Resolver dedicado:** a lógica foi encapsulada em helper próprio para evitar acoplamento nas views e deixar espaço para futuras estratégias além de `load_balance`.
+  - **Comportamento v1:** na criação do ticket, se o portal estiver com auto-assign habilitado, o sistema escolhe o agente elegível com menor número de tickets Helpdesk ativos atribuídos; em empate, usa desempate determinístico por menor `member_id`.
+  - **Cobertura de fluxos:** a regra foi aplicada na criação pública por form, na criação pública legada e na criação interna por agente.
+  - **Fallback:** quando o pool está vazio ou não há membro elegível válido no workspace, o ticket continua sendo criado sem assignee.
+  - **Frontend settings:** `Portal settings` ganhou a seção "Automatic assignment", com toggle, select de tipo e `MemberDropdown` para definir o pool de agentes elegíveis por portal.
+  - **Testes:** suíte contratual do Helpdesk expandida para validar persistência da configuração, escolha do agente menos carregado, desempate determinístico e fallback sem responsável.
