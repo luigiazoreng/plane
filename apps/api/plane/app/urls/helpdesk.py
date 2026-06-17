@@ -6,6 +6,11 @@ from plane.app.views.helpdesk import (
     PublicHelpdeskCustomerRegisterEndpoint,
     HelpdeskPortalViewSet,
     PublicHelpdeskPortalEndpoint,
+    HelpdeskFormViewSet,
+    HelpdeskFormFieldViewSet,
+    PublicHelpdeskFormListEndpoint,
+    PublicHelpdeskFormDetailEndpoint,
+    PublicHelpdeskFormSubmitEndpoint,
     HelpdeskRequestViewSet,
     PublicHelpdeskRequestEndpoint,
     HelpdeskRequestIssueViewSet,
@@ -70,12 +75,62 @@ urlpatterns = [
         }),
         name="helpdesk-portal-detail",
     ),
+    path(
+        "workspaces/<str:slug>/helpdesk/forms/",
+        HelpdeskFormViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-form",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/forms/<uuid:pk>/",
+        HelpdeskFormViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
+        name="helpdesk-form-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/forms/reorder/",
+        HelpdeskFormViewSet.as_view({"post": "reorder"}),
+        name="helpdesk-form-reorder",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/forms/<uuid:pk>/set-active/",
+        HelpdeskFormViewSet.as_view({"post": "set_active"}),
+        name="helpdesk-form-set-active",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/form-fields/",
+        HelpdeskFormFieldViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-form-field",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/form-fields/<uuid:pk>/",
+        HelpdeskFormFieldViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
+        name="helpdesk-form-field-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/form-fields/reorder/",
+        HelpdeskFormFieldViewSet.as_view({"post": "reorder"}),
+        name="helpdesk-form-field-reorder",
+    ),
 
     # --- Public portal (unchanged) ---
     path(
         "helpdesk/public/portals/<str:public_slug>/",
         PublicHelpdeskPortalEndpoint.as_view(),
         name="public-helpdesk-portal",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/forms/",
+        PublicHelpdeskFormListEndpoint.as_view(),
+        name="public-helpdesk-form-list",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/forms/<str:form_slug>/",
+        PublicHelpdeskFormDetailEndpoint.as_view(),
+        name="public-helpdesk-form-detail",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/forms/<str:form_slug>/submit/",
+        PublicHelpdeskFormSubmitEndpoint.as_view(),
+        name="public-helpdesk-form-submit",
     ),
     path(
         "helpdesk/public/portals/<str:public_slug>/auth/login/",

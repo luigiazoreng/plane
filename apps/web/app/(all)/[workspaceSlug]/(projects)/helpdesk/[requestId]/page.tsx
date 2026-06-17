@@ -12,7 +12,7 @@ import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
 import { Switch } from "@plane/propel/switch";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IHelpdeskRequest, IHelpdeskStatus, ISearchIssueResponse } from "@plane/types";
+import type { IHelpdeskStatus, ISearchIssueResponse } from "@plane/types";
 import { AppHeader } from "@/components/core/app-header";
 import { generateWorkItemLink } from "@plane/utils";
 import {
@@ -260,12 +260,35 @@ const WorkspaceRequestDetailPage = observer(() => {
                     <div>
                       <p className="text-xs tracking-wider text-text-400 uppercase">Original request</p>
                       <h2 className="text-base text-text-100 mt-2 font-semibold">{request.title}</h2>
+                      {request.form_detail ? (
+                        <p className="text-xs text-text-400 mt-1">
+                          Submitted via form: <span className="text-text-100">{request.form_detail.name}</span>
+                        </p>
+                      ) : null}
                     </div>
                     <Badge variant="neutral" size="sm">
                       {request.customer ? "Authenticated" : "Anonymous"}
                     </Badge>
                   </div>
                   <div className="text-sm text-text-300 whitespace-pre-wrap">{request.description}</div>
+                  {Object.keys(request.form_responses || {}).length > 0 ? (
+                    <div className="mt-5 border-t border-subtle pt-4">
+                      <p className="text-xs tracking-wider text-text-400 uppercase">Form responses</p>
+                      <div className="mt-3 space-y-3">
+                        {Object.entries(request.form_responses || {}).map(([key, value]) => {
+                          const field = request.form_detail?.fields_detail?.find((item) => item.key === key);
+                          return (
+                            <div key={key} className="rounded-lg border border-subtle bg-surface-1 p-3">
+                              <p className="text-xs text-text-400">{field?.label || key}</p>
+                              <div className="text-sm text-text-100 mt-1 whitespace-pre-wrap">
+                                {typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
 
                 <section className="rounded-xl border border-subtle bg-surface-2">
@@ -413,6 +436,12 @@ const WorkspaceRequestDetailPage = observer(() => {
                       {request.source === "public_form" ? "Public form" : "Internal form"}
                     </p>
                   </div>
+                  {request.form_detail ? (
+                    <div>
+                      <p className="text-xs text-text-400 mb-1">Form</p>
+                      <p className="text-text-100">{request.form_detail.name}</p>
+                    </div>
+                  ) : null}
                   <div>
                     <p className="text-xs text-text-400 mb-1">Assignees</p>
                     <MemberDropdown

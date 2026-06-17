@@ -6,7 +6,7 @@
 
 import { observable, action, makeObservable, runInAction } from "mobx";
 import { PublicHelpdeskService } from "@plane/services";
-import type { IHelpdeskPortal, IHelpdeskRequest } from "@plane/types";
+import type { IHelpdeskForm, IHelpdeskPortal, IHelpdeskRequest } from "@plane/types";
 
 import type { IHelpdeskCustomer } from "@plane/types";
 
@@ -14,6 +14,8 @@ export class PublicHelpdeskStore {
   customerToken: string | null = null;
   customerData: IHelpdeskCustomer | null = null;
   currentPortal: IHelpdeskPortal | null = null;
+  portalForms: IHelpdeskForm[] = [];
+  currentForm: IHelpdeskForm | null = null;
   myRequests: IHelpdeskRequest[] = [];
 
   private publicHelpdeskService: PublicHelpdeskService;
@@ -23,6 +25,8 @@ export class PublicHelpdeskStore {
       customerToken: observable,
       customerData: observable,
       currentPortal: observable,
+      portalForms: observable,
+      currentForm: observable,
       myRequests: observable,
 
       setCustomerToken: action,
@@ -30,10 +34,13 @@ export class PublicHelpdeskStore {
       logout: action,
 
       fetchPublicPortal: action,
+      fetchPortalForms: action,
+      fetchPortalForm: action,
       loginCustomer: action,
       registerCustomer: action,
       fetchMyRequests: action,
       createPublicRequest: action,
+      submitPublicForm: action,
     });
 
     this.publicHelpdeskService = new PublicHelpdeskService();
@@ -75,6 +82,8 @@ export class PublicHelpdeskStore {
   logout() {
     this.setCustomerToken(null);
     this.setCustomerData(null);
+    this.portalForms = [];
+    this.currentForm = null;
     this.myRequests = [];
   }
 
@@ -84,6 +93,22 @@ export class PublicHelpdeskStore {
       this.currentPortal = portal;
     });
     return portal;
+  }
+
+  async fetchPortalForms(publicSlug: string) {
+    const forms = await this.publicHelpdeskService.getPublicForms(publicSlug, this.customerToken || undefined);
+    runInAction(() => {
+      this.portalForms = forms;
+    });
+    return forms;
+  }
+
+  async fetchPortalForm(publicSlug: string, formSlug: string) {
+    const form = await this.publicHelpdeskService.getPublicForm(publicSlug, formSlug, this.customerToken || undefined);
+    runInAction(() => {
+      this.currentForm = form;
+    });
+    return form;
   }
 
   async loginCustomer(publicSlug: string, data: any) {
@@ -117,6 +142,21 @@ export class PublicHelpdeskStore {
   async createPublicRequest(publicSlug: string, data: Partial<IHelpdeskRequest>) {
     const request = await this.publicHelpdeskService.createPublicRequest(
       publicSlug,
+      data,
+      this.customerToken || undefined
+    );
+    runInAction(() => {
+      if (this.customerToken) {
+        this.myRequests = [request, ...this.myRequests];
+      }
+    });
+    return request;
+  }
+
+  async submitPublicForm(publicSlug: string, formSlug: string, data: Record<string, unknown>) {
+    const request = await this.publicHelpdeskService.submitPublicForm(
+      publicSlug,
+      formSlug,
       data,
       this.customerToken || undefined
     );

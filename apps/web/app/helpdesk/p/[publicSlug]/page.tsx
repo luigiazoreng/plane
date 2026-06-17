@@ -109,10 +109,17 @@ const HelpdeskPublicDashboard = observer(() => {
                       </td>
                       <td className="px-6 py-4">
                         <Badge
-                          variant={req.status === "open" ? "warning" : req.status === "waiting" ? "brand" : "success"}
+                          variant={
+                            req.status_detail?.name?.toLowerCase().includes("wait")
+                              ? "brand"
+                              : req.status_detail?.name?.toLowerCase().includes("resolv") ||
+                                  req.status_detail?.name?.toLowerCase().includes("clos")
+                                ? "success"
+                                : "warning"
+                          }
                           size="sm"
                         >
-                          {req.status.replace("_", " ")}
+                          {req.status_detail?.name || "Open"}
                         </Badge>
                       </td>
                       <td className="text-text-400 px-6 py-4">

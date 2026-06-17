@@ -50,6 +50,7 @@ export const coreRoutes: RouteConfigEntry[] = [
     layout("./helpdesk/p/[publicSlug]/layout.tsx", [
       route("helpdesk/p/:publicSlug", "./helpdesk/p/[publicSlug]/page.tsx"),
       route("helpdesk/p/:publicSlug/new", "./helpdesk/p/[publicSlug]/new/page.tsx"),
+      route("helpdesk/p/:publicSlug/forms/:formSlug", "./helpdesk/p/[publicSlug]/forms/[formSlug]/page.tsx"),
       route("helpdesk/p/:publicSlug/login", "./helpdesk/p/[publicSlug]/login/page.tsx"),
       route("helpdesk/p/:publicSlug/register", "./helpdesk/p/[publicSlug]/register/page.tsx"),
       route("helpdesk/p/:publicSlug/:requestId", "./helpdesk/p/[publicSlug]/[requestId]/page.tsx"),
@@ -130,10 +131,7 @@ export const coreRoutes: RouteConfigEntry[] = [
         // Workspace Helpdesk
         layout("./(all)/[workspaceSlug]/(projects)/helpdesk/layout.tsx", [
           route(":workspaceSlug/helpdesk", "./(all)/[workspaceSlug]/(projects)/helpdesk/page.tsx"),
-          route(
-            ":workspaceSlug/helpdesk/settings",
-            "./(all)/[workspaceSlug]/(projects)/helpdesk/settings/page.tsx"
-          ),
+          route(":workspaceSlug/helpdesk/settings", "./(all)/[workspaceSlug]/(projects)/helpdesk/settings/page.tsx"),
           route(
             ":workspaceSlug/helpdesk/:requestId",
             "./(all)/[workspaceSlug]/(projects)/helpdesk/[requestId]/page.tsx"

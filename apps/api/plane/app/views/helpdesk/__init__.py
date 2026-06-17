@@ -5,6 +5,13 @@ from .auth import (
     PublicHelpdeskCustomerRegisterEndpoint,
 )
 from .portal import HelpdeskPortalViewSet, PublicHelpdeskPortalEndpoint
+from .form import (
+    HelpdeskFormFieldViewSet,
+    HelpdeskFormViewSet,
+    PublicHelpdeskFormDetailEndpoint,
+    PublicHelpdeskFormListEndpoint,
+    PublicHelpdeskFormSubmitEndpoint,
+)
 from .request import HelpdeskRequestViewSet, PublicHelpdeskRequestEndpoint
 from .issue import HelpdeskRequestIssueViewSet
 from .intake import HelpdeskRequestIntakeIssueViewSet

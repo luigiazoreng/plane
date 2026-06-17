@@ -44,6 +44,70 @@ class HelpdeskPortal(WorkspaceBaseModel):
         return self.public_slug
 
 
+class HelpdeskFormVisibility(models.TextChoices):
+    PUBLIC = "public", "Public"
+    PRIVATE = "private", "Private"
+
+
+class HelpdeskForm(WorkspaceBaseModel):
+    portal = models.ForeignKey(HelpdeskPortal, on_delete=models.CASCADE, related_name="forms")
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    slug = models.SlugField(max_length=255)
+    visibility = models.CharField(
+        max_length=20, choices=HelpdeskFormVisibility.choices, default=HelpdeskFormVisibility.PUBLIC
+    )
+    is_active = models.BooleanField(default=True)
+    sequence = models.FloatField(default=65535)
+    success_message = models.TextField(blank=True, default="")
+
+    class Meta:
+        verbose_name = "Helpdesk Form"
+        verbose_name_plural = "Helpdesk Forms"
+        db_table = "helpdesk_forms"
+        ordering = ["sequence", "created_at"]
+        unique_together = ["portal", "slug", "deleted_at"]
+
+    def __str__(self):
+        return self.name
+
+
+class HelpdeskFormFieldType(models.TextChoices):
+    SYSTEM_TITLE = "system_title", "System Title"
+    SYSTEM_DESCRIPTION = "system_description", "System Description"
+    SHORT_TEXT = "short_text", "Short Text"
+    LONG_TEXT = "long_text", "Long Text"
+    SELECT = "select", "Select"
+    CHECKBOX = "checkbox", "Checkbox"
+    DATE = "date", "Date"
+
+
+class HelpdeskFormField(WorkspaceBaseModel):
+    form = models.ForeignKey(HelpdeskForm, on_delete=models.CASCADE, related_name="fields")
+    key = models.SlugField(max_length=255)
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    field_type = models.CharField(max_length=50, choices=HelpdeskFormFieldType.choices)
+    placeholder = models.CharField(max_length=255, blank=True, default="")
+    help_text = models.TextField(blank=True, default="")
+    required = models.BooleanField(default=False)
+    sequence = models.FloatField(default=65535)
+    options = models.JSONField(default=list, blank=True)
+    validation = models.JSONField(default=dict, blank=True)
+    ui_props = models.JSONField(default=dict, blank=True)
+    is_system = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Helpdesk Form Field"
+        verbose_name_plural = "Helpdesk Form Fields"
+        db_table = "helpdesk_form_fields"
+        ordering = ["sequence", "created_at"]
+        unique_together = ["form", "key", "deleted_at"]
+
+    def __str__(self):
+        return f"{self.form.name} -> {self.key}"
+
+
 DEFAULT_HELPDESK_STATUSES = [
     {"name": "Open", "color": "#F97316", "sequence": 10000, "is_default": True},
     {"name": "In Progress", "color": "#3B82F6", "sequence": 20000, "is_default": False},
@@ -76,6 +140,7 @@ class HelpdeskRequestSource(models.TextChoices):
 
 class HelpdeskRequest(WorkspaceBaseModel):
     portal = models.ForeignKey(HelpdeskPortal, on_delete=models.CASCADE, related_name="requests")
+    form = models.ForeignKey(HelpdeskForm, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
     customer = models.ForeignKey(
         HelpdeskCustomer, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests"
     )
@@ -88,6 +153,7 @@ class HelpdeskRequest(WorkspaceBaseModel):
     source = models.CharField(
         max_length=50, choices=HelpdeskRequestSource.choices, default=HelpdeskRequestSource.PUBLIC_FORM
     )
+    form_responses = models.JSONField(default=dict, blank=True)
     assignees = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,

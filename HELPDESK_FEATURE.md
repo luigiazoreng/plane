@@ -50,19 +50,27 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
 - `HelpdeskPortal`: Configuração do helpdesk a nível de workspace.
   - Campos: `workspace` (FK), `is_public` (Boolean), `require_login` (Boolean), `public_slug` (SlugField).
 
-### 3. Modelos de Solicitação (Requests)
+### 3. Modelos de Formulários Customizados
+
+- `HelpdeskForm`: Define um formulário publicável dentro de um portal.
+  - Campos: `portal` (FK), `name`, `description`, `slug`, `visibility` (`public` | `private`), `is_active`, `sequence`, `success_message`.
+- `HelpdeskFormField`: Define os campos renderizados no builder e no portal público.
+  - Campos: `form` (FK), `key`, `label`, `description`, `field_type`, `placeholder`, `help_text`, `required`, `sequence`, `options` (JSON), `validation` (JSON), `ui_props` (JSON), `is_system`.
+  - Tipos v1: `system_title`, `system_description`, `short_text`, `long_text`, `select`, `checkbox`, `date`.
+
+### 4. Modelos de Solicitação (Requests)
 
 - `HelpdeskRequest`: O Ticket em si.
-  - Campos: `portal` (FK), `customer` (FK - nullable se for público), `title`, `description`, `contact_email` (usado se não houver customer), `status`, `source` (Public Form, Internal Form).
+  - Campos: `portal` (FK), `form` (FK nullable), `customer` (FK - nullable se for público), `title`, `description`, `contact_email` (usado se não houver customer), `status`, `source` (Public Form, Internal Form), `form_responses` (JSON).
 - `HelpdeskRequestComment`: Histórico de mensagens do ticket.
   - Campos: `request` (FK), `actor` (FK para `User` - agente), `customer` (FK para `HelpdeskCustomer` - cliente), `content`, `is_internal`.
 
-### 4. Modelo de Vinculação com Issues (Integração)
+### 5. Modelo de Vinculação com Issues (Integração)
 
 - `HelpdeskRequestIssue`: Tabela pivot (N:N) para issues existentes do Plane.
   - Campos: `request` (FK), `issue` (FK), `created_by` (FK - User).
 
-### 5. Modelo de Vinculação com Intake (Dev Pipeline)
+### 6. Modelo de Vinculação com Intake (Dev Pipeline)
 
 - `HelpdeskRequestIntakeIssue`: Registra que um ticket foi encaminhado para o Intake de um projeto.
   - Campos: `request` (FK), `intake_issue` (FK para `IntakeIssue`), `forwarded_to_project` (FK para `Project`), `created_by` (FK - User nullable).
@@ -132,12 +140,27 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] Nova página `/{wSlug}/helpdesk/settings` com gestão completa de portais: criar, editar slug inline, toggles de visibilidade/login/chat, deletar com confirmação.
   - [x] Rota `helpdesk/settings` registrada em `apps/web/app/routes/core.ts` antes do catch-all `:requestId`.
 
+- [x] **Fase 8: Custom Forms v1 + Form Builder**
+  - [x] Criar modelos `HelpdeskForm` e `HelpdeskFormField` com migração `0128_helpdesk_forms`.
+  - [x] Estender `HelpdeskRequest` com `form` e `form_responses`.
+  - [x] Criar data migration para gerar um `Default request form` em todos os portais existentes.
+  - [x] Implementar endpoints workspace-level para CRUD/reorder/activate de forms e CRUD/reorder de fields.
+  - [x] Implementar endpoints públicos para listar forms disponíveis, buscar schema por slug e submeter requests por form.
+  - [x] Adicionar validação backend por tipo de campo, visibilidade (`public`/`private`) e opções obrigatórias de dropdown.
+  - [x] Atualizar `@plane/types`, `@plane/services`, `helpdesk.store.ts` e `public-helpdesk.store.ts` para forms dinâmicos.
+  - [x] Substituir o fluxo fixo `/helpdesk/p/[publicSlug]/new` por seleção de formulário + rota dinâmica `/helpdesk/p/[publicSlug]/forms/[formSlug]`.
+  - [x] Renderizar respostas estruturadas (`form_responses`) na página de detalhe do request para agentes.
+  - [x] Evoluir `/{wSlug}/helpdesk/settings` para um builder visual com sub-abas internas (`Portal settings`, `Form builder`, `Statuses`).
+  - [x] Adicionar suporte a campo `Dropdown` no builder com gestão explícita de opções (`label` / `value`).
+
 ---
 
 ## Pendências Técnicas
 
 - **`hydrateLinkedIssues` na store**: Implementação simplificada que silenciosamente ignora issues não encontradas na store. Pode ser melhorada para buscar detalhes da issue via search de workspace aceitando o `projectId` como parâmetro adicional.
 - **Atualização em tempo real do status do Intake**: O status refletido no Dev Pipeline só atualiza quando o usuário navega de volta ao ticket (re-fetch no `useEffect`). WebSocket/polling não implementado.
+- **Core compartilhado para outros módulos**: A fundação de forms já foi criada com foco em reuso, mas ainda vive acoplada ao domínio de Helpdesk. O próximo passo natural é extrair o builder/renderers/contratos para um core realmente compartilhado com Intake e outros módulos.
+- **Typecheck global do app web**: Continua bloqueado por um erro pré-existente fora do escopo do Helpdesk em `apps/web/core/store/pages/base-page.ts(121,11)`.
 
 ---
 
@@ -173,3 +196,10 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - **Bug fix:** `<Header>` do `@plane/ui` substituído por `AppHeader` do core nas duas páginas do Helpdesk. Isso faz o `AppSidebarToggleButton` aparecer quando a sidebar está minimizada, restaurando o fluxo de expandir a sidebar.
   - **Dashboard redesenhado:** layout full-width sem sidebar de portal embutida; header com stats inline (total/active/resolved) e botão "Settings"; kanban card com `border-l-2` colorida por status, footer com email e data; list view com chips de filtro por status e dropdown inline de alteração de status por row.
   - **Página de Settings** (`/{wSlug}/helpdesk/settings`): gestão completa de portais — criar com slug sanitizado, editar slug inline, toggles individuais para is_public/require_login/enable_chat, botão de deletar com modal de confirmação. `deletePortal` adicionado à store e registrado nas actions do MobX.
+- **[2026-06-17]**: Custom Forms v1 + Form Builder (Fase 8).
+  - **Backend:** novos modelos `HelpdeskForm` e `HelpdeskFormField`; `HelpdeskRequest` agora guarda `form` e `form_responses`; migração `0128_helpdesk_forms` cria um formulário padrão por portal existente.
+  - **API pública:** novos endpoints para listar forms do portal, buscar schema por `form_slug` e submeter requests via `/forms/<slug>/submit/`, respeitando visibilidade `public/private` e autenticação do cliente.
+  - **Validação:** campos de sistema (`title`/`description`) continuam canônicos; backend valida dropdowns com opções explícitas, booleans, datas e respostas obrigatórias por campo.
+  - **Frontend portal:** `/helpdesk/p/[publicSlug]/new` virou seletor de formulários; nova rota `/helpdesk/p/[publicSlug]/forms/[formSlug]` renderiza forms dinâmicos e redireciona forms privados para login.
+  - **Frontend agent:** detalhe do request agora mostra `Submitted via form` e renderiza `form_responses`.
+  - **Settings / Builder:** a página `/{wSlug}/helpdesk/settings` ganhou sub-abas internas (`Portal settings`, `Form builder`, `Statuses`), layout responsivo mais largo para o builder e suporte explícito a `Dropdown` com edição de opções `label/value`.

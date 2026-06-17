@@ -93,6 +93,8 @@ from .description import Description, DescriptionVersion
 
 from .helpdesk import (
     HelpdeskCustomer,
+    HelpdeskForm,
+    HelpdeskFormField,
     HelpdeskPortal,
     HelpdeskRequest,
     HelpdeskRequestAssignee,

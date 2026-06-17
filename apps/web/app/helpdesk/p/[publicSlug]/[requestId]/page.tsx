@@ -104,7 +104,9 @@ const HelpdeskPublicRequestPage = observer(() => {
           <ArrowLeft className="size-5" />
         </Link>
         <h1 className="text-2xl flex-1 font-bold text-primary">{request.title}</h1>
-        <span className="bg-primary/10 text-sm rounded-full px-3 py-1 font-medium text-primary">{request.status}</span>
+        <span className="bg-primary/10 text-sm rounded-full px-3 py-1 font-medium text-primary">
+          {request.status_detail?.name || "Open"}
+        </span>
       </div>
 
       {/* Original Request Details */}

@@ -15,6 +15,57 @@ export interface IHelpdeskPortal {
   updated_at: string;
 }
 
+export type IHelpdeskFormVisibility = "public" | "private";
+export type IHelpdeskFieldType =
+  | "system_title"
+  | "system_description"
+  | "short_text"
+  | "long_text"
+  | "select"
+  | "checkbox"
+  | "date";
+
+export interface IHelpdeskFormFieldOption {
+  label: string;
+  value: string;
+}
+
+export interface IHelpdeskFormField {
+  id: string;
+  workspace: string;
+  form: string;
+  key: string;
+  label: string;
+  description: string;
+  field_type: IHelpdeskFieldType;
+  placeholder: string;
+  help_text: string;
+  required: boolean;
+  sequence: number;
+  options: IHelpdeskFormFieldOption[];
+  validation: Record<string, unknown>;
+  ui_props: Record<string, unknown>;
+  is_system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IHelpdeskForm {
+  id: string;
+  workspace: string;
+  portal: string;
+  name: string;
+  description: string;
+  slug: string;
+  visibility: IHelpdeskFormVisibility;
+  is_active: boolean;
+  sequence: number;
+  success_message: string;
+  fields_detail: IHelpdeskFormField[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface IHelpdeskCustomer {
   id: string;
   email: string;
@@ -42,6 +93,7 @@ export interface IHelpdeskStatus {
 export interface IHelpdeskRequest {
   id: string;
   portal: string;
+  form?: string | null;
   workspace: string;
   customer?: string | null;
   contact_email?: string | null;
@@ -49,7 +101,9 @@ export interface IHelpdeskRequest {
   description: string;
   status: string | null; // FK UUID to IHelpdeskStatus
   status_detail: IHelpdeskStatus | null;
+  form_detail: IHelpdeskForm | null;
   source: THelpdeskRequestSource;
+  form_responses: Record<string, unknown>;
   assignees: string[];
   created_at: string;
   updated_at: string;
@@ -93,4 +147,10 @@ export interface IHelpdeskRequestIntakeIssue {
 
 export interface IHelpdeskTokenResponse {
   token: string;
+}
+
+export interface IHelpdeskFormSubmission {
+  contact_email?: string;
+  form: string;
+  responses: Record<string, unknown>;
 }

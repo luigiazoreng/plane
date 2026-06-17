@@ -4,6 +4,8 @@ from rest_framework import serializers
 # Module imports
 from plane.db.models import (
     HelpdeskCustomer,
+    HelpdeskForm,
+    HelpdeskFormField,
     HelpdeskPortal,
     HelpdeskRequest,
     HelpdeskRequestComment,
@@ -40,8 +42,65 @@ class HelpdeskPortalSerializer(BaseSerializer):
         read_only_fields = READ_ONLY_BASE
 
 
+class HelpdeskFormFieldSerializer(BaseSerializer):
+    class Meta:
+        model = HelpdeskFormField
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        form = attrs.get("form") or getattr(instance, "form", None)
+        field_type = attrs.get("field_type") or getattr(instance, "field_type", None)
+        key = attrs.get("key") or getattr(instance, "key", None)
+        options = attrs.get("options", getattr(instance, "options", []))
+        is_system = attrs.get("is_system", getattr(instance, "is_system", False))
+
+        if form and key:
+            existing = HelpdeskFormField.objects.filter(form=form, key=key, deleted_at__isnull=True)
+            if instance:
+                existing = existing.exclude(id=instance.id)
+            if existing.exists():
+                raise serializers.ValidationError({"key": "Field keys must be unique per form."})
+
+        if field_type == "select":
+            if not isinstance(options, list) or len(options) == 0:
+                raise serializers.ValidationError({"options": "Select fields require at least one option."})
+            normalized = []
+            for option in options:
+                if isinstance(option, str) and option.strip():
+                    normalized.append({"label": option.strip(), "value": option.strip()})
+                elif isinstance(option, dict) and option.get("value") and option.get("label"):
+                    normalized.append({"label": str(option["label"]), "value": str(option["value"])})
+                else:
+                    raise serializers.ValidationError({"options": "Each option must contain label and value."})
+            attrs["options"] = normalized
+        elif "options" in attrs and not isinstance(options, list):
+            raise serializers.ValidationError({"options": "Options must be a list."})
+
+        if is_system:
+            if field_type == "system_title":
+                attrs["key"] = "title"
+                attrs["required"] = True
+            elif field_type == "system_description":
+                attrs["key"] = "description"
+                attrs["required"] = True
+
+        return attrs
+
+
+class HelpdeskFormSerializer(BaseSerializer):
+    fields_detail = HelpdeskFormFieldSerializer(source="fields", many=True, read_only=True)
+
+    class Meta:
+        model = HelpdeskForm
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE
+
+
 class HelpdeskRequestSerializer(BaseSerializer):
     status_detail = HelpdeskStatusSerializer(source="status", read_only=True)
+    form_detail = HelpdeskFormSerializer(source="form", read_only=True)
 
     class Meta:
         model = HelpdeskRequest

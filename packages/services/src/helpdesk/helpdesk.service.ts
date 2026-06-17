@@ -7,6 +7,8 @@
 import { API_BASE_URL } from "@plane/constants";
 import { APIService } from "../api.service";
 import type {
+  IHelpdeskForm,
+  IHelpdeskFormField,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -30,7 +32,11 @@ export class HelpdeskService extends APIService {
     return this.post(`${workspaceSlug}/helpdesk/statuses/`, data).then((res) => res?.data);
   }
 
-  async updateStatus(workspaceSlug: string, statusId: string, data: Partial<IHelpdeskStatus>): Promise<IHelpdeskStatus> {
+  async updateStatus(
+    workspaceSlug: string,
+    statusId: string,
+    data: Partial<IHelpdeskStatus>
+  ): Promise<IHelpdeskStatus> {
     return this.patch(`${workspaceSlug}/helpdesk/statuses/${statusId}/`, data).then((res) => res?.data);
   }
 
@@ -38,10 +44,7 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/statuses/${statusId}/`).then((res) => res?.data);
   }
 
-  async reorderStatuses(
-    workspaceSlug: string,
-    items: { id: string; sequence: number }[]
-  ): Promise<IHelpdeskStatus[]> {
+  async reorderStatuses(workspaceSlug: string, items: { id: string; sequence: number }[]): Promise<IHelpdeskStatus[]> {
     return this.post(`${workspaceSlug}/helpdesk/statuses/reorder/`, items).then((res) => res?.data);
   }
 
@@ -69,6 +72,63 @@ export class HelpdeskService extends APIService {
 
   async deletePortal(workspaceSlug: string, portalId: string): Promise<void> {
     return this.delete(`${workspaceSlug}/helpdesk/portals/${portalId}/`).then((res) => res?.data);
+  }
+
+  // --- Form Management ---
+
+  async getForms(workspaceSlug: string, portalId?: string): Promise<IHelpdeskForm[]> {
+    return this.get(`${workspaceSlug}/helpdesk/forms/`, {
+      params: portalId ? { portal: portalId } : undefined,
+    }).then((res) => res?.data);
+  }
+
+  async createForm(workspaceSlug: string, data: Partial<IHelpdeskForm>): Promise<IHelpdeskForm> {
+    return this.post(`${workspaceSlug}/helpdesk/forms/`, data).then((res) => res?.data);
+  }
+
+  async updateForm(workspaceSlug: string, formId: string, data: Partial<IHelpdeskForm>): Promise<IHelpdeskForm> {
+    return this.patch(`${workspaceSlug}/helpdesk/forms/${formId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteForm(workspaceSlug: string, formId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/forms/${formId}/`).then((res) => res?.data);
+  }
+
+  async reorderForms(workspaceSlug: string, items: { id: string; sequence: number }[]): Promise<IHelpdeskForm[]> {
+    return this.post(`${workspaceSlug}/helpdesk/forms/reorder/`, items).then((res) => res?.data);
+  }
+
+  async setFormActive(workspaceSlug: string, formId: string, is_active: boolean): Promise<IHelpdeskForm> {
+    return this.post(`${workspaceSlug}/helpdesk/forms/${formId}/set-active/`, { is_active }).then((res) => res?.data);
+  }
+
+  async getFormFields(workspaceSlug: string, formId?: string): Promise<IHelpdeskFormField[]> {
+    return this.get(`${workspaceSlug}/helpdesk/form-fields/`, {
+      params: formId ? { form: formId } : undefined,
+    }).then((res) => res?.data);
+  }
+
+  async createFormField(workspaceSlug: string, data: Partial<IHelpdeskFormField>): Promise<IHelpdeskFormField> {
+    return this.post(`${workspaceSlug}/helpdesk/form-fields/`, data).then((res) => res?.data);
+  }
+
+  async updateFormField(
+    workspaceSlug: string,
+    fieldId: string,
+    data: Partial<IHelpdeskFormField>
+  ): Promise<IHelpdeskFormField> {
+    return this.patch(`${workspaceSlug}/helpdesk/form-fields/${fieldId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteFormField(workspaceSlug: string, fieldId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/form-fields/${fieldId}/`).then((res) => res?.data);
+  }
+
+  async reorderFormFields(
+    workspaceSlug: string,
+    items: { id: string; sequence: number }[]
+  ): Promise<IHelpdeskFormField[]> {
+    return this.post(`${workspaceSlug}/helpdesk/form-fields/reorder/`, items).then((res) => res?.data);
   }
 
   // --- Requests Management ---
@@ -172,6 +232,26 @@ export class PublicHelpdeskService extends APIService {
 
   async getPublicPortal(publicSlug: string): Promise<IHelpdeskPortal> {
     return this.get(`portals/${publicSlug}/`).then((res) => res?.data);
+  }
+
+  async getPublicForms(publicSlug: string, token?: string): Promise<IHelpdeskForm[]> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.get(`portals/${publicSlug}/forms/`, config).then((res) => res?.data);
+  }
+
+  async getPublicForm(publicSlug: string, formSlug: string, token?: string): Promise<IHelpdeskForm> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.get(`portals/${publicSlug}/forms/${formSlug}/`, config).then((res) => res?.data);
+  }
+
+  async submitPublicForm(
+    publicSlug: string,
+    formSlug: string,
+    data: Record<string, unknown>,
+    token?: string
+  ): Promise<IHelpdeskRequest> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.post(`portals/${publicSlug}/forms/${formSlug}/submit/`, data, config).then((res) => res?.data);
   }
 
   async createPublicRequest(

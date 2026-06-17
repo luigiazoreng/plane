@@ -4,75 +4,55 @@
  * See the LICENSE file for details.
  */
 
-import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router";
 import { observer } from "mobx-react";
-import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.store";
-import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import { Input } from "@plane/propel/input";
 import { Button } from "@plane/propel/button";
+import { Badge } from "@plane/propel/badge";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+import { Lock, Plus } from "lucide-react";
+import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.store";
 
 const HelpdeskPublicNewRequestPage = observer(() => {
   const { publicSlug } = useParams();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // If user is not logged in, email is required
-    if (!title || !description || (!publicStore.customerToken && !email)) {
-      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Please fill all required fields" });
-      return;
-    }
+  const pSlug = publicSlug?.toString() || "";
 
-    setSubmitting(true);
-    try {
-      const response = await publicStore.createPublicRequest(publicSlug?.toString() || "", {
-        title,
-        description,
-        contact_email: email,
-        source: "public_form",
-      });
-      setToast({
-        type: TOAST_TYPE.SUCCESS,
-        title: "Success",
-        message: "Your request has been submitted successfully.",
-      });
-      setTitle("");
-      setDescription("");
-      setEmail("");
-      // Redirect to the newly created request page if logged in, otherwise show success
-      if (publicStore.customerToken) {
-        navigate(`/helpdesk/p/${publicSlug}/${response.id}`);
-      } else {
-        setIsSuccess(true);
+  useEffect(() => {
+    if (!pSlug) return;
+
+    const load = async () => {
+      try {
+        const forms = await publicStore.fetchPortalForms(pSlug);
+        if (forms.length === 1) {
+          navigate(`/helpdesk/p/${pSlug}/forms/${forms[0].slug}`, { replace: true });
+        }
+      } catch (_error) {
+        setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to load forms." });
+      } finally {
+        setLoading(false);
       }
-    } catch (_err) {
-      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to submit request." });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    };
 
-  if (isSuccess) {
+    load();
+  }, [navigate, pSlug]);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2" />
+      </div>
+    );
+  }
+
+  if (publicStore.portalForms.length === 0) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <div className="bg-green-500/10 mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full">
-          <svg className="text-green-500 h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h1 className="text-3xl text-text-100 mb-4 font-bold">Request Submitted Successfully!</h1>
-        <p className="text-text-400 mb-8">
-          We've received your request and will get back to you at{" "}
-          <span className="text-text-100 font-semibold">{email}</span> as soon as possible.
-        </p>
-        <Button variant="primary" onClick={() => navigate(`/helpdesk/p/${publicSlug}`)}>
+        <h1 className="text-2xl text-text-100 font-bold">No forms available</h1>
+        <p className="text-text-400 mt-2">This portal does not have any active request forms right now.</p>
+        <Button className="mt-6" variant="secondary" onClick={() => navigate(`/helpdesk/p/${pSlug}`)}>
           Return to Portal
         </Button>
       </div>
@@ -80,70 +60,42 @@ const HelpdeskPublicNewRequestPage = observer(() => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-3xl text-text-100 font-bold">Submit a request</h1>
-        <p className="text-text-400 mt-2">Please provide as much detail as possible so we can help you better.</p>
+        <h1 className="text-3xl text-text-100 font-bold">Choose a request form</h1>
+        <p className="text-text-400 mt-2">Select the form that best matches the kind of support you need.</p>
       </div>
 
-      <div className="shadow-sm rounded-xl border border-subtle bg-surface-2 p-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {!publicStore.customerToken && (
-            <div>
-              <label htmlFor="contact_email" className="text-sm text-text-200 mb-1.5 block font-medium">
-                Contact Email <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id="contact_email"
-                type="email"
-                value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-                className="w-full"
-                required
-              />
-              <p className="text-xs text-text-400 mt-1">We will use this email to update you on your request.</p>
+      <div className="grid gap-4 md:grid-cols-2">
+        {publicStore.portalForms.map((form) => (
+          <button
+            key={form.id}
+            type="button"
+            onClick={() => navigate(`/helpdesk/p/${pSlug}/forms/${form.slug}`)}
+            className="hover:border-primary/30 rounded-xl border border-subtle bg-surface-2 p-6 text-left transition-colors hover:bg-surface-1"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-lg text-primary">
+                <Plus className="size-5" />
+              </div>
+              <Badge variant={form.visibility === "private" ? "warning" : "success"} size="sm">
+                {form.visibility === "private" ? "Private" : "Public"}
+              </Badge>
             </div>
-          )}
-
-          <div>
-            <label htmlFor="title" className="text-sm text-text-200 mb-1.5 block font-medium">
-              Subject <span className="text-red-500">*</span>
-            </label>
-            <Input
-              id="title"
-              type="text"
-              value={title}
-              onChange={(e: any) => setTitle(e.target.value)}
-              placeholder="Brief summary of the issue"
-              className="w-full"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="description" className="text-sm text-text-200 mb-1.5 block font-medium">
-              Description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              id="description"
-              className="text-sm text-text-100 placeholder:text-text-400 focus:border-primary focus:ring-primary min-h-[150px] w-full rounded-md border border-subtle bg-surface-1 p-3 focus:ring-1 focus:outline-none"
-              value={description}
-              onChange={(e: any) => setDescription(e.target.value)}
-              placeholder="Please enter the details of your request. A member of our support staff will respond as soon as possible."
-              required
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3 border-t border-subtle pt-6">
-            <Button variant="secondary" onClick={() => navigate(`/helpdesk/p/${publicSlug}`)} type="button">
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" loading={submitting}>
-              Submit Request
-            </Button>
-          </div>
-        </form>
+            <h2 className="text-lg text-text-100 mt-4 font-semibold">{form.name}</h2>
+            <p className="text-sm text-text-400 mt-2 line-clamp-3">
+              {form.description || "Open this form to submit a request to the support team."}
+            </p>
+            <div className="text-xs text-text-400 mt-4 flex items-center gap-2">
+              {form.visibility === "private" ? <Lock className="size-3.5" /> : null}
+              <span>
+                {form.visibility === "private"
+                  ? "Requires portal login"
+                  : "Available without login unless the portal requires it"}
+              </span>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );

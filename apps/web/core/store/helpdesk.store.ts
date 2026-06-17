@@ -9,6 +9,8 @@ import { computedFn } from "mobx-utils";
 import set from "lodash-es/set";
 // types
 import type {
+  IHelpdeskForm,
+  IHelpdeskFormField,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -25,6 +27,8 @@ export interface IHelpdeskStore {
   // observables
   statuses: Record<string, IHelpdeskStatus[]>; // workspaceSlug -> statuses (ordered by sequence)
   portals: Record<string, IHelpdeskPortal[]>; // workspaceSlug -> portals
+  forms: Record<string, IHelpdeskForm[]>; // portalId -> forms
+  formFields: Record<string, IHelpdeskFormField[]>; // formId -> fields
   requests: Record<string, IHelpdeskRequest[]>; // workspaceSlug -> requests
   comments: Record<string, IHelpdeskRequestComment[]>; // requestId -> comments
   requestIssues: Record<string, IHelpdeskRequestIssue[]>; // requestId -> issues
@@ -45,6 +49,27 @@ export interface IHelpdeskStore {
   createPortal: (workspaceSlug: string, data: Partial<IHelpdeskPortal>) => Promise<IHelpdeskPortal>;
   updatePortal: (workspaceSlug: string, portalId: string, data: Partial<IHelpdeskPortal>) => Promise<IHelpdeskPortal>;
   deletePortal: (workspaceSlug: string, portalId: string) => Promise<void>;
+
+  // form actions
+  fetchForms: (workspaceSlug: string, portalId: string) => Promise<IHelpdeskForm[]>;
+  createForm: (workspaceSlug: string, data: Partial<IHelpdeskForm>) => Promise<IHelpdeskForm>;
+  updateForm: (workspaceSlug: string, formId: string, data: Partial<IHelpdeskForm>) => Promise<IHelpdeskForm>;
+  deleteForm: (workspaceSlug: string, formId: string, portalId: string) => Promise<void>;
+  reorderForms: (workspaceSlug: string, portalId: string, items: { id: string; sequence: number }[]) => Promise<void>;
+  setFormActive: (workspaceSlug: string, formId: string, portalId: string, isActive: boolean) => Promise<IHelpdeskForm>;
+  fetchFormFields: (workspaceSlug: string, formId: string) => Promise<IHelpdeskFormField[]>;
+  createFormField: (workspaceSlug: string, data: Partial<IHelpdeskFormField>) => Promise<IHelpdeskFormField>;
+  updateFormField: (
+    workspaceSlug: string,
+    fieldId: string,
+    data: Partial<IHelpdeskFormField>
+  ) => Promise<IHelpdeskFormField>;
+  deleteFormField: (workspaceSlug: string, fieldId: string, formId: string) => Promise<void>;
+  reorderFormFields: (
+    workspaceSlug: string,
+    formId: string,
+    items: { id: string; sequence: number }[]
+  ) => Promise<void>;
 
   // request actions
   fetchRequests: (workspaceSlug: string) => Promise<IHelpdeskRequest[]>;
@@ -87,6 +112,8 @@ export interface IHelpdeskStore {
   getWorkspaceStatuses: (workspaceSlug: string) => IHelpdeskStatus[];
   getDefaultStatus: (workspaceSlug: string) => IHelpdeskStatus | undefined;
   getWorkspacePortals: (workspaceSlug: string) => IHelpdeskPortal[];
+  getPortalForms: (portalId: string) => IHelpdeskForm[];
+  getFormFields: (formId: string) => IHelpdeskFormField[];
   getWorkspaceRequests: (workspaceSlug: string) => IHelpdeskRequest[];
   getRequestComments: (requestId: string) => IHelpdeskRequestComment[];
   getRequestIssues: (requestId: string) => IHelpdeskRequestIssue[];
@@ -98,6 +125,8 @@ export interface IHelpdeskStore {
 export class HelpdeskStore implements IHelpdeskStore {
   statuses: Record<string, IHelpdeskStatus[]> = {};
   portals: Record<string, IHelpdeskPortal[]> = {};
+  forms: Record<string, IHelpdeskForm[]> = {};
+  formFields: Record<string, IHelpdeskFormField[]> = {};
   requests: Record<string, IHelpdeskRequest[]> = {};
   comments: Record<string, IHelpdeskRequestComment[]> = {};
   requestIssues: Record<string, IHelpdeskRequestIssue[]> = {};
@@ -112,6 +141,8 @@ export class HelpdeskStore implements IHelpdeskStore {
     makeObservable(this, {
       statuses: observable,
       portals: observable,
+      forms: observable,
+      formFields: observable,
       requests: observable,
       comments: observable,
       requestIssues: observable,
@@ -128,6 +159,17 @@ export class HelpdeskStore implements IHelpdeskStore {
       createPortal: action,
       updatePortal: action,
       deletePortal: action,
+      fetchForms: action,
+      createForm: action,
+      updateForm: action,
+      deleteForm: action,
+      reorderForms: action,
+      setFormActive: action,
+      fetchFormFields: action,
+      createFormField: action,
+      updateFormField: action,
+      deleteFormField: action,
+      reorderFormFields: action,
       fetchRequests: action,
       fetchRequestById: action,
       createRequest: action,
@@ -183,7 +225,11 @@ export class HelpdeskStore implements IHelpdeskStore {
     const response = await this.helpdeskService.createStatus(workspaceSlug, data);
     runInAction(() => {
       const current = this.statuses[workspaceSlug] || [];
-      set(this.statuses, [workspaceSlug], [...current, response].sort((a, b) => a.sequence - b.sequence));
+      set(
+        this.statuses,
+        [workspaceSlug],
+        [...current, response].toSorted((a, b) => a.sequence - b.sequence)
+      );
     });
     return response;
   };
@@ -225,8 +271,9 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.statuses,
         [workspaceSlug],
-        current.map((s) => (seqMap[s.id] !== undefined ? { ...s, sequence: seqMap[s.id] } : s))
-          .sort((a, b) => a.sequence - b.sequence)
+        current
+          .map((s) => (seqMap[s.id] !== undefined ? Object.assign({}, s, { sequence: seqMap[s.id] }) : s))
+          .toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     await this.helpdeskService.reorderStatuses(workspaceSlug, items);
@@ -239,7 +286,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.statuses,
         [workspaceSlug],
-        current.map((s) => ({ ...s, is_default: s.id === statusId }))
+        current.map((s) => Object.assign({}, s, { is_default: s.id === statusId }))
       );
     });
   };
@@ -296,6 +343,199 @@ export class HelpdeskStore implements IHelpdeskStore {
         this.portals,
         [workspaceSlug],
         current.filter((p) => p.id !== portalId)
+      );
+    });
+  };
+
+  // --- Forms ---
+
+  fetchForms = async (workspaceSlug: string, portalId: string): Promise<IHelpdeskForm[]> => {
+    const key = `forms:${portalId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getForms(workspaceSlug, portalId);
+      runInAction(() => {
+        set(this.forms, [portalId], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  createForm = async (workspaceSlug: string, data: Partial<IHelpdeskForm>): Promise<IHelpdeskForm> => {
+    const response = await this.helpdeskService.createForm(workspaceSlug, data);
+    runInAction(() => {
+      const portalId = response.portal;
+      const current = this.forms[portalId] || [];
+      set(
+        this.forms,
+        [portalId],
+        [...current, response].toSorted((a, b) => a.sequence - b.sequence)
+      );
+      set(this.formFields, [response.id], response.fields_detail || []);
+    });
+    return response;
+  };
+
+  updateForm = async (workspaceSlug: string, formId: string, data: Partial<IHelpdeskForm>): Promise<IHelpdeskForm> => {
+    const response = await this.helpdeskService.updateForm(workspaceSlug, formId, data);
+    runInAction(() => {
+      const portalId = response.portal;
+      const current = this.forms[portalId] || [];
+      set(
+        this.forms,
+        [portalId],
+        current.map((form) => (form.id === formId ? response : form)).toSorted((a, b) => a.sequence - b.sequence)
+      );
+      set(this.formFields, [response.id], response.fields_detail || this.formFields[response.id] || []);
+    });
+    return response;
+  };
+
+  deleteForm = async (workspaceSlug: string, formId: string, portalId: string): Promise<void> => {
+    await this.helpdeskService.deleteForm(workspaceSlug, formId);
+    runInAction(() => {
+      const current = this.forms[portalId] || [];
+      set(
+        this.forms,
+        [portalId],
+        current.filter((form) => form.id !== formId)
+      );
+      set(this.formFields, [formId], []);
+    });
+  };
+
+  reorderForms = async (
+    workspaceSlug: string,
+    portalId: string,
+    items: { id: string; sequence: number }[]
+  ): Promise<void> => {
+    runInAction(() => {
+      const current = this.forms[portalId] || [];
+      const seqMap = Object.fromEntries(items.map((item) => [item.id, item.sequence]));
+      set(
+        this.forms,
+        [portalId],
+        current
+          .map((form) =>
+            seqMap[form.id] !== undefined ? Object.assign({}, form, { sequence: seqMap[form.id] }) : form
+          )
+          .toSorted((a, b) => a.sequence - b.sequence)
+      );
+    });
+    const response = await this.helpdeskService.reorderForms(workspaceSlug, items);
+    runInAction(() => {
+      set(
+        this.forms,
+        [portalId],
+        response.filter((form) => form.portal === portalId)
+      );
+    });
+  };
+
+  setFormActive = async (
+    workspaceSlug: string,
+    formId: string,
+    portalId: string,
+    isActive: boolean
+  ): Promise<IHelpdeskForm> => {
+    const response = await this.helpdeskService.setFormActive(workspaceSlug, formId, isActive);
+    runInAction(() => {
+      const current = this.forms[portalId] || [];
+      set(
+        this.forms,
+        [portalId],
+        current.map((form) => (form.id === formId ? response : form))
+      );
+    });
+    return response;
+  };
+
+  fetchFormFields = async (workspaceSlug: string, formId: string): Promise<IHelpdeskFormField[]> => {
+    const key = `form-fields:${formId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getFormFields(workspaceSlug, formId);
+      runInAction(() => {
+        set(this.formFields, [formId], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  createFormField = async (workspaceSlug: string, data: Partial<IHelpdeskFormField>): Promise<IHelpdeskFormField> => {
+    const response = await this.helpdeskService.createFormField(workspaceSlug, data);
+    runInAction(() => {
+      const current = this.formFields[response.form] || [];
+      set(
+        this.formFields,
+        [response.form],
+        [...current, response].toSorted((a, b) => a.sequence - b.sequence)
+      );
+    });
+    return response;
+  };
+
+  updateFormField = async (
+    workspaceSlug: string,
+    fieldId: string,
+    data: Partial<IHelpdeskFormField>
+  ): Promise<IHelpdeskFormField> => {
+    const response = await this.helpdeskService.updateFormField(workspaceSlug, fieldId, data);
+    runInAction(() => {
+      const current = this.formFields[response.form] || [];
+      set(
+        this.formFields,
+        [response.form],
+        current.map((field) => (field.id === fieldId ? response : field)).toSorted((a, b) => a.sequence - b.sequence)
+      );
+    });
+    return response;
+  };
+
+  deleteFormField = async (workspaceSlug: string, fieldId: string, formId: string): Promise<void> => {
+    await this.helpdeskService.deleteFormField(workspaceSlug, fieldId);
+    runInAction(() => {
+      const current = this.formFields[formId] || [];
+      set(
+        this.formFields,
+        [formId],
+        current.filter((field) => field.id !== fieldId)
+      );
+    });
+  };
+
+  reorderFormFields = async (
+    workspaceSlug: string,
+    formId: string,
+    items: { id: string; sequence: number }[]
+  ): Promise<void> => {
+    runInAction(() => {
+      const current = this.formFields[formId] || [];
+      const seqMap = Object.fromEntries(items.map((item) => [item.id, item.sequence]));
+      set(
+        this.formFields,
+        [formId],
+        current
+          .map((field) =>
+            seqMap[field.id] !== undefined ? Object.assign({}, field, { sequence: seqMap[field.id] }) : field
+          )
+          .toSorted((a, b) => a.sequence - b.sequence)
+      );
+    });
+    const response = await this.helpdeskService.reorderFormFields(workspaceSlug, items);
+    runInAction(() => {
+      set(
+        this.formFields,
+        [formId],
+        response.filter((field) => field.form === formId)
       );
     });
   };
@@ -527,6 +767,14 @@ export class HelpdeskStore implements IHelpdeskStore {
 
   getWorkspacePortals = computedFn((workspaceSlug: string) => {
     return this.portals[workspaceSlug] || [];
+  });
+
+  getPortalForms = computedFn((portalId: string) => {
+    return this.forms[portalId] || [];
+  });
+
+  getFormFields = computedFn((formId: string) => {
+    return this.formFields[formId] || [];
   });
 
   getWorkspaceRequests = computedFn((workspaceSlug: string) => {

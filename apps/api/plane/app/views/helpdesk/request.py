@@ -2,12 +2,11 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import ValidationError
-import jwt
-from django.conf import settings
 
 from plane.app.views.base import BaseViewSet
-from plane.db.models.helpdesk import HelpdeskRequest, HelpdeskPortal, HelpdeskCustomer
+from plane.db.models.helpdesk import HelpdeskForm, HelpdeskFormVisibility, HelpdeskPortal, HelpdeskRequest
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
+from .form import get_customer_from_token, validate_form_submission
 
 
 class HelpdeskRequestViewSet(BaseViewSet):
@@ -28,7 +27,13 @@ class HelpdeskRequestViewSet(BaseViewSet):
         portal = HelpdeskPortal.objects.filter(id=portal_id, workspace=workspace).first()
         if not portal:
             raise ValidationError("Portal not found for this workspace.")
-        serializer.save(workspace=workspace, portal=portal)
+        form = None
+        form_id = self.request.data.get("form")
+        if form_id:
+            form = HelpdeskForm.objects.filter(id=form_id, portal=portal, workspace=workspace).first()
+            if not form:
+                raise ValidationError("Form not found for this portal.")
+        serializer.save(workspace=workspace, portal=portal, form=form)
 
 
 class PublicHelpdeskRequestEndpoint(BaseViewSet):
@@ -36,26 +41,12 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
     serializer_class = HelpdeskRequestSerializer
     model = HelpdeskRequest
 
-    def _get_customer_from_token(self, request):
-        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        if not auth_header.startswith("Bearer "):
-            return None, None
-        token = auth_header.split(" ")[1]
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            customer = HelpdeskCustomer.objects.filter(id=payload.get("customer_id")).first()
-            return customer, None
-        except jwt.ExpiredSignatureError:
-            return None, Response({"error": "Token expired"}, status=status.HTTP_401_UNAUTHORIZED)
-        except jwt.InvalidTokenError:
-            return None, Response({"error": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
-
     def list(self, request, public_slug):
         portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
         if not portal:
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        customer, error = self._get_customer_from_token(request)
+        customer, error = get_customer_from_token(request)
         if error:
             return error
         if not customer:
@@ -72,7 +63,7 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
         if not portal:
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        customer, error = self._get_customer_from_token(request)
+        customer, error = get_customer_from_token(request)
         if error:
             return error
 
@@ -91,7 +82,7 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
         if not portal:
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        customer, error = self._get_customer_from_token(request)
+        customer, error = get_customer_from_token(request)
         if error:
             return error
 
@@ -100,6 +91,37 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
 
         if portal.require_login and not customer:
             return Response({"error": "Login required to submit requests to this portal"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        form_id = request.data.get("form")
+        if form_id:
+            form = HelpdeskForm.objects.filter(id=form_id, portal=portal, is_active=True, deleted_at__isnull=True).first()
+            if not form:
+                return Response({"error": "Form not found"}, status=status.HTTP_404_NOT_FOUND)
+            if form.visibility == HelpdeskFormVisibility.PRIVATE and not customer:
+                return Response({"error": "Login required to submit this form"}, status=status.HTTP_401_UNAUTHORIZED)
+            if not customer and not request.data.get("contact_email"):
+                return Response({"contact_email": "Contact email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+            result = validate_form_submission(form, request.data)
+            if result["errors"]:
+                return Response(result["errors"], status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = HelpdeskRequestSerializer(data={
+                "title": result["title"],
+                "description": result["description"],
+                "contact_email": customer.email if customer else request.data.get("contact_email"),
+                "source": request.data.get("source", "public_form"),
+                "form_responses": result["responses"],
+            })
+            if serializer.is_valid():
+                serializer.save(
+                    portal=portal,
+                    form=form,
+                    workspace=portal.workspace,
+                    customer=customer,
+                )
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = HelpdeskRequestSerializer(data=request.data)
         if serializer.is_valid():
