@@ -11,6 +11,7 @@ import type {
   IHelpdeskAnalyticsResponse,
   IHelpdeskForm,
   IHelpdeskFormField,
+  IHelpdeskLinkedIssueLookupResponse,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -186,6 +187,15 @@ export class HelpdeskService extends APIService {
 
   async deleteRequestIssue(workspaceSlug: string, requestIssueId: string): Promise<void> {
     return this.delete(`${workspaceSlug}/helpdesk/request-issues/${requestIssueId}/`).then((res) => res?.data);
+  }
+
+  async lookupLinkedIssues(workspaceSlug: string, issueIds: string[]): Promise<IHelpdeskLinkedIssueLookupResponse> {
+    return this.get(`${workspaceSlug}/helpdesk/linked-issues/lookup/`, {
+      params: { issue_ids: issueIds },
+      paramsSerializer: {
+        indexes: null,
+      },
+    }).then((res) => res?.data);
   }
 
   // --- Intake Issue Links (forwarding to dev) ---

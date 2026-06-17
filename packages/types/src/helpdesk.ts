@@ -4,12 +4,14 @@
  * See the LICENSE file for details.
  */
 
-export type IHelpdeskAutoAssignmentType = "load_balance";
+export type IHelpdeskAutoAssignmentType = "load_balance" | "round_robin" | "capacity";
 
 export interface IHelpdeskAutoAssignmentConfig {
   version: number;
   member_ids: string[];
   active_status_ids: string[];
+  capacity_limit?: number | null;
+  round_robin_last_assignee_id?: string | null;
 }
 
 export interface IHelpdeskPortal {
@@ -142,6 +144,16 @@ export interface IHelpdeskRequestIssue {
   updated_at: string;
 }
 
+export interface IHelpdeskLinkedIssueLookupResult {
+  id: string;
+  project_id: string;
+}
+
+export interface IHelpdeskLinkedIssueLookupResponse {
+  results: IHelpdeskLinkedIssueLookupResult[];
+  missing_issue_ids: string[];
+}
+
 // -2 = pending, -1 = rejected, 1 = accepted, 2 = duplicate
 export type TIntakeIssueStatus = -2 | -1 | 1 | 2;
 
@@ -192,6 +204,9 @@ export interface IHelpdeskSLACompliance {
   resolution_pct: number | null;
   sla_first_response_hours: number | null;
   sla_resolution_hours: number | null;
+  scope: "portal" | "workspace_default" | "ambiguous";
+  historical_cutoff: string | null;
+  historical_note: string | null;
 }
 
 export interface IHelpdeskTimeSeriesPoint {

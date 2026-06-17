@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react";
 import { Link, useParams } from "react-router";
 import type { TIntakeIssueStatus } from "@plane/types";
@@ -59,6 +59,7 @@ const WorkspaceRequestDetailPage = observer(() => {
   const [forwardTitle, setForwardTitle] = useState("");
   const [forwardDescription, setForwardDescription] = useState("");
   const [isForwarding, setIsForwarding] = useState(false);
+  const previousAcceptedIssueIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (!workspaceSlug || !requestId) return;
@@ -85,12 +86,63 @@ const WorkspaceRequestDetailPage = observer(() => {
   const comments = helpdeskStore.getRequestComments(rId);
   const linkedIssues = helpdeskStore.getRequestIssues(rId);
   const intakeLinks = helpdeskStore.getRequestIntakeIssues(rId);
+  const unresolvedLinkedIssues = helpdeskStore.getUnresolvedLinkedIssues(rId);
   const requestState = helpdeskStore.getCollectionState(`request:${rId}`);
   const commentsState = helpdeskStore.getCollectionState(`comments:${rId}`);
   const linkedIssuesState = helpdeskStore.getCollectionState(`request-issues:${rId}`);
   const intakeLinksState = helpdeskStore.getCollectionState(`request-intake-issues:${rId}`);
 
   const linkedIssueIds = useMemo(() => linkedIssues.map((i) => i.issue), [linkedIssues]);
+
+  useEffect(() => {
+    if (!wSlug || !rId) return;
+
+    let intervalId: number | undefined;
+
+    const refreshIntakeLinks = async () => {
+      const latestLinks = await helpdeskStore.fetchRequestIntakeIssues(wSlug, rId);
+      const currentAcceptedIssueIds = latestLinks
+        .filter((link) => link.intake_status === 1 && link.issue_id)
+        .map((link) => link.issue_id as string);
+
+      const hasNewAcceptedIssue = currentAcceptedIssueIds.some(
+        (issueId) => !previousAcceptedIssueIdsRef.current.includes(issueId)
+      );
+      previousAcceptedIssueIdsRef.current = currentAcceptedIssueIds;
+
+      if (hasNewAcceptedIssue) {
+        await helpdeskStore.hydrateLinkedIssues(wSlug, rId);
+      }
+    };
+
+    const restartPolling = () => {
+      if (intervalId) window.clearInterval(intervalId);
+      if (document.visibilityState !== "visible") return;
+      intervalId = window.setInterval(() => {
+        refreshIntakeLinks().catch(() => null);
+      }, 20000);
+    };
+
+    restartPolling();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIntakeLinks().catch(() => null);
+      }
+      restartPolling();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, [helpdeskStore, rId, wSlug]);
+
+  useEffect(() => {
+    previousAcceptedIssueIdsRef.current = intakeLinks
+      .filter((link) => link.intake_status === 1 && link.issue_id)
+      .map((link) => link.issue_id as string);
+  }, [intakeLinks]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
@@ -561,6 +613,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                   <div className="space-y-3">
                     {linkedIssues.map((requestIssue) => {
                       const issue = issueMap[requestIssue.issue];
+                      const isUnavailable = unresolvedLinkedIssues.includes(requestIssue.issue);
                       const projectIdentifier = getProjectIdentifierById(issue?.project_id);
                       const workItemLink =
                         issue && issue.project_id && projectIdentifier
@@ -591,14 +644,16 @@ const WorkspaceRequestDetailPage = observer(() => {
                                 />
                               ) : (
                                 <Badge variant="neutral" size="sm">
-                                  Linked issue
+                                  {isUnavailable ? "Issue unavailable" : "Linked issue"}
                                 </Badge>
                               )}
                               <p className="text-sm text-text-100 mt-2 truncate font-medium">
                                 {issue?.name || requestIssue.issue}
                               </p>
                               <p className="text-xs text-text-400 mt-1">
-                                Linked on {new Date(requestIssue.created_at).toLocaleDateString()}
+                                {isUnavailable
+                                  ? "This issue could not be loaded. It may have been removed or is no longer accessible."
+                                  : `Linked on ${new Date(requestIssue.created_at).toLocaleDateString()}`}
                               </p>
                             </Link>
                             <div className="flex shrink-0 items-center gap-1">

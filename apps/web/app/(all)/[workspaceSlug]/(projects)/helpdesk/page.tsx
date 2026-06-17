@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { BaseKanbanLayout } from "@/components/base-layouts/kanban/layout";
 import { AppHeader } from "@/components/core/app-header";
+import { isHelpdeskRequestActive } from "@/helpers/helpdesk/statuses";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 
 type THelpdeskAgentLayout = "list" | "kanban";
@@ -104,6 +105,7 @@ const WorkspaceHelpdeskPage = observer(() => {
   const groupedRequests = helpdeskStore.getRequestsGroupedByStatus(wSlug);
   const portals = helpdeskStore.getWorkspacePortals(wSlug);
   const defaultPortalId = portals[0]?.id;
+  const portalMap = useMemo(() => Object.fromEntries(portals.map((portal) => [portal.id, portal])), [portals]);
 
   const statusMap = useMemo(() => Object.fromEntries(statuses.map((s) => [s.id, s])), [statuses]);
 
@@ -148,10 +150,9 @@ const WorkspaceHelpdeskPage = observer(() => {
   const requestsState = helpdeskStore.getCollectionState(`requests:${wSlug}`);
   const isLoading = statusesState.isLoading || requestsState.isLoading;
   const totalRequests = requests.length;
-  const activeRequests = requests.filter((r) => {
-    const s = r.status ? statusMap[r.status] : null;
-    return s && !s.name.toLowerCase().includes("resolv") && !s.name.toLowerCase().includes("clos");
-  }).length;
+  const activeRequests = requests.filter((request) =>
+    isHelpdeskRequestActive(request, statuses, portalMap[request.portal]?.auto_assignment_config)
+  ).length;
   const resolvedRequests = totalRequests - activeRequests;
 
   useEffect(() => {

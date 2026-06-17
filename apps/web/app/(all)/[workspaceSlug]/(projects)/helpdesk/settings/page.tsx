@@ -32,14 +32,17 @@ import {
   Headset,
   Pencil,
   Plus,
-  RectangleHorizontal,
-  SquareCheck,
   Star,
   Trash2,
   X,
 } from "lucide-react";
 import { AppHeader } from "@/components/core/app-header";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
+import {
+  createHelpdeskFieldDraft,
+  getNormalizedHelpdeskAutoAssignmentConfig,
+  HELPDESK_CUSTOM_FIELD_TYPES,
+} from "@/helpers/helpdesk/form-core";
 import { useMember } from "@/hooks/store/use-member";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 
@@ -63,23 +66,7 @@ const COLOR_PALETTE = [
   "#78716C",
 ];
 
-const CUSTOM_FIELD_TYPES: { type: IHelpdeskFieldType; label: string; icon: typeof RectangleHorizontal }[] = [
-  { type: "short_text", label: "Short text", icon: RectangleHorizontal },
-  { type: "long_text", label: "Long text", icon: RectangleHorizontal },
-  { type: "select", label: "Dropdown", icon: RectangleHorizontal },
-  { type: "checkbox", label: "Checkbox", icon: SquareCheck },
-  { type: "date", label: "Date", icon: RectangleHorizontal },
-];
-
 type TSettingsTab = "statuses" | "portal-settings" | "forms";
-
-const getAutoAssignmentConfig = (portal: IHelpdeskPortal): IHelpdeskAutoAssignmentConfig => ({
-  version: typeof portal.auto_assignment_config?.version === "number" ? portal.auto_assignment_config.version : 1,
-  member_ids: Array.isArray(portal.auto_assignment_config?.member_ids) ? portal.auto_assignment_config.member_ids : [],
-  active_status_ids: Array.isArray(portal.auto_assignment_config?.active_status_ids)
-    ? portal.auto_assignment_config.active_status_ids
-    : [],
-});
 
 const HelpdeskSettingsPage = observer(() => {
   const { workspaceSlug } = useParams();
@@ -284,7 +271,7 @@ const HelpdeskSettingsPage = observer(() => {
       auto_assignment_config?: Partial<IHelpdeskAutoAssignmentConfig>;
     }
   ) => {
-    const currentConfig = getAutoAssignmentConfig(portal);
+    const currentConfig = getNormalizedHelpdeskAutoAssignmentConfig(portal);
     try {
       await helpdeskStore.updatePortal(wSlug, portal.id, {
         auto_assignment_enabled: patch.auto_assignment_enabled ?? portal.auto_assignment_enabled,
@@ -297,6 +284,14 @@ const HelpdeskSettingsPage = observer(() => {
       });
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update automatic assignment" });
+    }
+  };
+
+  const handlePortalPatch = async (portal: IHelpdeskPortal, patch: Partial<IHelpdeskPortal>) => {
+    try {
+      await helpdeskStore.updatePortal(wSlug, portal.id, patch);
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update portal settings" });
     }
   };
 
@@ -326,18 +321,9 @@ const HelpdeskSettingsPage = observer(() => {
   const handleAddField = async (fieldType: IHelpdeskFieldType) => {
     if (!selectedForm) return;
     try {
-      const nextIndex = selectedFormFields.length + 1;
       const field = await helpdeskStore.createFormField(wSlug, {
         form: selectedForm.id,
-        key: `${fieldType}-${nextIndex}`.replace(/_/g, "-"),
-        label: `New ${fieldType.replace("_", " ")}`,
-        field_type: fieldType,
-        sequence: (selectedFormFields.at(-1)?.sequence ?? 0) + 10000,
-        required: false,
-        options: fieldType === "select" ? [{ label: "Option 1", value: "option-1" }] : [],
-        validation: {},
-        ui_props: {},
-        is_system: false,
+        ...createHelpdeskFieldDraft(fieldType, selectedFormFields),
       });
       setSelectedFieldId(field.id);
     } catch (_error) {
@@ -579,7 +565,7 @@ const HelpdeskSettingsPage = observer(() => {
               ) : (
                 <div className="space-y-3">
                   {portals.map((portal) => {
-                    const autoAssignmentConfig = getAutoAssignmentConfig(portal);
+                    const autoAssignmentConfig = getNormalizedHelpdeskAutoAssignmentConfig(portal);
                     const isAutoAssignEnabled = portal.auto_assignment_enabled;
 
                     return (
@@ -689,7 +675,7 @@ const HelpdeskSettingsPage = observer(() => {
                               <div className="min-w-0">
                                 <p className="text-13 font-medium text-primary">Automatic assignment</p>
                                 <p className="mt-1 text-13 text-tertiary">
-                                  Assigns new tickets to the eligible agent with the lowest active Helpdesk load.
+                                  Select how new tickets should be routed and which statuses count as active load.
                                 </p>
                               </div>
                               <Switch
@@ -722,6 +708,8 @@ const HelpdeskSettingsPage = observer(() => {
                                   className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none disabled:cursor-not-allowed"
                                 >
                                   <option value="load_balance">Load balance</option>
+                                  <option value="round_robin">Round robin</option>
+                                  <option value="capacity">Capacity-aware</option>
                                 </select>
                               </label>
 
@@ -760,11 +748,116 @@ const HelpdeskSettingsPage = observer(() => {
                                   </p>
                                 ) : (
                                   <p className="text-12 text-tertiary">
-                                    New tickets will be assigned to the least-loaded eligible agent.
+                                    {portal.auto_assignment_type === "round_robin" &&
+                                      "New tickets will rotate through eligible agents in a stable order."}
+                                    {portal.auto_assignment_type === "capacity" &&
+                                      "New tickets will prefer the least-loaded agent under the configured capacity."}
+                                    {portal.auto_assignment_type === "load_balance" &&
+                                      "New tickets will be assigned to the least-loaded eligible agent."}
                                   </p>
                                 )}
                               </div>
+
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-12 font-medium text-secondary">Active ticket statuses</span>
+                                  {autoAssignmentConfig.active_status_ids.length > 0 && (
+                                    <Badge size="sm" variant="neutral">
+                                      {autoAssignmentConfig.active_status_ids.length}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-2 rounded-md border border-subtle bg-layer-1 p-3">
+                                  {statuses.map((status) => {
+                                    const isSelected = autoAssignmentConfig.active_status_ids.includes(status.id);
+
+                                    return (
+                                      <button
+                                        key={status.id}
+                                        type="button"
+                                        disabled={!isAutoAssignEnabled}
+                                        onClick={() => {
+                                          const nextStatusIds = isSelected
+                                            ? autoAssignmentConfig.active_status_ids.filter(
+                                                (statusId) => statusId !== status.id
+                                              )
+                                            : [...autoAssignmentConfig.active_status_ids, status.id];
+
+                                          handleAutoAssignmentUpdate(portal, {
+                                            auto_assignment_config: { active_status_ids: nextStatusIds },
+                                          });
+                                        }}
+                                        className={cn(
+                                          "rounded-md border px-2.5 py-1.5 text-12 transition-colors disabled:cursor-not-allowed",
+                                          isSelected
+                                            ? "bg-accent-strong/10 border-accent-strong text-primary"
+                                            : "border-subtle bg-layer-2 text-secondary"
+                                        )}
+                                      >
+                                        {status.name}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <p className="text-12 text-tertiary">
+                                  Leave empty to use the default fallback: every non-resolved and non-closed status.
+                                </p>
+                              </div>
+
+                              {portal.auto_assignment_type === "capacity" && (
+                                <label className="space-y-1">
+                                  <span className="text-12 font-medium text-secondary">Capacity limit per agent</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={autoAssignmentConfig.capacity_limit ?? ""}
+                                    onChange={(e) =>
+                                      handleAutoAssignmentUpdate(portal, {
+                                        auto_assignment_config: {
+                                          capacity_limit: e.target.value ? Number(e.target.value) : null,
+                                        },
+                                      })
+                                    }
+                                    disabled={!isAutoAssignEnabled}
+                                    placeholder="e.g. 15"
+                                    className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none disabled:cursor-not-allowed"
+                                  />
+                                </label>
+                              )}
                             </div>
+                          </div>
+
+                          <div className="grid gap-4 border-t border-subtle px-4 py-4 lg:grid-cols-2">
+                            <label className="space-y-1">
+                              <span className="text-12 font-medium text-secondary">SLA first response (hours)</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={portal.sla_first_response_hours ?? ""}
+                                onChange={(e) =>
+                                  handlePortalPatch(portal, {
+                                    sla_first_response_hours: e.target.value ? Number(e.target.value) : null,
+                                  })
+                                }
+                                placeholder="e.g. 4"
+                                className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-12 font-medium text-secondary">SLA resolution (hours)</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={portal.sla_resolution_hours ?? ""}
+                                onChange={(e) =>
+                                  handlePortalPatch(portal, {
+                                    sla_resolution_hours: e.target.value ? Number(e.target.value) : null,
+                                  })
+                                }
+                                placeholder="e.g. 24"
+                                className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                              />
+                            </label>
                           </div>
                         </div>
                       </div>
@@ -939,7 +1032,7 @@ const HelpdeskSettingsPage = observer(() => {
                       {selectedForm ? (
                         <>
                           <div className="mb-4 grid gap-2 md:grid-cols-2 2xl:grid-cols-3">
-                            {CUSTOM_FIELD_TYPES.map(({ type, label, icon: Icon }) => (
+                            {HELPDESK_CUSTOM_FIELD_TYPES.map(({ type, label, icon: Icon }) => (
                               <button
                                 key={type}
                                 type="button"

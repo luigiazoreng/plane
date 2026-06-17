@@ -11,6 +11,7 @@ import set from "lodash-es/set";
 import type {
   IHelpdeskForm,
   IHelpdeskFormField,
+  IHelpdeskLinkedIssueLookupResult,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -33,6 +34,8 @@ export interface IHelpdeskStore {
   comments: Record<string, IHelpdeskRequestComment[]>; // requestId -> comments
   requestIssues: Record<string, IHelpdeskRequestIssue[]>; // requestId -> issues
   requestIntakeIssues: Record<string, IHelpdeskRequestIntakeIssue[]>; // requestId -> intake issue links
+  linkedIssueProjectMap: Record<string, string>; // issueId -> projectId
+  unresolvedLinkedIssues: Record<string, string[]>; // requestId -> unresolved issue ids
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
 
@@ -118,6 +121,7 @@ export interface IHelpdeskStore {
   getRequestComments: (requestId: string) => IHelpdeskRequestComment[];
   getRequestIssues: (requestId: string) => IHelpdeskRequestIssue[];
   getRequestIntakeIssues: (requestId: string) => IHelpdeskRequestIntakeIssue[];
+  getUnresolvedLinkedIssues: (requestId: string) => string[];
   getRequestsGroupedByStatus: (workspaceSlug: string) => Record<string, IHelpdeskRequest[]>;
   getCollectionState: (key: string) => { isLoading: boolean; error: string | null };
 }
@@ -131,6 +135,8 @@ export class HelpdeskStore implements IHelpdeskStore {
   comments: Record<string, IHelpdeskRequestComment[]> = {};
   requestIssues: Record<string, IHelpdeskRequestIssue[]> = {};
   requestIntakeIssues: Record<string, IHelpdeskRequestIntakeIssue[]> = {};
+  linkedIssueProjectMap: Record<string, string> = {};
+  unresolvedLinkedIssues: Record<string, string[]> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
 
@@ -147,6 +153,8 @@ export class HelpdeskStore implements IHelpdeskStore {
       comments: observable,
       requestIssues: observable,
       requestIntakeIssues: observable,
+      linkedIssueProjectMap: observable,
+      unresolvedLinkedIssues: observable,
       loadingState: observable,
       errorState: observable,
       fetchStatuses: action,
@@ -203,6 +211,26 @@ export class HelpdeskStore implements IHelpdeskStore {
     });
   };
 
+  private setLinkedIssueProjects = (mappings: IHelpdeskLinkedIssueLookupResult[]) => {
+    runInAction(() => {
+      mappings.forEach(({ id, project_id }) => {
+        if (id && project_id) set(this.linkedIssueProjectMap, [id], project_id);
+      });
+    });
+  };
+
+  private groupIssueIdsByProject = (issueIds: string[]): Record<string, string[]> =>
+    issueIds.reduce(
+      (acc, issueId) => {
+        const projectId = this.linkedIssueProjectMap[issueId];
+        if (!projectId) return acc;
+        if (!acc[projectId]) acc[projectId] = [];
+        acc[projectId].push(issueId);
+        return acc;
+      },
+      {} as Record<string, string[]>
+    );
+
   // --- Statuses ---
 
   fetchStatuses = async (workspaceSlug: string): Promise<IHelpdeskStatus[]> => {
@@ -228,7 +256,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.statuses,
         [workspaceSlug],
-        [...current, response].toSorted((a, b) => a.sequence - b.sequence)
+        [...current, response].slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     return response;
@@ -273,7 +301,7 @@ export class HelpdeskStore implements IHelpdeskStore {
         [workspaceSlug],
         current
           .map((s) => (seqMap[s.id] !== undefined ? Object.assign({}, s, { sequence: seqMap[s.id] }) : s))
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     await this.helpdeskService.reorderStatuses(workspaceSlug, items);
@@ -373,7 +401,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.forms,
         [portalId],
-        [...current, response].toSorted((a, b) => a.sequence - b.sequence)
+        [...current, response].slice().toSorted((a, b) => a.sequence - b.sequence)
       );
       set(this.formFields, [response.id], response.fields_detail || []);
     });
@@ -388,7 +416,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.forms,
         [portalId],
-        current.map((form) => (form.id === formId ? response : form)).toSorted((a, b) => a.sequence - b.sequence)
+        current.map((form) => (form.id === formId ? response : form)).slice().toSorted((a, b) => a.sequence - b.sequence)
       );
       set(this.formFields, [response.id], response.fields_detail || this.formFields[response.id] || []);
     });
@@ -423,7 +451,7 @@ export class HelpdeskStore implements IHelpdeskStore {
           .map((form) =>
             seqMap[form.id] !== undefined ? Object.assign({}, form, { sequence: seqMap[form.id] }) : form
           )
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     const response = await this.helpdeskService.reorderForms(workspaceSlug, items);
@@ -477,7 +505,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.formFields,
         [response.form],
-        [...current, response].toSorted((a, b) => a.sequence - b.sequence)
+        [...current, response].slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     return response;
@@ -494,7 +522,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.formFields,
         [response.form],
-        current.map((field) => (field.id === fieldId ? response : field)).toSorted((a, b) => a.sequence - b.sequence)
+        current.map((field) => (field.id === fieldId ? response : field)).slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     return response;
@@ -527,7 +555,7 @@ export class HelpdeskStore implements IHelpdeskStore {
           .map((field) =>
             seqMap[field.id] !== undefined ? Object.assign({}, field, { sequence: seqMap[field.id] }) : field
           )
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     const response = await this.helpdeskService.reorderFormFields(workspaceSlug, items);
@@ -647,6 +675,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       const response = await this.helpdeskService.getRequestIssues(workspaceSlug, requestId);
       runInAction(() => {
         set(this.requestIssues, [requestId], response);
+        set(this.unresolvedLinkedIssues, [requestId], []);
       });
       this.stopLoading(key);
       return response;
@@ -686,20 +715,47 @@ export class HelpdeskStore implements IHelpdeskStore {
     const linkedIssueIds = issues.map((i) => i.issue).filter(Boolean);
     if (linkedIssueIds.length === 0) return;
 
-    const missing = linkedIssueIds.filter((id) => !this.rootStore.issue.issues.getIssueById(id));
-    if (missing.length === 0) return;
+    const intakeLinks = this.requestIntakeIssues[requestId] || [];
+    const intakeMappings = intakeLinks
+      .filter((link) => link.issue_id && link.forwarded_to_project)
+      .map((link) => ({ id: link.issue_id as string, project_id: link.forwarded_to_project }));
 
-    // hydrateLinkedIssues needs a projectId for the issues API — fetch individually via workspace-level
-    // For now we fetch per project by grouping missing ids — the issue store handles this
-    await Promise.all(
-      missing.map((issueId) => {
-        const issue = this.rootStore.issue.issues.getIssueById(issueId);
-        if (!issue) {
-          // Issue not in store — attempt fetch (project is unknown here, skip silently)
-        }
-        return Promise.resolve();
-      })
-    );
+    this.setLinkedIssueProjects(intakeMappings);
+
+    let missing = linkedIssueIds.filter((id) => !this.rootStore.issue.issues.getIssueById(id));
+    if (missing.length === 0) {
+      runInAction(() => {
+        set(this.unresolvedLinkedIssues, [requestId], []);
+      });
+      return;
+    }
+
+    const hydrateKnownIssues = async (issueIds: string[]) => {
+      const grouped = this.groupIssueIdsByProject(issueIds);
+      await Promise.all(
+        Object.entries(grouped).map(([projectId, projectIssueIds]) =>
+          this.rootStore.issue.issues.getIssues(workspaceSlug, projectId, projectIssueIds)
+        )
+      );
+    };
+
+    await hydrateKnownIssues(missing);
+    missing = linkedIssueIds.filter((id) => !this.rootStore.issue.issues.getIssueById(id));
+    if (missing.length === 0) {
+      runInAction(() => {
+        set(this.unresolvedLinkedIssues, [requestId], []);
+      });
+      return;
+    }
+
+    const lookupResponse = await this.helpdeskService.lookupLinkedIssues(workspaceSlug, missing);
+    this.setLinkedIssueProjects(lookupResponse.results);
+    await hydrateKnownIssues(missing);
+
+    const unresolved = linkedIssueIds.filter((id) => !this.rootStore.issue.issues.getIssueById(id));
+    runInAction(() => {
+      set(this.unresolvedLinkedIssues, [requestId], unresolved);
+    });
   };
 
   // --- Intake Issue Links ---
@@ -791,6 +847,10 @@ export class HelpdeskStore implements IHelpdeskStore {
 
   getRequestIntakeIssues = computedFn((requestId: string) => {
     return this.requestIntakeIssues[requestId] || [];
+  });
+
+  getUnresolvedLinkedIssues = computedFn((requestId: string) => {
+    return this.unresolvedLinkedIssues[requestId] || [];
   });
 
   getRequestsGroupedByStatus = computedFn((workspaceSlug: string) => {
