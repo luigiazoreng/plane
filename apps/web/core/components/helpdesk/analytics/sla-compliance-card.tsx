@@ -70,6 +70,9 @@ export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLo
       {sla.sla_resolution_hours && (
         <SLABar pct={sla.resolution_pct} label="Resolution" target={`within ${sla.sla_resolution_hours}h`} />
       )}
+      {sla.historical_note && (
+        <p className="text-xs text-custom-text-400 border-custom-border-100 border-t pt-3">{sla.historical_note}</p>
+      )}
     </div>
   );
 });

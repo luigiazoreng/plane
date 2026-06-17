@@ -60,6 +60,7 @@ export const RequestsBySourceChart = observer(function RequestsBySourceChart({ d
       data={chartData}
       dataKey="value"
       cells={cells}
+      showLabel={false}
       innerRadius={65}
       outerRadius={105}
       paddingAngle={2}

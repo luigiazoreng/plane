@@ -112,7 +112,10 @@ const HelpdeskPublicFormPage = observer(() => {
   }, [fSlug, navigate, pSlug]);
 
   const form = publicStore.currentForm;
-  const orderedFields = useMemo(() => (form?.fields_detail || []).toSorted((a, b) => a.sequence - b.sequence), [form]);
+  const orderedFields = useMemo(
+    () => (form?.fields_detail || []).slice().sort((a, b) => a.sequence - b.sequence),
+    [form]
+  );
 
   const handleValueChange = (key: string, value: unknown) => {
     setFieldValues((prev) => ({ ...prev, [key]: value }));
