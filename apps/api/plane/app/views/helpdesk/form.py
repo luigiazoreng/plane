@@ -16,6 +16,9 @@ from plane.db.models.helpdesk import (
     HelpdeskFormField,
     HelpdeskFormVisibility,
     HelpdeskPortal,
+    HelpdeskRequest,
+    HelpdeskRequestSource,
+    HelpdeskStatus,
 )
 
 
@@ -224,7 +227,7 @@ class PublicHelpdeskFormSubmitEndpoint(BaseAPIView):
         if not customer and not contact_email:
             return Response({"contact_email": "Contact email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        result = validate_form_submission(form, request.data)
+        result = validate_helpdesk_form_submission(form, request.data)
         if result["errors"]:
             return Response(result["errors"], status=status.HTTP_400_BAD_REQUEST)
 
