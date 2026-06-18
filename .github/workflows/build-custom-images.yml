@@ -73,3 +73,14 @@ jobs:
           tags: |
             ghcr.io/${{ env.OWNER }}/plane-frontend:stable-1.3.1
             ghcr.io/${{ env.OWNER }}/plane-frontend:latest
+
+  notify:
+    name: Notify webhook
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    steps:
+      - name: Call deploy webhook
+        run: |
+          curl -fsSL -X POST "${{ secrets.DEPLOY_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{"ref":"${{ github.ref_name }}","sha":"${{ github.sha }}","actor":"${{ github.actor }}"}'
