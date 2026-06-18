@@ -160,7 +160,7 @@ class HelpdeskRequest(WorkspaceBaseModel):
         HelpdeskCustomer, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests"
     )
     title = models.CharField(max_length=255)
-    description = models.TextField()
+    description = models.TextField(blank=True, default="")
     contact_email = models.EmailField(max_length=255, null=True, blank=True)
     status = models.ForeignKey(
         HelpdeskStatus, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests"

@@ -193,7 +193,7 @@ const WorkspaceHelpdeskPage = observer(() => {
     setAddingToGroup(null);
     setNewRequestTitle("");
     try {
-      await helpdeskStore.createRequest(wSlug, { title, status: statusId, portal: defaultPortalId, description: "" });
+      await helpdeskStore.createRequest(wSlug, { title, status: statusId, portal: defaultPortalId });
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to create request" });
     }
