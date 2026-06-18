@@ -209,6 +209,12 @@ llm_config_variables = [
         "is_encrypted": False,
     },
     {
+        "key": "LLM_BASE_URL",
+        "value": os.environ.get("LLM_BASE_URL", ""),
+        "category": "AI",
+        "is_encrypted": False,
+    },
+    {
         "key": "LLM_MODEL",
         "value": os.environ.get("LLM_MODEL", "gpt-4o-mini"),
         "category": "AI",

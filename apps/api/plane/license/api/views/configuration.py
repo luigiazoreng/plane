@@ -27,6 +27,7 @@ from plane.license.api.serializers import InstanceConfigurationSerializer
 from plane.license.utils.encryption import encrypt_data
 from plane.utils.cache import cache_response, invalidate_cache
 from plane.license.utils.instance_value import get_email_configuration
+from plane.utils.instance_config_variables import instance_config_variables
 
 
 class InstanceConfigurationEndpoint(BaseAPIView):
@@ -41,7 +42,24 @@ class InstanceConfigurationEndpoint(BaseAPIView):
     @invalidate_cache(path="/api/instances/configurations/", user=False)
     @invalidate_cache(path="/api/instances/", user=False)
     def patch(self, request):
-        configurations = InstanceConfiguration.objects.filter(key__in=request.data.keys())
+        known_configurations = {item["key"]: item for item in instance_config_variables}
+        request_keys = list(request.data.keys())
+
+        for key in request_keys:
+            config_item = known_configurations.get(key)
+            if not config_item:
+                continue
+
+            InstanceConfiguration.objects.get_or_create(
+                key=key,
+                defaults={
+                    "category": config_item.get("category"),
+                    "is_encrypted": config_item.get("is_encrypted", False),
+                    "value": "",
+                },
+            )
+
+        configurations = InstanceConfiguration.objects.filter(key__in=request_keys)
 
         bulk_configurations = []
         for configuration in configurations:
@@ -55,7 +73,12 @@ class InstanceConfigurationEndpoint(BaseAPIView):
 
         InstanceConfiguration.objects.bulk_update(bulk_configurations, ["value"], batch_size=100)
 
-        serializer = InstanceConfigurationSerializer(configurations, many=True)
+        serializer = InstanceConfigurationSerializer(
+            configurations.order_by(
+                Case(*[When(key=key, then=Value(index)) for index, key in enumerate(request_keys)])
+            ),
+            many=True,
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
