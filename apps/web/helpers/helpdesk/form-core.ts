@@ -4,7 +4,7 @@ import type {
   IHelpdeskFormField,
   IHelpdeskPortal,
 } from "@plane/types";
-import { RectangleHorizontal, SquareCheck } from "lucide-react";
+import { Calendar, ChevronDown, ListTree, RectangleHorizontal, SquareCheck } from "lucide-react";
 
 export const HELPDESK_CUSTOM_FIELD_TYPES: {
   type: IHelpdeskFieldType;
@@ -13,9 +13,10 @@ export const HELPDESK_CUSTOM_FIELD_TYPES: {
 }[] = [
   { type: "short_text", label: "Short text", icon: RectangleHorizontal },
   { type: "long_text", label: "Long text", icon: RectangleHorizontal },
-  { type: "select", label: "Dropdown", icon: RectangleHorizontal },
+  { type: "select", label: "Dropdown", icon: ChevronDown },
+  { type: "cascade_select", label: "Cascading dropdown", icon: ListTree },
   { type: "checkbox", label: "Checkbox", icon: SquareCheck },
-  { type: "date", label: "Date", icon: RectangleHorizontal },
+  { type: "date", label: "Date", icon: Calendar },
 ];
 
 export const getNormalizedHelpdeskAutoAssignmentConfig = (portal: IHelpdeskPortal): IHelpdeskAutoAssignmentConfig => ({
@@ -42,7 +43,7 @@ export const createHelpdeskFieldDraft = (
 
   return {
     key: `${fieldType}-${nextIndex}`.replace(/_/g, "-"),
-    label: `New ${fieldType.replace("_", " ")}`,
+    label: `New ${fieldType.replace(/_/g, " ")}`,
     field_type: fieldType,
     sequence: (selectedFormFields.at(-1)?.sequence ?? 0) + 10000,
     required: false,
@@ -50,5 +51,29 @@ export const createHelpdeskFieldDraft = (
     validation: {},
     ui_props: {},
     is_system: false,
+    parent_field_key: "",
   };
+};
+
+/**
+ * Renders a ticket_id_pattern with current date and a sample counter for preview purposes.
+ * Tokens: YYYY, YY, MM, DD, ###.. (any number of #)
+ */
+export const previewTicketIdPattern = (pattern: string, counter = 1): string => {
+  if (!pattern) return "";
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const yy = yyyy.slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+
+  let result = pattern
+    .replace(/YYYY/g, yyyy)
+    .replace(/YY/g, yy)
+    .replace(/MM/g, mm)
+    .replace(/DD/g, dd);
+
+  result = result.replace(/#+/g, (match) => String(counter).padStart(match.length, "0"));
+
+  return result;
 };

@@ -74,6 +74,8 @@ class HelpdeskForm(WorkspaceBaseModel):
     is_active = models.BooleanField(default=True)
     sequence = models.FloatField(default=65535)
     success_message = models.TextField(blank=True, default="")
+    ticket_id_pattern = models.CharField(max_length=64, blank=True, default="")
+    ticket_id_counter = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = "Helpdesk Form"
@@ -94,6 +96,7 @@ class HelpdeskFormFieldType(models.TextChoices):
     SELECT = "select", "Select"
     CHECKBOX = "checkbox", "Checkbox"
     DATE = "date", "Date"
+    CASCADE_SELECT = "cascade_select", "Cascading Dropdown"
 
 
 class HelpdeskFormField(WorkspaceBaseModel):
@@ -107,9 +110,11 @@ class HelpdeskFormField(WorkspaceBaseModel):
     required = models.BooleanField(default=False)
     sequence = models.FloatField(default=65535)
     options = models.JSONField(default=list, blank=True)
+    parent_mapping = models.JSONField(default=dict, blank=True)
     validation = models.JSONField(default=dict, blank=True)
     ui_props = models.JSONField(default=dict, blank=True)
     is_system = models.BooleanField(default=False)
+    parent_field_key = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         verbose_name = "Helpdesk Form Field"
@@ -169,6 +174,7 @@ class HelpdeskRequest(WorkspaceBaseModel):
         max_length=50, choices=HelpdeskRequestSource.choices, default=HelpdeskRequestSource.PUBLIC_FORM
     )
     form_responses = models.JSONField(default=dict, blank=True)
+    display_id = models.CharField(max_length=64, blank=True, default="")
     first_responded_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     assignees = models.ManyToManyField(

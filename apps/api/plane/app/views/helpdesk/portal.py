@@ -3,8 +3,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 
 from plane.app.views.base import BaseViewSet, BaseAPIView
-from plane.db.models.helpdesk import HelpdeskPortal
+from plane.db.models.helpdesk import HelpdeskPortal, HelpdeskForm, HelpdeskFormField
 from plane.app.serializers.helpdesk import HelpdeskPortalSerializer
+from plane.app.helpdesk.form_core import build_default_helpdesk_template_fields
 
 
 class HelpdeskPortalViewSet(BaseViewSet):
@@ -21,7 +22,19 @@ class HelpdeskPortalViewSet(BaseViewSet):
     def perform_create(self, serializer):
         from plane.db.models import Workspace
         workspace = Workspace.objects.get(slug=self.kwargs.get("slug"))
-        serializer.save(workspace=workspace)
+        portal = serializer.save(workspace=workspace)
+
+        # Create the default form template for new portals
+        form = HelpdeskForm.objects.create(
+            workspace=workspace,
+            portal=portal,
+            name="Default request form",
+            slug="default-request-form",
+            is_active=True,
+            sequence=10000,
+        )
+        fields = build_default_helpdesk_template_fields(workspace, form)
+        HelpdeskFormField.objects.bulk_create(fields)
 
 
 class PublicHelpdeskPortalEndpoint(BaseAPIView):

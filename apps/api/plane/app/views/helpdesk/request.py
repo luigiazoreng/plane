@@ -9,7 +9,7 @@ from plane.db.models.helpdesk import HelpdeskForm, HelpdeskFormVisibility, Helpd
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from .form import get_customer_from_token
-from plane.app.helpdesk.form_core import validate_helpdesk_form_submission
+from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, generate_ticket_display_id
 
 
 class HelpdeskRequestViewSet(BaseViewSet):
@@ -50,6 +50,11 @@ class HelpdeskRequestViewSet(BaseViewSet):
             if not form:
                 raise ValidationError("Form not found for this portal.")
         helpdesk_request = serializer.save(workspace=workspace, portal=portal, form=form)
+        if form:
+            display_id = generate_ticket_display_id(form)
+            if display_id:
+                HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(display_id=display_id)
+                helpdesk_request.display_id = display_id
         assign_helpdesk_request_automatically(helpdesk_request, request_payload=self.request.data)
 
 
@@ -137,6 +142,10 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                     workspace=portal.workspace,
                     customer=customer,
                 )
+                display_id = generate_ticket_display_id(form)
+                if display_id:
+                    HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(display_id=display_id)
+                    helpdesk_request.display_id = display_id
                 assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
                 return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

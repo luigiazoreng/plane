@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from plane.app.serializers.helpdesk import HelpdeskFormFieldSerializer, HelpdeskFormSerializer, HelpdeskRequestSerializer
 from plane.app.views.base import BaseAPIView, BaseViewSet
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
-from plane.app.helpdesk.form_core import build_default_helpdesk_system_fields, validate_helpdesk_form_submission
+from plane.app.helpdesk.form_core import build_default_helpdesk_system_fields, validate_helpdesk_form_submission, generate_ticket_display_id
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import (
     HelpdeskCustomer,
@@ -237,6 +237,7 @@ class PublicHelpdeskFormSubmitEndpoint(BaseAPIView):
             deleted_at__isnull=True,
         ).first()
 
+        display_id = generate_ticket_display_id(form)
         helpdesk_request = HelpdeskRequest.objects.create(
             portal=portal,
             form=form,
@@ -248,6 +249,7 @@ class PublicHelpdeskFormSubmitEndpoint(BaseAPIView):
             status=default_status,
             source=HelpdeskRequestSource.PUBLIC_FORM,
             form_responses=result["responses"],
+            display_id=display_id,
         )
         assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
         serializer = HelpdeskRequestSerializer(helpdesk_request)

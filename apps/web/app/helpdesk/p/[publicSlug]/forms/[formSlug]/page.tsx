@@ -10,72 +10,8 @@ import { observer } from "mobx-react";
 import { Button } from "@plane/propel/button";
 import { Input } from "@plane/propel/input";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IHelpdeskFormField } from "@plane/types";
+import { HelpdeskFormRenderer } from "@/components/helpdesk/form-renderer";
 import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.store";
-
-const renderFieldInput = (field: IHelpdeskFormField, value: unknown, onChange: (value: unknown) => void) => {
-  switch (field.field_type) {
-    case "system_title":
-    case "short_text":
-      return (
-        <Input
-          type="text"
-          value={typeof value === "string" ? value : ""}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
-          placeholder={field.placeholder}
-          className="w-full"
-        />
-      );
-    case "system_description":
-    case "long_text":
-      return (
-        <textarea
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder}
-          className="text-sm text-text-100 placeholder:text-text-400 focus:border-primary min-h-[140px] w-full rounded-md border border-subtle bg-surface-1 p-3 outline-none"
-        />
-      );
-    case "select":
-      return (
-        <select
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none"
-        >
-          <option value="">Select an option</option>
-          {field.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      );
-    case "checkbox":
-      return (
-        <label className="text-sm text-text-200 flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={(e) => onChange(e.target.checked)}
-            className="h-4 w-4 rounded border-subtle"
-          />
-          <span>{field.help_text || field.label}</span>
-        </label>
-      );
-    case "date":
-      return (
-        <Input
-          type="date"
-          value={typeof value === "string" ? value : ""}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
-          className="w-full"
-        />
-      );
-    default:
-      return null;
-  }
-};
 
 const HelpdeskPublicFormPage = observer(() => {
   const { publicSlug, formSlug } = useParams();
@@ -118,7 +54,23 @@ const HelpdeskPublicFormPage = observer(() => {
   );
 
   const handleValueChange = (key: string, value: unknown) => {
-    setFieldValues((prev) => ({ ...prev, [key]: value }));
+    setFieldValues((prev) => {
+      const next = { ...prev, [key]: value };
+      // When a cascade_select value changes, clear any descendant values so
+      // children don't hold stale selections
+      for (const field of orderedFields) {
+        if (field.parent_field_key === key && field.key !== key) {
+          next[field.key] = "";
+          // Also clear grandchildren
+          for (const child of orderedFields) {
+            if (child.parent_field_key === field.key) {
+              next[child.key] = "";
+            }
+          }
+        }
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -214,17 +166,11 @@ const HelpdeskPublicFormPage = observer(() => {
             </div>
           )}
 
-          {orderedFields.map((field) => (
-            <div key={field.id}>
-              <label className="text-sm text-text-200 mb-1.5 block font-medium">
-                {field.label} {field.required ? <span className="text-red-500">*</span> : null}
-              </label>
-              {renderFieldInput(field, fieldValues[field.key], (value) => handleValueChange(field.key, value))}
-              {field.field_type !== "checkbox" && field.help_text ? (
-                <p className="text-xs text-text-400 mt-1">{field.help_text}</p>
-              ) : null}
-            </div>
-          ))}
+          <HelpdeskFormRenderer
+            fields={orderedFields}
+            values={fieldValues}
+            onValueChange={handleValueChange}
+          />
 
           <div className="flex items-center justify-end gap-3 border-t border-subtle pt-6">
             <Button variant="secondary" type="button" onClick={() => navigate(`/helpdesk/p/${pSlug}/new`)}>

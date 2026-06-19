@@ -95,18 +95,34 @@ class HelpdeskFormFieldSerializer(BaseSerializer):
             if existing.exists():
                 raise serializers.ValidationError({"key": "Field keys must be unique per form."})
 
-        if field_type == "select":
-            if not isinstance(options, list) or len(options) == 0:
-                raise serializers.ValidationError({"options": "Select fields require at least one option."})
+        if field_type in ("select", "cascade_select"):
+            if not isinstance(options, list):
+                raise serializers.ValidationError({"options": "Options must be a list."})
             normalized = []
             for option in options:
                 if isinstance(option, str) and option.strip():
-                    normalized.append({"label": option.strip(), "value": option.strip()})
-                elif isinstance(option, dict) and option.get("value") and option.get("label"):
-                    normalized.append({"label": str(option["label"]), "value": str(option["value"])})
+                    label = option.strip()
+                    normalized.append({"label": label, "value": label})
+                elif isinstance(option, dict) and option.get("label"):
+                    label = str(option["label"]).strip()
+                    # value always equals label — ignore any sent value
+                    normalized.append({"label": label, "value": label})
                 else:
-                    raise serializers.ValidationError({"options": "Each option must contain label and value."})
+                    raise serializers.ValidationError({"options": "Each option must have a label."})
             attrs["options"] = normalized
+
+            if field_type == "cascade_select":
+                # Validate parent_mapping: keys and values must be strings/lists
+                parent_mapping = attrs.get("parent_mapping", getattr(instance, "parent_mapping", {}))
+                if not isinstance(parent_mapping, dict):
+                    raise serializers.ValidationError({"parent_mapping": "Must be an object."})
+                clean_mapping = {}
+                for k, v in parent_mapping.items():
+                    if not isinstance(v, list):
+                        raise serializers.ValidationError({"parent_mapping": f"Values must be lists (got {type(v)} for key '{k}')."})
+                    clean_mapping[str(k)] = [str(i) for i in v]
+                attrs["parent_mapping"] = clean_mapping
+
         elif "options" in attrs and not isinstance(options, list):
             raise serializers.ValidationError({"options": "Options must be a list."})
 
@@ -127,7 +143,7 @@ class HelpdeskFormSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskForm
         fields = "__all__"
-        read_only_fields = READ_ONLY_BASE
+        read_only_fields = READ_ONLY_BASE + ["ticket_id_counter"]
 
 
 class HelpdeskRequestSerializer(BaseSerializer):
@@ -137,7 +153,7 @@ class HelpdeskRequestSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskRequest
         fields = "__all__"
-        read_only_fields = READ_ONLY_BASE + ["portal", "customer"]
+        read_only_fields = READ_ONLY_BASE + ["portal", "customer", "display_id"]
 
 
 class HelpdeskRequestCommentSerializer(BaseSerializer):

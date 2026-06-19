@@ -15,6 +15,7 @@ import type {
   IHelpdeskAutoAssignmentConfig,
   IHelpdeskAutoAssignmentType,
   IHelpdeskFieldType,
+  IHelpdeskForm,
   IHelpdeskFormField,
   IHelpdeskPortal,
   IHelpdeskStatus,
@@ -22,11 +23,13 @@ import type {
 import { cn } from "@plane/utils";
 import { Sortable } from "@plane/ui";
 import {
+  AlertCircle,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
   Check,
   ExternalLink,
+  Eye,
   GripVertical,
   Globe,
   Headset,
@@ -42,9 +45,11 @@ import {
   createHelpdeskFieldDraft,
   getNormalizedHelpdeskAutoAssignmentConfig,
   HELPDESK_CUSTOM_FIELD_TYPES,
+  previewTicketIdPattern,
 } from "@/helpers/helpdesk/form-core";
 import { useMember } from "@/hooks/store/use-member";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
+import { HelpdeskFormRenderer } from "@/components/helpdesk/form-renderer";
 
 // Simple hex color palette for status creation
 const COLOR_PALETTE = [
@@ -96,11 +101,24 @@ const HelpdeskSettingsPage = observer(() => {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [deletingFormId, setDeletingFormId] = useState<{ formId: string; portalId: string } | null>(null);
   const [activeTab, setActiveTab] = useState<TSettingsTab>("portal-settings");
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [activationErrors, setActivationErrors] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Local draft state for the settings panels — written on every keystroke, flushed on Save
+  const [fieldDraft, setFieldDraft] = useState<Partial<IHelpdeskFormField>>({});
+  const [formDraft, setFormDraft] = useState<Partial<IHelpdeskForm>>({});
 
   useEffect(() => {
     if (!wSlug) return;
     helpdeskStore.fetchStatuses(wSlug);
-    helpdeskStore.fetchPortals(wSlug);
+    helpdeskStore.fetchPortals(wSlug).then((portals) => {
+      if (!portals?.length) return;
+      portals.forEach((portal) => {
+        helpdeskStore.fetchForms(wSlug, portal.id);
+      });
+      setSelectedPortalId((prev) => prev ?? portals[0]?.id ?? null);
+    });
   }, [helpdeskStore, wSlug]);
 
   useEffect(() => {
@@ -112,16 +130,6 @@ const HelpdeskSettingsPage = observer(() => {
   const portals = helpdeskStore.getWorkspacePortals(wSlug);
   const portalsState = helpdeskStore.getCollectionState(`portals:${wSlug}`);
   const statusesState = helpdeskStore.getCollectionState(`statuses:${wSlug}`);
-
-  useEffect(() => {
-    if (portals.length === 0) return;
-    portals.forEach((portal) => {
-      helpdeskStore.fetchForms(wSlug, portal.id);
-    });
-    if (!selectedPortalId) {
-      setSelectedPortalId(portals[0]?.id ?? null);
-    }
-  }, [helpdeskStore, portals, selectedPortalId, wSlug]);
 
   const selectedPortal = portals.find((portal) => portal.id === selectedPortalId) || portals[0] || null;
   const selectedPortalForms = useMemo(
@@ -150,6 +158,25 @@ const HelpdeskSettingsPage = observer(() => {
     (selectedFieldId ? selectedFormFields.find((field) => field.id === selectedFieldId) : null) ||
     selectedFormFields[0] ||
     null;
+
+  // Reset drafts whenever selection changes so stale edits don't bleed over
+  useEffect(() => {
+    setFieldDraft({});
+  }, [selectedField?.id]);
+
+  useEffect(() => {
+    setFormDraft({});
+  }, [selectedForm?.id]);
+
+  // Merge store data with local drafts for rendering
+  const draftField: IHelpdeskFormField | null = selectedField
+    ? ({ ...selectedField, ...fieldDraft } as IHelpdeskFormField)
+    : null;
+  const draftForm: IHelpdeskForm | null = selectedForm
+    ? ({ ...selectedForm, ...formDraft } as IHelpdeskForm)
+    : null;
+
+  const isDirty = Object.keys(fieldDraft).length > 0 || Object.keys(formDraft).length > 0;
 
   // ---- Status handlers ----
 
@@ -335,36 +362,121 @@ const HelpdeskSettingsPage = observer(() => {
     }
   };
 
-  const handleFormFieldChange = async (fieldId: string, patch: Partial<IHelpdeskFormField>) => {
+  const handleFormFieldChange = (patch: Partial<IHelpdeskFormField>) => {
+    setFieldDraft((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleFormSettingsChange = (patch: Partial<IHelpdeskForm>) => {
+    setFormDraft((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleSaveAll = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
-      await helpdeskStore.updateFormField(wSlug, fieldId, patch);
+      const saves: Promise<unknown>[] = [];
+      if (selectedField && Object.keys(fieldDraft).length > 0) {
+        saves.push(helpdeskStore.updateFormField(wSlug, selectedField.id, fieldDraft));
+      }
+      if (selectedForm && Object.keys(formDraft).length > 0) {
+        saves.push(helpdeskStore.updateForm(wSlug, selectedForm.id, formDraft));
+      }
+      await Promise.all(saves);
+      setFieldDraft({});
+      setFormDraft({});
     } catch (_error) {
-      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update field" });
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to save changes" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDropdownOptionChange = (
-    field: IHelpdeskFormField,
-    index: number,
-    patch: Partial<{ label: string; value: string }>
-  ) => {
-    const nextOptions = field.options.map((option, optionIndex) =>
+  const validateFormForActivation = (fields: IHelpdeskFormField[]): string[] => {
+    const errors: string[] = [];
+    const fieldKeys = new Set(fields.map((f) => f.key));
+    for (const field of fields) {
+      if (!field.label.trim()) {
+        errors.push(`Field "${field.key}" has an empty label.`);
+      }
+      if (field.field_type === "select" && field.options.length === 0) {
+        errors.push(`Dropdown field "${field.label || field.key}" has no options.`);
+      }
+      if (field.field_type === "cascade_select" && field.parent_field_key && !fieldKeys.has(field.parent_field_key)) {
+        errors.push(`Cascading field "${field.label || field.key}" references a missing parent field.`);
+      }
+    }
+    return errors;
+  };
+
+  const handleToggleFormActive = async (form: IHelpdeskForm, newValue: boolean) => {
+    if (newValue) {
+      const errors = validateFormForActivation(helpdeskStore.getFormFields(form.id));
+      if (errors.length > 0) {
+        setActivationErrors(errors);
+        return;
+      }
+    }
+    setActivationErrors([]);
+    helpdeskStore.setFormActive(wSlug, form.id, selectedPortal!.id, newValue);
+  };
+
+  const handleDropdownOptionChange = (index: number, patch: Partial<{ label: string; value: string }>) => {
+    const options = draftField?.options ?? [];
+    const nextOptions = options.map((option, optionIndex) =>
       optionIndex === index ? { ...option, ...patch } : option
     );
-    handleFormFieldChange(field.id, { options: nextOptions });
+    handleFormFieldChange({ options: nextOptions });
   };
 
-  const handleAddDropdownOption = (field: IHelpdeskFormField) => {
-    const nextIndex = field.options.length + 1;
-    handleFormFieldChange(field.id, {
-      options: [...field.options, { label: `Option ${nextIndex}`, value: `option-${nextIndex}` }],
+  const handleAddDropdownOption = () => {
+    const options = draftField?.options ?? [];
+    const nextIndex = options.length + 1;
+    handleFormFieldChange({
+      options: [...options, { label: `Option ${nextIndex}`, value: `option-${nextIndex}` }],
     });
   };
 
-  const handleRemoveDropdownOption = (field: IHelpdeskFormField, index: number) => {
-    handleFormFieldChange(field.id, {
-      options: field.options.filter((_, optionIndex) => optionIndex !== index),
+  const handleRemoveDropdownOption = (index: number) => {
+    const options = draftField?.options ?? [];
+    handleFormFieldChange({
+      options: options.filter((_, optionIndex) => optionIndex !== index),
     });
+  };
+
+  const handleAddCascadeOption = () => {
+    const options = draftField?.options ?? [];
+    const nextIndex = options.length + 1;
+    handleFormFieldChange({
+      options: [...options, { label: `Option ${nextIndex}`, value: `Option ${nextIndex}` }],
+    });
+  };
+
+  const handleCascadeOptionLabelChange = (index: number, label: string) => {
+    const options = draftField?.options ?? [];
+    const oldValue = options[index]?.value ?? "";
+    const newOptions = options.map((opt, i) => (i === index ? { label, value: label } : opt));
+    const newMapping = { ...(draftField?.parent_mapping ?? {}) };
+    if (oldValue && oldValue !== label && oldValue in newMapping) {
+      newMapping[label] = newMapping[oldValue];
+      delete newMapping[oldValue];
+    }
+    handleFormFieldChange({ options: newOptions, parent_mapping: newMapping });
+  };
+
+  const handleRemoveCascadeOption = (index: number) => {
+    const options = draftField?.options ?? [];
+    const removedValue = options[index]?.value ?? "";
+    const newOptions = options.filter((_, i) => i !== index);
+    const newMapping = { ...(draftField?.parent_mapping ?? {}) };
+    if (removedValue in newMapping) delete newMapping[removedValue];
+    handleFormFieldChange({ options: newOptions, parent_mapping: newMapping });
+  };
+
+  const handleCascadeMappingToggle = (parentValue: string, childValue: string, checked: boolean) => {
+    const mapping = draftField?.parent_mapping ?? {};
+    const current = mapping[parentValue] ?? [];
+    const next = checked ? [...new Set([...current, childValue])] : current.filter((v) => v !== childValue);
+    handleFormFieldChange({ parent_mapping: { ...mapping, [parentValue]: next } });
   };
 
   const handleDeleteForm = async (formId: string, portalId: string) => {
@@ -1005,11 +1117,23 @@ const HelpdeskSettingsPage = observer(() => {
                                 <span>Active</span>
                                 <Switch
                                   value={form.is_active}
-                                  onChange={() =>
-                                    helpdeskStore.setFormActive(wSlug, form.id, selectedPortal.id, !form.is_active)
-                                  }
+                                  onChange={() => handleToggleFormActive(form, !form.is_active)}
                                 />
                               </div>
+                              {activationErrors.length > 0 && selectedForm?.id === form.id && (
+                                <div className="rounded-md border border-red-200 bg-red-50 p-2 dark:border-red-800/40 dark:bg-red-900/20">
+                                  <div className="flex items-start gap-1.5">
+                                    <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+                                    <div className="space-y-0.5">
+                                      {activationErrors.map((err, i) => (
+                                        <p key={i} className="text-11 text-red-600 dark:text-red-400">
+                                          {err}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => setDeletingFormId({ formId: form.id, portalId: selectedPortal.id })}
@@ -1031,6 +1155,31 @@ const HelpdeskSettingsPage = observer(() => {
                           </h3>
                           <p className="mt-0.5 text-12 text-tertiary">Drag fields to reorder the portal form.</p>
                         </div>
+                        {selectedForm && (
+                          <div className="flex shrink-0 items-center gap-2">
+                            {isDirty && (
+                              <Badge size="sm" variant="warning">
+                                Unsaved changes
+                              </Badge>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setIsPreviewOpen(true)}
+                              className="flex items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2.5 py-1.5 text-12 text-secondary transition-colors hover:text-primary"
+                            >
+                              <Eye className="size-3.5" />
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSaveAll}
+                              disabled={!isDirty || isSaving}
+                              className="flex items-center gap-1.5 rounded-md bg-accent-strong px-3 py-1.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                            >
+                              {isSaving ? "Saving…" : "Save"}
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {selectedForm ? (
@@ -1099,45 +1248,59 @@ const HelpdeskSettingsPage = observer(() => {
                           <h3 className="text-sm font-semibold text-primary">Form settings</h3>
                           <div className="mt-4 space-y-3">
                             <input
-                              value={selectedForm.name}
-                              onChange={(e) =>
-                                helpdeskStore.updateForm(wSlug, selectedForm.id, { name: e.target.value })
-                              }
+                              value={draftForm?.name ?? ""}
+                              onChange={(e) => handleFormSettingsChange({ name: e.target.value })}
                               placeholder="Form name"
                               className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                             />
                             <textarea
-                              value={selectedForm.description}
-                              onChange={(e) =>
-                                helpdeskStore.updateForm(wSlug, selectedForm.id, { description: e.target.value })
-                              }
+                              value={draftForm?.description ?? ""}
+                              onChange={(e) => handleFormSettingsChange({ description: e.target.value })}
                               placeholder="Describe when customers should use this form"
                               className="min-h-20 w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                             />
                             <textarea
-                              value={selectedForm.success_message}
-                              onChange={(e) =>
-                                helpdeskStore.updateForm(wSlug, selectedForm.id, { success_message: e.target.value })
-                              }
+                              value={draftForm?.success_message ?? ""}
+                              onChange={(e) => handleFormSettingsChange({ success_message: e.target.value })}
                               placeholder="Success message shown after submission"
                               className="min-h-20 w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                             />
+                            <div className="space-y-1.5">
+                              <label className="text-12 font-medium text-secondary">Ticket ID pattern</label>
+                              <input
+                                value={draftForm?.ticket_id_pattern ?? ""}
+                                onChange={(e) => handleFormSettingsChange({ ticket_id_pattern: e.target.value })}
+                                placeholder="ITR-.YYYY.-.#####"
+                                className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none font-mono"
+                              />
+                              {draftForm?.ticket_id_pattern && (
+                                <p className="text-12 text-tertiary">
+                                  Preview:{" "}
+                                  <span className="font-mono text-primary">
+                                    {previewTicketIdPattern(draftForm.ticket_id_pattern)}
+                                  </span>
+                                </p>
+                              )}
+                              <p className="text-11 text-tertiary">
+                                Tokens: YYYY, YY, MM, DD, ##### (any number of #)
+                              </p>
+                            </div>
                           </div>
 
-                          {selectedField ? (
+                          {draftField ? (
                             <div className="mt-6 border-t border-subtle pt-4">
                               <h4 className="text-13 font-medium text-primary">Field settings</h4>
                               <div className="mt-3 space-y-3">
                                 <input
-                                  value={selectedField.label}
-                                  onChange={(e) => handleFormFieldChange(selectedField.id, { label: e.target.value })}
+                                  value={draftField.label}
+                                  onChange={(e) => handleFormFieldChange({ label: e.target.value })}
                                   className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                                 />
-                                {!selectedField.is_system ? (
+                                {!draftField.is_system ? (
                                   <input
-                                    value={selectedField.key}
+                                    value={draftField.key}
                                     onChange={(e) =>
-                                      handleFormFieldChange(selectedField.id, {
+                                      handleFormFieldChange({
                                         key: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
                                       })
                                     }
@@ -1145,45 +1308,39 @@ const HelpdeskSettingsPage = observer(() => {
                                   />
                                 ) : null}
                                 <input
-                                  value={selectedField.placeholder}
-                                  onChange={(e) =>
-                                    handleFormFieldChange(selectedField.id, { placeholder: e.target.value })
-                                  }
+                                  value={draftField.placeholder}
+                                  onChange={(e) => handleFormFieldChange({ placeholder: e.target.value })}
                                   placeholder="Placeholder"
                                   className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                                 />
                                 <textarea
-                                  value={selectedField.help_text}
-                                  onChange={(e) =>
-                                    handleFormFieldChange(selectedField.id, { help_text: e.target.value })
-                                  }
+                                  value={draftField.help_text}
+                                  onChange={(e) => handleFormFieldChange({ help_text: e.target.value })}
                                   placeholder="Help text"
                                   className="min-h-20 w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                                 />
-                                {selectedField.field_type === "select" ? (
+                                {draftField.field_type === "select" ? (
                                   <div className="space-y-2">
                                     <div className="flex items-center justify-between gap-3">
                                       <p className="text-12 font-medium text-secondary">Dropdown options</p>
                                       <button
                                         type="button"
-                                        onClick={() => handleAddDropdownOption(selectedField)}
+                                        onClick={handleAddDropdownOption}
                                         className="rounded-md border border-subtle bg-layer-1 px-2.5 py-1 text-12 text-secondary transition-colors hover:text-primary"
                                       >
                                         Add option
                                       </button>
                                     </div>
                                     <div className="space-y-2">
-                                      {selectedField.options.map((option, index) => (
+                                      {draftField.options.map((option, index) => (
                                         <div
-                                          key={`${selectedField.id}-${option.value || option.label}`}
+                                          key={`${draftField.id}-${option.value || option.label}`}
                                           className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2"
                                         >
                                           <input
                                             value={option.label}
                                             onChange={(e) =>
-                                              handleDropdownOptionChange(selectedField, index, {
-                                                label: e.target.value,
-                                              })
+                                              handleDropdownOptionChange(index, { label: e.target.value })
                                             }
                                             placeholder="Label"
                                             className="min-w-0 rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
@@ -1191,7 +1348,7 @@ const HelpdeskSettingsPage = observer(() => {
                                           <input
                                             value={option.value}
                                             onChange={(e) =>
-                                              handleDropdownOptionChange(selectedField, index, {
+                                              handleDropdownOptionChange(index, {
                                                 value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
                                               })
                                             }
@@ -1200,9 +1357,9 @@ const HelpdeskSettingsPage = observer(() => {
                                           />
                                           <button
                                             type="button"
-                                            onClick={() => handleRemoveDropdownOption(selectedField, index)}
+                                            onClick={() => handleRemoveDropdownOption(index)}
                                             className="text-red-500 rounded-md px-2 text-12"
-                                            disabled={selectedField.options.length <= 1}
+                                            disabled={draftField.options.length <= 1}
                                           >
                                             Remove
                                           </button>
@@ -1211,20 +1368,144 @@ const HelpdeskSettingsPage = observer(() => {
                                     </div>
                                   </div>
                                 ) : null}
+                                {draftField.field_type === "cascade_select" ? (
+                                  <div className="space-y-3">
+                                    {/* Parent field selector */}
+                                    <div className="space-y-1.5">
+                                      <p className="text-12 font-medium text-secondary">Parent field</p>
+                                      <select
+                                        value={draftField.parent_field_key ?? ""}
+                                        onChange={(e) =>
+                                          handleFormFieldChange({
+                                            parent_field_key: e.target.value,
+                                            parent_mapping: {},
+                                          })
+                                        }
+                                        className="w-full rounded-md border border-subtle bg-layer-1 px-2 py-1.5 text-12 text-primary outline-none"
+                                      >
+                                        <option value="">None (root level)</option>
+                                        {selectedFormFields
+                                          .filter((f) => f.id !== draftField.id && f.field_type === "cascade_select")
+                                          .map((f) => (
+                                            <option key={f.id} value={f.key}>
+                                              {f.label}
+                                            </option>
+                                          ))}
+                                      </select>
+                                    </div>
+
+                                    {/* Own options list (flat) */}
+                                    <div className="space-y-1.5">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <p className="text-12 font-medium text-secondary">Options</p>
+                                        <button
+                                          type="button"
+                                          onClick={handleAddCascadeOption}
+                                          className="rounded-md border border-subtle bg-layer-1 px-2.5 py-1 text-12 text-secondary transition-colors hover:text-primary"
+                                        >
+                                          Add option
+                                        </button>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {draftField.options.map((opt, idx) => (
+                                          <div key={idx} className="flex items-center gap-2">
+                                            <input
+                                              value={opt.label}
+                                              onChange={(e) => handleCascadeOptionLabelChange(idx, e.target.value)}
+                                              placeholder="Option label"
+                                              className="min-w-0 flex-1 rounded-md border border-subtle bg-layer-1 px-2 py-1.5 text-12 text-primary outline-none"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveCascadeOption(idx)}
+                                              className="shrink-0 rounded p-1 text-red-400 hover:text-red-500"
+                                            >
+                                              <X className="size-3" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                        {draftField.options.length === 0 && (
+                                          <p className="text-11 text-tertiary">No options yet. Add some above.</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Mapping editor — only for child fields */}
+                                    {draftField.parent_field_key && (() => {
+                                      const parentField = selectedFormFields.find(
+                                        (f) => f.key === draftField.parent_field_key
+                                      );
+                                      if (!parentField || parentField.options.length === 0) {
+                                        return (
+                                          <p className="text-11 text-tertiary">
+                                            Add options to the parent field first to configure the mapping.
+                                          </p>
+                                        );
+                                      }
+                                      return (
+                                        <div className="space-y-1.5">
+                                          <p className="text-12 font-medium text-secondary">
+                                            Mapping — which options appear per parent value
+                                          </p>
+                                          <div className="rounded-md border border-subtle bg-layer-1 divide-y divide-subtle">
+                                            {parentField.options.map((parentOpt) => {
+                                              const checkedValues = new Set(
+                                                draftField.parent_mapping[parentOpt.value] ?? []
+                                              );
+                                              return (
+                                                <div key={parentOpt.value} className="px-3 py-2">
+                                                  <p className="mb-1.5 text-11 font-medium text-secondary">
+                                                    {parentOpt.label}
+                                                  </p>
+                                                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                                    {draftField.options.length === 0 ? (
+                                                      <span className="text-11 text-tertiary italic">
+                                                        No options in this field yet
+                                                      </span>
+                                                    ) : (
+                                                      draftField.options.map((childOpt) => (
+                                                        <label
+                                                          key={childOpt.value}
+                                                          className="flex cursor-pointer items-center gap-1.5 text-12 text-secondary"
+                                                        >
+                                                          <input
+                                                            type="checkbox"
+                                                            checked={checkedValues.has(childOpt.value)}
+                                                            onChange={(e) =>
+                                                              handleCascadeMappingToggle(
+                                                                parentOpt.value,
+                                                                childOpt.value,
+                                                                e.target.checked
+                                                              )
+                                                            }
+                                                            className="h-3.5 w-3.5 rounded border-subtle accent-accent-strong"
+                                                          />
+                                                          {childOpt.label}
+                                                        </label>
+                                                      ))
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : null}
                                 <div className="flex items-center justify-between text-12 text-secondary">
                                   <span>Required</span>
                                   <Switch
-                                    value={selectedField.required}
-                                    onChange={() =>
-                                      handleFormFieldChange(selectedField.id, { required: !selectedField.required })
-                                    }
+                                    value={draftField.required}
+                                    onChange={() => handleFormFieldChange({ required: !draftField.required })}
                                   />
                                 </div>
-                                {!selectedField.is_system ? (
+                                {!draftField.is_system ? (
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      helpdeskStore.deleteFormField(wSlug, selectedField.id, selectedForm.id)
+                                      helpdeskStore.deleteFormField(wSlug, selectedField!.id, selectedForm!.id)
                                     }
                                     className="text-red-500 text-12"
                                   >
@@ -1252,6 +1533,35 @@ const HelpdeskSettingsPage = observer(() => {
           )}
         </div>
       </div>
+
+      {/* Form preview modal */}
+      {isPreviewOpen && selectedForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="shadow-xl flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-subtle bg-layer-1">
+            <div className="flex items-center justify-between border-b border-subtle p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-primary">{selectedForm.name}</h3>
+                <p className="mt-0.5 text-12 text-tertiary">Preview mode — not submittable</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPreviewOpen(false)}
+                className="rounded-md p-1.5 text-tertiary transition-colors hover:bg-layer-transparent-hover hover:text-primary"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <HelpdeskFormRenderer fields={selectedFormFields} isPreview />
+            </div>
+            <div className="flex justify-end border-t border-subtle p-4">
+              <Button variant="primary" size="base" disabled title="Preview mode — submission disabled">
+                Submit request
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete status modal */}
       {deletingStatusId && (
@@ -1469,6 +1779,7 @@ function SettingRow({ label, description, control }: { label: string; descriptio
     </div>
   );
 }
+
 
 function ConfirmModal({
   title,

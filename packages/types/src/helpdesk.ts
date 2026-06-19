@@ -38,7 +38,8 @@ export type IHelpdeskFieldType =
   | "long_text"
   | "select"
   | "checkbox"
-  | "date";
+  | "date"
+  | "cascade_select";
 
 export interface IHelpdeskFormFieldOption {
   label: string;
@@ -58,9 +59,12 @@ export interface IHelpdeskFormField {
   required: boolean;
   sequence: number;
   options: IHelpdeskFormFieldOption[];
+  /** { [parentValue]: childValue[] } — only used for cascade_select child fields */
+  parent_mapping: Record<string, string[]>;
   validation: Record<string, unknown>;
   ui_props: Record<string, unknown>;
   is_system: boolean;
+  parent_field_key: string;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +80,7 @@ export interface IHelpdeskForm {
   is_active: boolean;
   sequence: number;
   success_message: string;
+  ticket_id_pattern: string;
   fields_detail: IHelpdeskFormField[];
   created_at: string;
   updated_at: string;
@@ -115,6 +120,7 @@ export interface IHelpdeskRequest {
   contact_email?: string | null;
   title: string;
   description: string;
+  display_id: string;
   status: string | null; // FK UUID to IHelpdeskStatus
   status_detail: IHelpdeskStatus | null;
   form_detail: IHelpdeskForm | null;

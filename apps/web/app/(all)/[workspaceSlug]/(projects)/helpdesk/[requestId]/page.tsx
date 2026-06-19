@@ -272,6 +272,9 @@ const WorkspaceRequestDetailPage = observer(() => {
                 </Link>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
+                    {request.display_id && (
+                      <span className="shrink-0 font-mono text-11 text-tertiary">{request.display_id}</span>
+                    )}
                     <h1 className="text-sm text-text-100 truncate font-semibold">{request.title}</h1>
                     {request.status && statusMap[request.status] && (
                       <span
@@ -311,7 +314,12 @@ const WorkspaceRequestDetailPage = observer(() => {
                   <div className="mb-4 flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs tracking-wider text-text-400 uppercase">Original request</p>
-                      <h2 className="text-base text-text-100 mt-2 font-semibold">{request.title}</h2>
+                      <div className="mt-2 flex items-center gap-2">
+                        {request.display_id && (
+                          <span className="font-mono text-12 text-tertiary">{request.display_id}</span>
+                        )}
+                        <h2 className="text-base text-text-100 font-semibold">{request.title}</h2>
+                      </div>
                       {request.form_detail ? (
                         <p className="text-xs text-text-400 mt-1">
                           Submitted via form: <span className="text-text-100">{request.form_detail.name}</span>

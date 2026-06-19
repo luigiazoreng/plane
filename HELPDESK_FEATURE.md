@@ -212,6 +212,29 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
 
 ---
 
+- [x] **Fase 12: Form Builder Resilience + Cascading Categories + Ticket Numbering**
+  - [x] **Modelo `cascade_select`:** novo tipo adicionado a `HelpdeskFormFieldType`; `parent_field_key` (CharField) adicionado a `HelpdeskFormField` para declarar hierarquia de campos dependentes.
+  - [x] **Modelo ticket ID:** `ticket_id_pattern` (CharField) e `ticket_id_counter` (PositiveIntegerField) adicionados a `HelpdeskForm`; `display_id` (CharField) adicionado a `HelpdeskRequest`.
+  - [x] **Migração `0132_helpdesk_phase12`:** AlterField para field_type + AddField para parent_field_key, ticket_id_pattern, ticket_id_counter, display_id.
+  - [x] **`form_core.py` expandido:** `build_default_helpdesk_template_fields()` cria Subject + 3 cascade_select (category_1/2/3) + Description; `generate_ticket_display_id()` incrementa counter atomicamente via `F()` e aplica tokens YYYY/YY/MM/DD/#####; validação de cascade_select em `validate_helpdesk_form_submission` resolve valores válidos percorrendo a árvore de opções do campo raiz.
+  - [x] **Template padrão em novos portais:** `HelpdeskPortalViewSet.perform_create` cria "Default request form" com os 5 campos do template ao criar um portal.
+  - [x] **Geração de display_id na criação:** chamado em `PublicHelpdeskFormSubmitEndpoint` (form.py) e em `HelpdeskRequestViewSet.perform_create` / `PublicHelpdeskRequestEndpoint.create` (request.py) quando o form tem `ticket_id_pattern`.
+  - [x] **Serializers:** `ticket_id_counter` somente-leitura em `HelpdeskFormSerializer`; `display_id` somente-leitura em `HelpdeskRequestSerializer`; validação de `cascade_select` adicionada em `HelpdeskFormFieldSerializer`.
+  - [x] **Tipos frontend atualizados:** `IHelpdeskFieldType` inclui `"cascade_select"`; `IHelpdeskFormFieldOption` tem `children?: IHelpdeskFormFieldOption[]`; `IHelpdeskFormField` tem `parent_field_key`; `IHelpdeskForm` tem `ticket_id_pattern`; `IHelpdeskRequest` tem `display_id`.
+  - [x] **Helpers frontend:** `HELPDESK_CUSTOM_FIELD_TYPES` inclui `cascade_select` com ícone `ListTree`; `createHelpdeskFieldDraft` inicializa `parent_field_key: ""`; nova função `previewTicketIdPattern` para preview ao vivo.
+  - [x] **Form builder UI (settings page):**
+    - Badge amarelo "Unsaved changes" ao editar campos sem salvar.
+    - Botão "Preview" no header do builder abre modal com `HelpdeskFormRenderer` em modo preview (não submissível).
+    - Validação client-side ao ativar form: label vazio, dropdown sem opções, cascade com parent_field_key inválido.
+    - Campo `ticket_id_pattern` na coluna de settings com preview ao vivo do ID gerado.
+    - Editor de tree nodes para campos `cascade_select` raiz (componente `CascadeTreeEditor` recursivo).
+    - Seletor de `parent_field_key` para campos `cascade_select` filhos.
+  - [x] **`form-renderer.tsx` compartilhado:** criado em `apps/web/core/components/helpdesk/`; renderiza todos os tipos incluindo `cascade_select` com filtragem dinâmica baseada no valor do campo pai; suporta prop `isPreview` para desabilitar inputs.
+  - [x] **Portal público atualizado:** `forms/[formSlug]/page.tsx` usa `HelpdeskFormRenderer`; ao mudar um cascade_select, valores descendentes são limpos automaticamente.
+  - [x] **Display ID na UI do agente:** `display_id` aparece em fonte mono acima do título no kanban, na list view e no header + seção "Original request" da página de detalhe.
+
+---
+
 ## Pendências Técnicas
 
 - **Core compartilhado para outros módulos**: A fundação de forms já foi criada com foco em reuso, mas ainda vive acoplada ao domínio de Helpdesk. O próximo passo natural é extrair o builder/renderers/contratos para um core realmente compartilhado com Intake e outros módulos.
