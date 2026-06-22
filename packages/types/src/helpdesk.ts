@@ -131,6 +131,26 @@ export interface IHelpdeskRequest {
   updated_at: string;
 }
 
+// --- List filters & display ---
+
+export type THelpdeskGroupBy = "status" | "assignee" | "portal" | "form" | "source" | "none";
+export type THelpdeskOrderBy = "-created_at" | "created_at" | "-updated_at" | "updated_at" | "title";
+
+export interface IHelpdeskRequestFilters {
+  status: string[];
+  assignees: string[];
+  portal: string[];
+  form: string[];
+  source: THelpdeskRequestSource[];
+  /** ["after:YYYY-MM-DD", "before:YYYY-MM-DD"] — same date filter shape used by work items */
+  created_at: string[];
+}
+
+export interface IHelpdeskDisplayFilters {
+  group_by: THelpdeskGroupBy;
+  order_by: THelpdeskOrderBy;
+}
+
 export interface IHelpdeskRequestComment {
   id: string;
   request: string;

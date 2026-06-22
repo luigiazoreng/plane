@@ -17,12 +17,57 @@ class HelpdeskRequestViewSet(BaseViewSet):
     serializer_class = HelpdeskRequestSerializer
     model = HelpdeskRequest
 
+    # `search` is handled by SearchFilter (BaseViewSet wires it up)
+    search_fields = ["title", "description", "display_id", "contact_email"]
+
+    ALLOWED_ORDER_BY = {
+        "created_at",
+        "-created_at",
+        "updated_at",
+        "-updated_at",
+        "title",
+    }
+
+    # comma-separated multi-value params -> queryset lookups (Plane convention)
+    MULTI_VALUE_FILTERS = {
+        "status": "status__in",
+        "portal": "portal__in",
+        "form": "form__in",
+        "source": "source__in",
+        "assignees": "assignees__in",
+    }
+
     def get_queryset(self):
-        return self.filter_queryset(
+        queryset = self.filter_queryset(
             super()
             .get_queryset()
             .filter(workspace__slug=self.kwargs.get("slug"))
         )
+
+        # multi-value filters (?status=a,b&assignees=c,d ...)
+        for param, lookup in self.MULTI_VALUE_FILTERS.items():
+            raw = self.request.query_params.get(param)
+            if raw:
+                values = [item for item in raw.split(",") if item]
+                if values:
+                    queryset = queryset.filter(**{lookup: values})
+
+        # created_at date range
+        created_at_gte = self.request.query_params.get("created_at__gte")
+        created_at_lte = self.request.query_params.get("created_at__lte")
+        if created_at_gte:
+            queryset = queryset.filter(created_at__date__gte=created_at_gte)
+        if created_at_lte:
+            queryset = queryset.filter(created_at__date__lte=created_at_lte)
+
+        # ordering (whitelisted)
+        order_by = self.request.query_params.get("order_by", "-created_at")
+        if order_by not in self.ALLOWED_ORDER_BY:
+            order_by = "-created_at"
+        queryset = queryset.order_by(order_by)
+
+        # distinct() guards against duplicate rows when filtering by the assignees M2M
+        return queryset.distinct()
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
