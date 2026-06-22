@@ -31,4 +31,4 @@ python manage.py create_bucket
 # Clear Cache before starting to remove stale values
 python manage.py clear_cache
 
-python manage.py runserver 0.0.0.0:8000 --settings=plane.settings.local
+DJANGO_SETTINGS_MODULE=plane.settings.local uvicorn plane.asgi:application --host 0.0.0.0 --port 8000 --reload --reload-dir /code/plane
