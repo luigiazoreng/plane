@@ -10,7 +10,13 @@ import { observer } from "mobx-react";
 import { useNavigate, useParams } from "react-router";
 import { useLocalStorage } from "@plane/hooks";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IBaseLayoutsBaseGroup, IHelpdeskRequest, IHelpdeskStatus } from "@plane/types";
+import type {
+  IBaseLayoutsBaseGroup,
+  IHelpdeskDisplayFilters,
+  IHelpdeskRequest,
+  IHelpdeskRequestFilters,
+  IHelpdeskStatus,
+} from "@plane/types";
 import { cn } from "@plane/utils";
 import {
   BarChart2,
@@ -19,13 +25,25 @@ import {
   KanbanSquare,
   LayoutList,
   MessageSquareText,
+  Search,
   Settings,
   UserRound,
 } from "lucide-react";
 import { BaseKanbanLayout } from "@/components/base-layouts/kanban/layout";
 import { AppHeader } from "@/components/core/app-header";
+import { HelpdeskAppliedFilters } from "@/components/helpdesk/filters/helpdesk-applied-filters";
+import { HelpdeskDisplayDropdown } from "@/components/helpdesk/filters/helpdesk-display-dropdown";
+import { HelpdeskFiltersDropdown } from "@/components/helpdesk/filters/helpdesk-filters-dropdown";
+import {
+  DEFAULT_HELPDESK_DISPLAY_FILTERS,
+  DEFAULT_HELPDESK_FILTERS,
+  buildHelpdeskRequestParams,
+  groupHelpdeskRequests,
+} from "@/helpers/helpdesk/filters";
 import { isHelpdeskRequestActive } from "@/helpers/helpdesk/statuses";
+import useDebounce from "@/hooks/use-debounce";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
+import { useMember } from "@/hooks/store/use-member";
 
 type THelpdeskAgentLayout = "list" | "kanban";
 type THelpdeskKanbanItem = IHelpdeskRequest & Record<string, unknown>;
@@ -79,12 +97,25 @@ const WorkspaceHelpdeskPage = observer(() => {
   const { workspaceSlug } = useParams();
   const navigate = useNavigate();
   const helpdeskStore = useHelpdesk();
+  const { getUserDetails } = useMember();
   const storageKey = workspaceSlug ? `helpdesk-layout:${workspaceSlug}` : "helpdesk-layout";
   const { storedValue: storedLayout, setValue: setStoredLayout } = useLocalStorage<THelpdeskAgentLayout>(
     storageKey,
     "list"
   );
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { storedValue: storedFilters, setValue: setStoredFilters } = useLocalStorage<IHelpdeskRequestFilters>(
+    workspaceSlug ? `helpdesk-filters:${workspaceSlug}` : "helpdesk-filters",
+    DEFAULT_HELPDESK_FILTERS
+  );
+  const { storedValue: storedDisplay, setValue: setStoredDisplay } = useLocalStorage<IHelpdeskDisplayFilters>(
+    workspaceSlug ? `helpdesk-display:${workspaceSlug}` : "helpdesk-display",
+    DEFAULT_HELPDESK_DISPLAY_FILTERS
+  );
+  const filters = useMemo(() => ({ ...DEFAULT_HELPDESK_FILTERS, ...storedFilters }), [storedFilters]);
+  const displayFilters = useMemo(() => ({ ...DEFAULT_HELPDESK_DISPLAY_FILTERS, ...storedDisplay }), [storedDisplay]);
+
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [inlineStatusRequest, setInlineStatusRequest] = useState<string | null>(null);
   const [addingToGroup, setAddingToGroup] = useState<string | null>(null);
   const [newRequestTitle, setNewRequestTitle] = useState("");
@@ -94,20 +125,55 @@ const WorkspaceHelpdeskPage = observer(() => {
   const wSlug = workspaceSlug?.toString() || "";
   const layout = storedLayout || "list";
 
+  const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
+  const requests = helpdeskStore.getWorkspaceRequests(wSlug);
+  const portals = helpdeskStore.getWorkspacePortals(wSlug);
+  const forms = useMemo(
+    () => portals.flatMap((portal) => helpdeskStore.getPortalForms(portal.id)),
+    [portals, helpdeskStore]
+  );
+  const defaultPortalId = portals[0]?.id;
+  const portalMap = useMemo(() => Object.fromEntries(portals.map((portal) => [portal.id, portal])), [portals]);
+  const statusMap = useMemo(() => Object.fromEntries(statuses.map((s) => [s.id, s])), [statuses]);
+
+  // group-by drives drag-drop / inline-add availability
+  const groupByStatus = displayFilters.group_by === "status";
+
+  const queryParams = useMemo(
+    () => buildHelpdeskRequestParams(filters, displayFilters, debouncedSearch),
+    [filters, displayFilters, debouncedSearch]
+  );
+
+  // initial load of statuses / portals
   useEffect(() => {
     if (!wSlug) return;
     helpdeskStore.fetchStatuses(wSlug);
     helpdeskStore.fetchPortals(wSlug);
-    helpdeskStore.fetchRequests(wSlug);
+  }, [wSlug, helpdeskStore]);
 
+  // fetch forms per portal (used by the Form filter + grouping)
+  useEffect(() => {
+    if (!wSlug) return;
+    portals.forEach((portal) => helpdeskStore.fetchForms(wSlug, portal.id));
+  }, [wSlug, portals, helpdeskStore]);
+
+  // re-fetch requests whenever filters / display / search change
+  useEffect(() => {
+    if (!wSlug) return;
+    helpdeskStore.fetchRequests(wSlug, queryParams);
+  }, [wSlug, helpdeskStore, queryParams]);
+
+  // re-fetch on tab focus
+  useEffect(() => {
+    if (!wSlug) return;
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        helpdeskStore.fetchRequests(wSlug);
+        helpdeskStore.fetchRequests(wSlug, queryParams);
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [wSlug, helpdeskStore]);
+  }, [wSlug, helpdeskStore, queryParams]);
 
   useHelpdeskSSE(wSlug, (event: THelpdeskSSEEvent) => {
     if (event.type === "request.created" || event.type === "request.updated") {
@@ -115,23 +181,21 @@ const WorkspaceHelpdeskPage = observer(() => {
     }
   });
 
-  const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
-  const requests = helpdeskStore.getWorkspaceRequests(wSlug);
-  const groupedRequests = helpdeskStore.getRequestsGroupedByStatus(wSlug);
-  const portals = helpdeskStore.getWorkspacePortals(wSlug);
-  const defaultPortalId = portals[0]?.id;
-  const portalMap = useMemo(() => Object.fromEntries(portals.map((portal) => [portal.id, portal])), [portals]);
-
-  const statusMap = useMemo(() => Object.fromEntries(statuses.map((s) => [s.id, s])), [statuses]);
-
-  const filteredRequests = useMemo(
-    () => (statusFilter === "all" ? requests : requests.filter((r) => r.status === statusFilter)),
-    [requests, statusFilter]
+  // generic grouping (kanban + list group headers)
+  const { groups, grouped } = useMemo(
+    () =>
+      groupHelpdeskRequests(requests, displayFilters.group_by, {
+        statuses,
+        portals,
+        forms,
+        getMemberName: (id) => getUserDetails(id)?.display_name ?? "Unknown",
+      }),
+    [requests, displayFilters.group_by, statuses, portals, forms, getUserDetails]
   );
 
   const kanbanGroups = useMemo<IBaseLayoutsBaseGroup[]>(
-    () => statuses.map((s) => ({ id: s.id, name: s.name })),
-    [statuses]
+    () => groups.map((g) => ({ id: g.id, name: g.name })),
+    [groups]
   );
 
   const requestItems = useMemo(() => {
@@ -150,16 +214,14 @@ const WorkspaceHelpdeskPage = observer(() => {
   }, [requests, addingToGroup]);
 
   const requestGroups = useMemo(() => {
-    return statuses.reduce(
-      (acc, s) => {
-        const ids = (groupedRequests[s.id] || []).map((r) => r.id);
-        if (addingToGroup === s.id) ids.push(`__add__:${s.id}`);
-        acc[s.id] = ids;
-        return acc;
-      },
-      {} as Record<string, string[]>
-    );
-  }, [statuses, groupedRequests, addingToGroup]);
+    const next: Record<string, string[]> = {};
+    for (const g of groups) {
+      const ids = [...(grouped[g.id] || [])];
+      if (groupByStatus && addingToGroup === g.id) ids.push(`__add__:${g.id}`);
+      next[g.id] = ids;
+    }
+    return next;
+  }, [groups, grouped, groupByStatus, addingToGroup]);
 
   const statusesState = helpdeskStore.getCollectionState(`statuses:${wSlug}`);
   const requestsState = helpdeskStore.getCollectionState(`requests:${wSlug}`);
@@ -177,6 +239,16 @@ const WorkspaceHelpdeskPage = observer(() => {
     }
   }, [addingToGroup]);
 
+  const handleFilterChange = (key: keyof IHelpdeskRequestFilters, values: string[]) => {
+    setStoredFilters({ ...filters, [key]: values });
+  };
+  const handleRemoveFilter = (key: keyof IHelpdeskRequestFilters, value: string) => {
+    setStoredFilters({ ...filters, [key]: (filters[key] as string[]).filter((v) => v !== value) });
+  };
+  const handleClearFilters = () => setStoredFilters({ ...DEFAULT_HELPDESK_FILTERS });
+  const handleDisplayChange = (data: Partial<IHelpdeskDisplayFilters>) =>
+    setStoredDisplay({ ...displayFilters, ...data });
+
   const handleStatusDrop = async (
     sourceId: string,
     _destinationId: string | null,
@@ -189,7 +261,7 @@ const WorkspaceHelpdeskPage = observer(() => {
       setToast({ type: TOAST_TYPE.SUCCESS, title: "Status updated" });
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to move request" });
-      await helpdeskStore.fetchRequests(wSlug);
+      await helpdeskStore.fetchRequests(wSlug, queryParams);
     }
   };
 
@@ -237,6 +309,26 @@ const WorkspaceHelpdeskPage = observer(() => {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Search */}
+              <div className="hidden items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 py-1 md:flex">
+                <Search className="size-3.5 text-tertiary" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="w-32 bg-transparent text-13 text-primary outline-none placeholder:text-tertiary"
+                />
+              </div>
+
+              <HelpdeskFiltersDropdown
+                filters={filters}
+                statuses={statuses}
+                portals={portals}
+                forms={forms}
+                onChange={handleFilterChange}
+              />
+              <HelpdeskDisplayDropdown displayFilters={displayFilters} onChange={handleDisplayChange} />
+
               <button
                 type="button"
                 onClick={() => navigate(`/${wSlug}/helpdesk/analytics`)}
@@ -286,6 +378,15 @@ const WorkspaceHelpdeskPage = observer(() => {
         }
       />
 
+      <HelpdeskAppliedFilters
+        filters={filters}
+        statuses={statuses}
+        portals={portals}
+        forms={forms}
+        onRemove={handleRemoveFilter}
+        onClear={handleClearFilters}
+      />
+
       <div className="flex-1 overflow-hidden">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
@@ -313,7 +414,7 @@ const WorkspaceHelpdeskPage = observer(() => {
         ) : requests.length === 0 && !addingToGroup ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <MessageSquareText className="mb-4 size-8 text-tertiary" />
-            <p className="text-13 font-medium text-primary">No requests yet</p>
+            <p className="text-13 font-medium text-primary">No requests found</p>
             <p className="mt-1 max-w-sm text-13 text-tertiary">
               Requests submitted through your portal will appear here for triage.
             </p>
@@ -331,35 +432,40 @@ const WorkspaceHelpdeskPage = observer(() => {
             items={requestItems}
             groups={kanbanGroups}
             groupedItemIds={requestGroups}
-            enableDragDrop
+            enableDragDrop={groupByStatus}
             onDrop={handleStatusDrop}
             renderGroupHeader={({ group, itemCount }) => {
               const statusObj = statusMap[group.id];
-              if (!statusObj) return null;
-              const realCount = itemCount - (addingToGroup === group.id ? 1 : 0);
+              const realCount = itemCount - (groupByStatus && addingToGroup === group.id ? 1 : 0);
               return (
                 <div className="relative flex w-full flex-row items-center gap-1 py-1.5">
                   <div
                     className="flex size-5 shrink-0 items-center justify-center rounded-xs"
-                    style={{ backgroundColor: `${statusObj.color}1a` }}
+                    style={statusObj ? { backgroundColor: `${statusObj.color}1a` } : undefined}
                   >
-                    <StatusDot color={statusObj.color} className="h-2 w-2" />
+                    {statusObj ? (
+                      <StatusDot color={statusObj.color} className="h-2 w-2" />
+                    ) : (
+                      <StatusDot color="#9ca3af" className="h-2 w-2" />
+                    )}
                   </div>
                   <div className="flex w-full flex-row items-baseline gap-1 overflow-hidden">
                     <span className="line-clamp-1 inline-block truncate font-medium text-primary">{group.name}</span>
                     <span className="shrink-0 pl-2 text-13 font-medium text-tertiary">{realCount}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddingToGroup(group.id);
-                      setNewRequestTitle("");
-                    }}
-                    className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-layer-transparent transition-all hover:bg-layer-transparent-hover"
-                    title="Add request"
-                  >
-                    <span className="text-xs leading-none font-semibold text-secondary">+</span>
-                  </button>
+                  {groupByStatus && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddingToGroup(group.id);
+                        setNewRequestTitle("");
+                      }}
+                      className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-layer-transparent transition-all hover:bg-layer-transparent-hover"
+                      title="Add request"
+                    >
+                      <span className="text-xs leading-none font-semibold text-secondary">+</span>
+                    </button>
+                  )}
                 </div>
               );
             }}
@@ -441,203 +547,185 @@ const WorkspaceHelpdeskPage = observer(() => {
             }}
           />
         ) : (
-          /* List view */
+          /* List view — grouped */
           <div className="flex h-full flex-col overflow-hidden">
-            {/* Status filter chips */}
-            <div className="flex flex-wrap items-center gap-1.5 border-b border-subtle bg-layer-1 px-4 py-2">
-              <button
-                key="all"
-                type="button"
-                onClick={() => setStatusFilter("all")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-12 font-medium transition-colors",
-                  statusFilter === "all"
-                    ? "bg-accent-strong/10 text-accent-strong"
-                    : "bg-layer-2 text-secondary hover:bg-layer-1 hover:text-primary"
-                )}
-              >
-                All
-                <span
-                  className={cn(
-                    "rounded-full px-1 text-11 font-semibold",
-                    statusFilter === "all" ? "opacity-70" : "bg-layer-1 text-tertiary"
-                  )}
-                >
-                  {totalRequests}
-                </span>
-              </button>
-              {statuses.map((s) => {
-                const isActive = statusFilter === s.id;
-                const count = (groupedRequests[s.id] || []).length;
-                const { r, g, b } = hexToRgb(s.color);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setStatusFilter(s.id)}
-                    className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-12 font-medium transition-colors"
-                    style={isActive ? { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.15)`, color: s.color } : undefined}
-                  >
-                    {!isActive && (
-                      <span className="flex items-center gap-1.5 rounded-full bg-layer-2 px-2.5 py-1 text-12 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary">
-                        {s.name}
-                        <span className="rounded-full bg-layer-1 px-1 text-11 font-semibold text-tertiary">
-                          {count}
-                        </span>
-                      </span>
-                    )}
-                    {isActive && (
-                      <>
-                        <StatusDot color={s.color} className="h-1.5 w-1.5 shrink-0" />
-                        {s.name}
-                        <span className="rounded-full px-1 text-11 font-semibold opacity-70">{count}</span>
-                      </>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
             <div className="flex-1 overflow-y-auto">
-              {filteredRequests.length === 0 && !addingToGroup ? (
+              {requests.length === 0 && !addingToGroup ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <MessageSquareText className="mb-3 size-7 text-tertiary" />
-                  <p className="text-13 font-medium text-primary">No requests with this status</p>
+                  <p className="text-13 font-medium text-primary">No requests match your filters</p>
                 </div>
               ) : (
-                <div>
-                  {filteredRequests.map((request) => {
-                    const statusObj = request.status ? statusMap[request.status] : null;
-                    const isStatusOpen = inlineStatusRequest === request.id;
-                    return (
-                      <div
-                        key={request.id}
-                        className="group relative flex items-center gap-3 border-b border-subtle px-4 py-2.5 transition-colors hover:bg-layer-1"
-                      >
-                        {/* Status badge — clickable inline */}
-                        <div className="relative shrink-0">
-                          {statusObj ? (
-                            <StatusChip
-                              status={statusObj}
-                              onClick={() => setInlineStatusRequest(isStatusOpen ? null : request.id)}
-                            />
-                          ) : (
-                            <span className="rounded px-2 py-1 text-12 text-tertiary">—</span>
-                          )}
-                          {isStatusOpen && (
-                            <div className="shadow-lg absolute top-full left-0 z-10 mt-1 min-w-40 rounded-lg border border-subtle bg-layer-1 py-1">
-                              {statuses.map((s) => (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => handleInlineStatusChange(request.id, s.id)}
-                                  className={cn(
-                                    "flex w-full items-center gap-2 px-3 py-1.5 text-13 transition-colors hover:bg-layer-2",
-                                    s.id === request.status ? "font-medium text-primary" : "text-secondary"
-                                  )}
-                                >
-                                  <StatusDot color={s.color} className="h-2 w-2 shrink-0" />
-                                  {s.name}
-                                </button>
-                              ))}
+                groups.map((group) => {
+                  const groupRequestIds = grouped[group.id] || [];
+                  const showAddRow = groupByStatus && addingToGroup === group.id;
+                  if (groupRequestIds.length === 0 && !showAddRow) return null;
+                  const groupStatus = statusMap[group.id];
+                  return (
+                    <div key={group.id}>
+                      {/* Group header */}
+                      <div className="sticky top-0 z-1 flex items-center gap-2 border-b border-subtle bg-layer-1 px-4 py-2">
+                        <StatusDot
+                          color={group.color || groupStatus?.color || "#9ca3af"}
+                          className="h-2 w-2 shrink-0"
+                        />
+                        <span className="text-13 font-medium text-primary">{group.name}</span>
+                        <span className="text-12 text-tertiary">{groupRequestIds.length}</span>
+                        {groupByStatus && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddingToGroup(group.id);
+                              setNewRequestTitle("");
+                            }}
+                            className="ml-1 grid size-5 place-items-center rounded-sm text-secondary transition-colors hover:bg-layer-2"
+                            title="Add request"
+                          >
+                            <span className="text-xs leading-none font-semibold">+</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {groupRequestIds.map((requestId) => {
+                        const request = requestItems[requestId];
+                        if (!request) return null;
+                        const statusObj = request.status ? statusMap[request.status] : null;
+                        const isStatusOpen = inlineStatusRequest === request.id;
+                        return (
+                          <div
+                            key={request.id}
+                            className="group relative flex items-center gap-3 border-b border-subtle px-4 py-2.5 transition-colors hover:bg-layer-1"
+                          >
+                            {/* Status badge — clickable inline */}
+                            <div className="relative shrink-0">
+                              {statusObj ? (
+                                <StatusChip
+                                  status={statusObj}
+                                  onClick={() => setInlineStatusRequest(isStatusOpen ? null : request.id)}
+                                />
+                              ) : (
+                                <span className="rounded px-2 py-1 text-12 text-tertiary">—</span>
+                              )}
+                              {isStatusOpen && (
+                                <div className="shadow-lg absolute top-full left-0 z-10 mt-1 min-w-40 rounded-lg border border-subtle bg-layer-1 py-1">
+                                  {statuses.map((s) => (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={() => handleInlineStatusChange(request.id, s.id)}
+                                      className={cn(
+                                        "flex w-full items-center gap-2 px-3 py-1.5 text-13 transition-colors hover:bg-layer-2",
+                                        s.id === request.status ? "font-medium text-primary" : "text-secondary"
+                                      )}
+                                    >
+                                      <StatusDot color={s.color} className="h-2 w-2 shrink-0" />
+                                      {s.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
 
-                        {/* Title + description — navigate on click */}
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 cursor-pointer text-left"
-                          onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
-                        >
-                          {request.display_id && (
-                            <p className="font-mono text-11 text-tertiary">{request.display_id}</p>
-                          )}
-                          <p className="truncate text-body-sm-medium text-primary">{request.title}</p>
-                          {request.description && (
-                            <p className="mt-0.5 truncate text-12 text-tertiary">{request.description}</p>
-                          )}
-                        </button>
+                            {/* Title + description — navigate on click */}
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 cursor-pointer text-left"
+                              onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
+                            >
+                              {request.display_id && (
+                                <p className="font-mono text-11 text-tertiary">{request.display_id}</p>
+                              )}
+                              <p className="truncate text-body-sm-medium text-primary">{request.title}</p>
+                              {request.description && (
+                                <p className="mt-0.5 truncate text-12 text-tertiary">{request.description}</p>
+                              )}
+                            </button>
 
-                        {/* Meta */}
-                        <div className="hidden shrink-0 items-center gap-4 text-tertiary md:flex">
-                          <div className="flex items-center gap-1.5 text-13">
-                            <UserRound className="size-3.5 shrink-0" />
-                            <span className="max-w-[120px] truncate">{request.contact_email || "Authenticated"}</span>
+                            {/* Meta */}
+                            <div className="hidden shrink-0 items-center gap-4 text-tertiary md:flex">
+                              <div className="flex items-center gap-1.5 text-13">
+                                <UserRound className="size-3.5 shrink-0" />
+                                <span className="max-w-[120px] truncate">
+                                  {request.contact_email || "Authenticated"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 text-13">
+                                <CalendarDays className="size-3.5 shrink-0" />
+                                {new Date(request.created_at).toLocaleDateString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 text-13">
-                            <CalendarDays className="size-3.5 shrink-0" />
-                            {new Date(request.created_at).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
+                        );
+                      })}
+
+                      {/* Inline add row */}
+                      {showAddRow && (
+                        <div className="flex items-center gap-3 border-b border-subtle px-4 py-2.5">
+                          {statusMap[group.id] && (
+                            <StatusChip status={statusMap[group.id]} showDot className="shrink-0" />
+                          )}
+                          <input
+                            ref={listAddInputRef}
+                            value={newRequestTitle}
+                            onChange={(e) => setNewRequestTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleAddRequest(group.id);
+                              if (e.key === "Escape") {
+                                setAddingToGroup(null);
+                                setNewRequestTitle("");
+                              }
+                            }}
+                            placeholder="Request title..."
+                            className="min-w-0 flex-1 bg-transparent text-body-sm-medium text-primary outline-none placeholder:text-tertiary"
+                          />
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleAddRequest(group.id)}
+                              disabled={!newRequestTitle.trim() || !defaultPortalId}
+                              className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                            >
+                              Add
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddingToGroup(null);
+                                setNewRequestTitle("");
+                              }}
+                              className="rounded px-2 py-0.5 text-12 text-secondary transition-colors hover:bg-layer-transparent-hover"
+                            >
+                              Cancel
+                            </button>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Inline add row */}
-                  {addingToGroup && (
-                    <div className="flex items-center gap-3 border-b border-subtle px-4 py-2.5">
-                      {statusMap[addingToGroup] && (
-                        <StatusChip status={statusMap[addingToGroup]} showDot className="shrink-0" />
                       )}
-                      <input
-                        ref={listAddInputRef}
-                        value={newRequestTitle}
-                        onChange={(e) => setNewRequestTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleAddRequest(addingToGroup);
-                          if (e.key === "Escape") {
-                            setAddingToGroup(null);
-                            setNewRequestTitle("");
-                          }
-                        }}
-                        placeholder="Request title..."
-                        className="min-w-0 flex-1 bg-transparent text-body-sm-medium text-primary outline-none placeholder:text-tertiary"
-                      />
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleAddRequest(addingToGroup)}
-                          disabled={!newRequestTitle.trim() || !defaultPortalId}
-                          className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
-                        >
-                          Add
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAddingToGroup(null);
-                            setNewRequestTitle("");
-                          }}
-                          className="rounded px-2 py-0.5 text-12 text-secondary transition-colors hover:bg-layer-transparent-hover"
-                        >
-                          Cancel
-                        </button>
-                      </div>
                     </div>
-                  )}
-                </div>
+                  );
+                })
               )}
 
               {/* + New request */}
-              <button
-                type="button"
-                onClick={() => {
-                  const target = statusFilter !== "all" ? statusFilter : (statuses[0]?.id ?? null);
-                  if (target) {
-                    setAddingToGroup(target);
-                    setNewRequestTitle("");
-                  }
-                }}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-13 text-tertiary transition-colors hover:bg-layer-1 hover:text-secondary"
-              >
-                <span className="text-base leading-none font-medium">+</span>
-                New request
-              </button>
+              {groupByStatus && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = statuses[0]?.id ?? null;
+                    if (target) {
+                      setAddingToGroup(target);
+                      setNewRequestTitle("");
+                    }
+                  }}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-13 text-tertiary transition-colors hover:bg-layer-1 hover:text-secondary"
+                >
+                  <span className="text-base leading-none font-medium">+</span>
+                  New request
+                </button>
+              )}
             </div>
           </div>
         )}

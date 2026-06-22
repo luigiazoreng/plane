@@ -8,6 +8,7 @@ from plane.db.models import (
     HelpdeskFormField,
     HelpdeskPortal,
     HelpdeskRequest,
+    HelpdeskRequestAssignee,
     HelpdeskRequestComment,
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
@@ -149,11 +150,64 @@ class HelpdeskFormSerializer(BaseSerializer):
 class HelpdeskRequestSerializer(BaseSerializer):
     status_detail = HelpdeskStatusSerializer(source="status", read_only=True)
     form_detail = HelpdeskFormSerializer(source="form", read_only=True)
+    # `assignees` is an M2M with a custom through model, so DRF treats it as
+    # read-only. Declare it explicitly to make it writable and sync the through
+    # table manually in create()/update().
+    assignees = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
 
     class Meta:
         model = HelpdeskRequest
         fields = "__all__"
         read_only_fields = READ_ONLY_BASE + ["portal", "customer", "display_id"]
+
+    def _sync_assignees(self, instance, assignee_ids):
+        # hard delete so soft-deleted rows don't linger in the M2M relation
+        HelpdeskRequestAssignee.objects.filter(request=instance).delete(soft=False)
+        unique_ids = list(dict.fromkeys(str(uid) for uid in assignee_ids))
+        if unique_ids:
+            HelpdeskRequestAssignee.objects.bulk_create(
+                [
+                    HelpdeskRequestAssignee(
+                        request=instance,
+                        assignee_id=assignee_id,
+                        workspace_id=instance.workspace_id,
+                    )
+                    for assignee_id in unique_ids
+                ],
+                batch_size=10,
+                ignore_conflicts=True,
+            )
+
+    def create(self, validated_data):
+        assignees = validated_data.pop("assignees", None)
+        instance = super().create(validated_data)
+        if assignees is not None:
+            self._sync_assignees(instance, assignees)
+        return instance
+
+    def update(self, instance, validated_data):
+        assignees = validated_data.pop("assignees", None)
+        instance = super().update(instance, validated_data)
+        if assignees is not None:
+            self._sync_assignees(instance, assignees)
+        return instance
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # serialize assignees as a list of user IDs, reading active through-rows
+        # only (the M2M relation does not filter soft-deleted links)
+        data["assignees"] = [
+            str(uid)
+            for uid in HelpdeskRequestAssignee.objects.filter(
+                request=instance, deleted_at__isnull=True
+            ).values_list("assignee_id", flat=True)
+        ]
+        return data
 
 
 class HelpdeskRequestCommentSerializer(BaseSerializer):

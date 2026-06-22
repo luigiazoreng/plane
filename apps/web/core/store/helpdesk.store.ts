@@ -75,7 +75,10 @@ export interface IHelpdeskStore {
   ) => Promise<void>;
 
   // request actions
-  fetchRequests: (workspaceSlug: string) => Promise<IHelpdeskRequest[]>;
+  fetchRequests: (
+    workspaceSlug: string,
+    params?: Record<string, string | string[]>
+  ) => Promise<IHelpdeskRequest[]>;
   fetchRequestById: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequest>;
   createRequest: (workspaceSlug: string, data: Partial<IHelpdeskRequest>) => Promise<IHelpdeskRequest>;
   updateRequest: (
@@ -304,7 +307,7 @@ export class HelpdeskStore implements IHelpdeskStore {
         current
           .map((s) => (seqMap[s.id] !== undefined ? Object.assign({}, s, { sequence: seqMap[s.id] }) : s))
           .slice()
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     await this.helpdeskService.reorderStatuses(workspaceSlug, items);
@@ -424,7 +427,7 @@ export class HelpdeskStore implements IHelpdeskStore {
         current
           .map((form) => (form.id === formId ? response : form))
           .slice()
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
       set(this.formFields, [response.id], response.fields_detail || this.formFields[response.id] || []);
     });
@@ -460,7 +463,7 @@ export class HelpdeskStore implements IHelpdeskStore {
             seqMap[form.id] !== undefined ? Object.assign({}, form, { sequence: seqMap[form.id] }) : form
           )
           .slice()
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     const response = await this.helpdeskService.reorderForms(workspaceSlug, items);
@@ -534,7 +537,7 @@ export class HelpdeskStore implements IHelpdeskStore {
         current
           .map((field) => (field.id === fieldId ? response : field))
           .slice()
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     return response;
@@ -568,7 +571,7 @@ export class HelpdeskStore implements IHelpdeskStore {
             seqMap[field.id] !== undefined ? Object.assign({}, field, { sequence: seqMap[field.id] }) : field
           )
           .slice()
-          .toSorted((a, b) => a.sequence - b.sequence)
+          .slice().toSorted((a, b) => a.sequence - b.sequence)
       );
     });
     const response = await this.helpdeskService.reorderFormFields(workspaceSlug, items);
@@ -583,11 +586,14 @@ export class HelpdeskStore implements IHelpdeskStore {
 
   // --- Requests ---
 
-  fetchRequests = async (workspaceSlug: string): Promise<IHelpdeskRequest[]> => {
+  fetchRequests = async (
+    workspaceSlug: string,
+    params?: Record<string, string | string[]>
+  ): Promise<IHelpdeskRequest[]> => {
     const key = `requests:${workspaceSlug}`;
     this.startLoading(key);
     try {
-      const response = await this.helpdeskService.getRequests(workspaceSlug);
+      const response = await this.helpdeskService.getRequests(workspaceSlug, params);
       if (Array.isArray(response)) {
         runInAction(() => {
           set(this.requests, [workspaceSlug], response);
