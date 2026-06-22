@@ -18,3 +18,4 @@ from .intake import HelpdeskRequestIntakeIssueViewSet
 from .comment import HelpdeskRequestCommentViewSet, PublicHelpdeskCommentEndpoint
 from .status import HelpdeskStatusViewSet
 from .analytics import HelpdeskAnalyticsEndpoint
+from .sse import HelpdeskSSEView, HelpdeskSSETokenView

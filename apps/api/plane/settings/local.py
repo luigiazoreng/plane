@@ -8,6 +8,7 @@ import os
 
 from .common import *  # noqa
 
+
 DEBUG = True
 
 # Debug Toolbar settings

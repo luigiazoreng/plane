@@ -1,5 +1,7 @@
 from django.urls import path
 from plane.app.views.helpdesk import (
+    HelpdeskSSEView,
+    HelpdeskSSETokenView,
     HelpdeskCustomerLoginEndpoint,
     HelpdeskCustomerRegisterEndpoint,
     PublicHelpdeskCustomerLoginEndpoint,
@@ -218,6 +220,18 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/analytics/",
         HelpdeskAnalyticsEndpoint.as_view(),
         name="helpdesk-analytics",
+    ),
+
+    # --- SSE live events ---
+    path(
+        "workspaces/<str:slug>/helpdesk/sse-token/",
+        HelpdeskSSETokenView.as_view(),
+        name="helpdesk-sse-token",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/events/",
+        HelpdeskSSEView.as_view(),
+        name="helpdesk-sse",
     ),
 
     # --- Public comments ---
