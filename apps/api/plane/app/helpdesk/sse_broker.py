@@ -1,14 +1,17 @@
 """
-SSE broker — Redis pub/sub backend so events cross process/worker boundaries.
+SSE broker — Redis pub/sub, fully async.
 
-publish() is synchronous (called from DRF views).
-subscribe()/unsubscribe() are synchronous; each subscriber holds a
-threading.Condition that is notified by a per-workspace Redis listener thread.
+publish()   — sync, safe to call from DRF views (uses redis-py sync client).
+subscribe() — async, returns an AsyncSubscriber; used by the async SSE view.
+
+Each uvicorn worker process keeps its own set of in-process asyncio.Queue
+subscribers. A per-slug asyncio Task listens on the Redis channel and fans
+messages out to all local queues.
 """
+import asyncio
 import json
 import os
 import threading
-import time
 from collections import defaultdict
 
 import redis as _redis_lib
@@ -21,7 +24,7 @@ def _channel(slug: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Sync redis client for publish
+# Sync Redis client — for publish() called from DRF views (sync context)
 # ---------------------------------------------------------------------------
 _pub_client: _redis_lib.Redis | None = None
 _pub_lock = threading.Lock()
@@ -37,109 +40,87 @@ def _get_pub() -> _redis_lib.Redis:
 
 
 # ---------------------------------------------------------------------------
-# Subscriber
+# Async subscriber registry — per event-loop (one per uvicorn worker)
 # ---------------------------------------------------------------------------
-
-class _Subscriber:
-    def __init__(self):
-        self._cond = threading.Condition()
-        self._queue: list = []
-        self._closed = False
-
-    def put(self, payload: str):
-        with self._cond:
-            self._queue.append(payload)
-            self._cond.notify_all()
-
-    def close(self):
-        with self._cond:
-            self._closed = True
-            self._cond.notify_all()
-
-    def events(self, heartbeat_interval: float = 20.0):
-        while True:
-            with self._cond:
-                deadline = time.monotonic() + heartbeat_interval
-                while not self._queue and not self._closed:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        break
-                    self._cond.wait(timeout=remaining)
-
-                if self._closed:
-                    return
-
-                if self._queue:
-                    items = list(self._queue)
-                    self._queue.clear()
-                else:
-                    yield ": heartbeat\n\n"
-                    continue
-
-            for item in items:
-                yield f"data: {item}\n\n"
-
-
-# ---------------------------------------------------------------------------
-# Per-process subscriber registry + Redis listener threads
-# ---------------------------------------------------------------------------
-_sub_lock = threading.Lock()
+# slug → set of asyncio.Queue
 _subscribers: dict[str, set] = defaultdict(set)
-_listener_threads: dict[str, threading.Thread] = {}
-_listener_lock = threading.Lock()
+# slug → asyncio.Task that reads from Redis and fans out
+_listener_tasks: dict[str, asyncio.Task] = {}
+_registry_lock = asyncio.Lock()  # created lazily in async context
 
 
-def _start_listener(slug: str):
-    with _listener_lock:
-        t = _listener_threads.get(slug)
-        if t and t.is_alive():
-            return
-
-        def _run():
-            r = _redis_lib.from_url(_redis_url, decode_responses=True)
-            ps = r.pubsub(ignore_subscribe_messages=True)
-            ps.subscribe(_channel(slug))
-            try:
-                for msg in ps.listen():
-                    if msg["type"] != "message":
-                        continue
-                    payload = msg["data"]
-                    with _sub_lock:
-                        subs = list(_subscribers.get(slug, []))
-                    if not subs:
-                        break
-                    for sub in subs:
-                        sub.put(payload)
-            finally:
-                ps.unsubscribe(_channel(slug))
-                r.close()
-                with _listener_lock:
-                    _listener_threads.pop(slug, None)
-
-        t = threading.Thread(target=_run, daemon=True, name=f"sse:{slug}")
-        _listener_threads[slug] = t
-        t.start()
+async def _get_lock() -> asyncio.Lock:
+    global _registry_lock
+    # Each event-loop needs its own Lock; recreate if the loop changed.
+    try:
+        _registry_lock.locked()
+    except RuntimeError:
+        _registry_lock = asyncio.Lock()
+    return _registry_lock
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+async def _listener_task(slug: str):
+    """Async task: subscribe to Redis channel, fan out to local queues."""
+    loop = asyncio.get_running_loop()
+    # Run blocking redis pubsub in a thread so we don't block the event loop.
+    queue: asyncio.Queue = asyncio.Queue()
 
-def subscribe(slug: str) -> _Subscriber:
-    sub = _Subscriber()
-    with _sub_lock:
-        _subscribers[slug].add(sub)
-    _start_listener(slug)
-    return sub
+    def _redis_thread():
+        r = _redis_lib.from_url(_redis_url, decode_responses=True)
+        ps = r.pubsub(ignore_subscribe_messages=True)
+        ps.subscribe(_channel(slug))
+        try:
+            for msg in ps.listen():
+                if msg["type"] != "message":
+                    continue
+                payload = msg["data"]
+                loop.call_soon_threadsafe(queue.put_nowait, payload)
+                # Stop if no local subscribers remain
+                if not _subscribers.get(slug):
+                    break
+        finally:
+            ps.unsubscribe(_channel(slug))
+            r.close()
+
+    thread = threading.Thread(target=_redis_thread, daemon=True, name=f"sse:{slug}")
+    thread.start()
+
+    try:
+        while True:
+            payload = await queue.get()
+            subs = list(_subscribers.get(slug, []))
+            for sub_q in subs:
+                try:
+                    sub_q.put_nowait(payload)
+                except asyncio.QueueFull:
+                    pass
+    except asyncio.CancelledError:
+        pass
 
 
-def unsubscribe(slug: str, sub: _Subscriber):
-    with _sub_lock:
-        _subscribers[slug].discard(sub)
-    sub.close()
+async def subscribe(slug: str) -> "asyncio.Queue[str | None]":
+    lock = await _get_lock()
+    async with lock:
+        q: asyncio.Queue = asyncio.Queue(maxsize=50)
+        _subscribers[slug].add(q)
+
+        task = _listener_tasks.get(slug)
+        if task is None or task.done():
+            _listener_tasks[slug] = asyncio.create_task(_listener_task(slug))
+
+        return q
+
+
+async def unsubscribe(slug: str, q: "asyncio.Queue"):
+    lock = await _get_lock()
+    async with lock:
+        _subscribers[slug].discard(q)
+        # Signal the consumer that the stream is done
+        await q.put(None)
 
 
 def publish(slug: str, event: dict):
+    """Synchronous — safe to call from DRF views."""
     payload = json.dumps(event)
     try:
         _get_pub().publish(_channel(slug), payload)

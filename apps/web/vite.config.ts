@@ -35,11 +35,21 @@ export default defineConfig(() => ({
     host: "127.0.0.1",
     proxy: {
       // Proxy /api/workspaces so cookies are sent same-origin (avoids SameSite=Lax restriction).
-      // uvicorn/ASGI streams SSE natively — no hop-by-hop header patching needed.
       "/api/workspaces": {
         target: process.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          // http-proxy buffers the entire response before forwarding by default.
+          // For SSE (text/event-stream), pipe the upstream directly to the client
+          // instead — otherwise the browser never receives chunks while connected.
+          proxy.on("proxyRes", (proxyRes, req, res) => {
+            if (req.url?.includes("/helpdesk/events/")) {
+              res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+              proxyRes.pipe(res);
+            }
+          });
+        },
       },
     },
   },
