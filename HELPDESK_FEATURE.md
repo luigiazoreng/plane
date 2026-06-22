@@ -233,6 +233,17 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] **Portal público atualizado:** `forms/[formSlug]/page.tsx` usa `HelpdeskFormRenderer`; ao mudar um cascade_select, valores descendentes são limpos automaticamente.
   - [x] **Display ID na UI do agente:** `display_id` aparece em fonte mono acima do título no kanban, na list view e no header + seção "Original request" da página de detalhe.
 
+- [x] **Fase 13: SSE Live Reload**
+  - [x] Criado `apps/api/plane/app/helpdesk/sse_broker.py` — broker Redis pub/sub com threading; `publish()` síncrono chamado pelas views; `subscribe()` retorna `_Subscriber` (Condition + queue); daemon thread por workspace escuta o canal Redis e entrega eventos localmente.
+  - [x] Criado `apps/api/plane/app/views/helpdesk/sse.py` — `HelpdeskSSEView` (Django View sync) retorna `StreamingHttpResponse` com `text/event-stream`; autenticação via cookie de sessão (enviado same-origin pelo proxy Vite); heartbeat de 20s para manter conexão TCP viva.
+  - [x] `HelpdeskSSETokenView` mantido como fallback (autenticação via token Redis one-time); bug de `redis.get()` retornar `bytes` corrigido com `user_id.decode()` antes de passar para ORM query.
+  - [x] URLs registradas: `workspaces/<slug>/helpdesk/sse-token/` e `workspaces/<slug>/helpdesk/events/`.
+  - [x] `publish()` adicionado em todos os pontos de mutação: `HelpdeskRequestViewSet.perform_create`, `HelpdeskRequestViewSet.partial_update`, `HelpdeskRequestCommentViewSet.perform_create`, `PublicHelpdeskFormSubmitEndpoint.post` e `PublicHelpdeskRequestEndpoint.create`.
+  - [x] Header `Content-Encoding: identity` na resposta SSE para impedir que `GZipMiddleware` bufferize o stream.
+  - [x] Vite proxy em `vite.config.ts`: `/api/workspaces` → `http://127.0.0.1:8000`; intercept `proxyRes` substitui `Connection: close` → `keep-alive` e `Transfer-Encoding: chunked` para o path `/helpdesk/events/` (evita que o `http-proxy` encerre o stream ao receber o header do Django runserver).
+  - [x] Hook `apps/web/core/hooks/use-helpdesk-sse.ts` usa `fetch()` com URL relativa (sem CORS), parse manual de linhas SSE, reconexão com backoff exponencial (2s → 30s) e Page Visibility API.
+  - [x] Integrado nas páginas de listagem e detalhe do agente: `request.created` / `request.updated` → `fetchRequests`; `comment.created` / `request.updated` → `fetchRequestById` + `fetchRequestComments`.
+
 ---
 
 ## Pendências Técnicas
@@ -240,7 +251,7 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
 - **Core compartilhado para outros módulos**: A fundação de forms já foi criada com foco em reuso, mas ainda vive acoplada ao domínio de Helpdesk. O próximo passo natural é extrair o builder/renderers/contratos para um core realmente compartilhado com Intake e outros módulos.
 - **Dados históricos de SLA**: Tickets criados antes da Fase 10 não têm `first_responded_at` nem `resolved_at` populados. O compliance de SLA só é preciso para tickets criados após a migração `0130`. A tela de analytics exibe o aviso `historical_note` retornado pela API, mas não existe script de backfill.
 - **Auto-assign: estratégias avançadas**: `round_robin` e `capacity` estão implementados no backend e selecionáveis na UI, mas `skills`, horários e reassignment automático continuam fora do escopo atual.
-- **Polling vs. WebSocket**: A atualização do Dev Pipeline usa polling de 20s. Quando a infraestrutura de WebSocket do Plane estiver disponível para o módulo, o provider de atualização pode ser trocado sem reescrever a página (a store já separa o contrato).
+- **Polling vs. SSE no Dev Pipeline**: A atualização do Dev Pipeline (links Intake) ainda usa polling de 20s — o SSE atual cobre apenas `request.created`, `request.updated` e `comment.created`. Quando conveniente, um evento `intake.updated` pode ser adicionado ao broker sem alterar o frontend do SSE.
 
 ---
 
@@ -306,3 +317,10 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - **Extração form_core:** lógica de validação e criação de campos extraída de `form.py` para `helpdesk/form_core.py`; helpers frontend movidos para `helpers/helpdesk/` (alias correto `@/helpers/*`).
   - **Typecheck zerado:** todos os erros TS do módulo helpdesk corrigidos — `toSorted()` → `.slice().sort()`, `showLabel` no PieChart, `super()` sem args em `BasePage`.
   - **Pin do sidebar persistente:** `HELPDESK` adicionado a `WorkspaceUserPreference.UserPreferenceKeys` — o GET agora cria a linha no banco e o PATCH consegue salvar o estado de pin após reload.
+- **[2026-06-22]**: SSE Live Reload (Fase 13).
+  - **Broker Redis pub/sub:** `sse_broker.py` criado com `publish()` síncrono (chamado pelas views) e `subscribe()` baseado em `threading.Condition`; um daemon thread por workspace escuta o canal Redis `helpdesk:sse:{slug}` e entrega mensagens a todos os subscribers locais.
+  - **Endpoint SSE:** `HelpdeskSSEView` retorna `StreamingHttpResponse` com `text/event-stream`; heartbeat de 20s; `Content-Encoding: identity` para evitar bufferização pelo `GZipMiddleware`.
+  - **Bug fix — `redis.get()` retorna bytes:** `User.objects.get(pk=user_id)` recebia `bytes` em vez de `str`, causando `TypeError` interno do Django convertido em HTTP 500. Corrigido com `user_id.decode()` antes da query ORM.
+  - **Bug fix — `PublicHelpdeskFormSubmitEndpoint` sem publish:** tickets criados pelo portal público não disparavam SSE. Adicionado `sse_publish()` após `HelpdeskRequest.objects.create()`.
+  - **Vite proxy:** `/api/workspaces` proxiado para `:8000`; intercept `proxyRes` substitui `Connection: close` → `keep-alive` no path `/helpdesk/events/` para evitar que o proxy encerre o stream prematuro (Django runserver emite `Connection: close` em toda `StreamingHttpResponse` sem `Content-Length`).
+  - **Hook frontend:** `use-helpdesk-sse.ts` usa `fetch()` com URL relativa (bypassa CORS — cookies enviados same-origin via proxy), parse manual de linhas SSE, reconexão com backoff exponencial e Page Visibility API. Integrado nas páginas de listagem e detalhe.
