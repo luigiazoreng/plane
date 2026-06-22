@@ -111,7 +111,7 @@ const WorkspaceHelpdeskPage = observer(() => {
 
   useHelpdeskSSE(wSlug, (event: THelpdeskSSEEvent) => {
     if (event.type === "request.created" || event.type === "request.updated") {
-      helpdeskStore.fetchRequests(wSlug);
+      helpdeskStore.fetchRequestById(wSlug, event.request_id);
     }
   });
 
