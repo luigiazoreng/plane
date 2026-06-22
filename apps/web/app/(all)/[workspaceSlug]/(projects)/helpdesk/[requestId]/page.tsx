@@ -19,10 +19,13 @@ import { generateWorkItemLink } from "@plane/utils";
 import {
   ArrowLeft,
   ArrowUpRight,
+  FileText,
   Link2,
   Lock,
   MessageCircleMore,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Send,
   UserRound,
@@ -53,6 +56,7 @@ const WorkspaceRequestDetailPage = observer(() => {
   const [newComment, setNewComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [isInternalNote, setIsInternalNote] = useState(false);
+  const [isRequestPanelOpen, setIsRequestPanelOpen] = useState(true);
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   // Intake forwarding state
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
@@ -271,31 +275,36 @@ const WorkspaceRequestDetailPage = observer(() => {
     <>
       <div className="flex h-full w-full flex-col bg-surface-1">
         <AppHeader
+          rowClassName="h-auto min-h-11 py-2.5"
           header={
             <div className="flex w-full items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <Link to={`/${wSlug}/helpdesk`} className="text-tertiary transition-colors hover:text-primary">
+                <Link to={`/${wSlug}/helpdesk`} className="shrink-0 text-tertiary transition-colors hover:text-primary">
                   <ArrowLeft className="size-4" />
                 </Link>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     {request.display_id && (
                       <span className="font-mono shrink-0 text-11 text-tertiary">{request.display_id}</span>
                     )}
-                    <h1 className="text-sm text-text-100 truncate font-semibold">{request.title}</h1>
+                    <h1 className="text-sm text-text-100 min-w-0 truncate font-semibold">{request.title}</h1>
                     {request.status && statusMap[request.status] && (
                       <span
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-11 font-medium"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-11 font-medium"
                         style={{
-                          backgroundColor: `${statusMap[request.status].color}22`,
+                          backgroundColor: `${statusMap[request.status].color}1f`,
                           color: statusMap[request.status].color,
                         }}
                       >
+                        <span
+                          className="block size-[5px] shrink-0 rounded-full"
+                          style={{ backgroundColor: statusMap[request.status].color }}
+                        />
                         {statusMap[request.status].name}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-text-400 truncate">
+                  <p className="text-xs text-text-400 mt-0.5 truncate">
                     {request.contact_email || "Authenticated customer"} ·{" "}
                     {request.source === "public_form" ? "Public form" : "Internal form"} ·{" "}
                     {new Date(request.created_at).toLocaleString()}
@@ -313,19 +322,36 @@ const WorkspaceRequestDetailPage = observer(() => {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Main content — conversation */}
-          <div className="flex min-w-0 flex-1 flex-col border-r border-subtle">
-            <div className="flex-1 overflow-y-auto p-4 md:p-6">
-              <div className="mx-auto flex max-w-4xl flex-col gap-6">
-                <section className="rounded-xl border border-subtle bg-surface-2 p-5">
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs tracking-wider text-text-400 uppercase">Original request</p>
-                      <div className="mt-2 flex items-center gap-2">
+          {/* Left panel — original request (collapsible) */}
+          <aside
+            className={`hidden shrink-0 overflow-hidden border-r border-subtle bg-surface-2 transition-[width,opacity] duration-200 ease-in-out lg:block ${
+              isRequestPanelOpen ? "w-[360px] opacity-100" : "w-0 border-r-0 opacity-0"
+            }`}
+          >
+            <div className="flex h-full w-[360px] flex-col overflow-y-auto">
+              <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="text-text-300 size-4" />
+                  <h2 className="text-sm text-text-100 font-semibold">Original request</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRequestPanelOpen(false)}
+                  className="text-text-300 rounded-md p-1 transition-colors hover:bg-surface-1 hover:text-primary"
+                  title="Collapse panel"
+                >
+                  <PanelLeftClose className="size-4" />
+                </button>
+              </div>
+              <div className="flex-1 space-y-4 p-4">
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         {request.display_id && (
-                          <span className="font-mono text-12 text-tertiary">{request.display_id}</span>
+                          <span className="font-mono text-11 text-tertiary">{request.display_id}</span>
                         )}
-                        <h2 className="text-base text-text-100 font-semibold">{request.title}</h2>
+                        <h3 className="text-sm text-text-100 font-semibold">{request.title}</h3>
                       </div>
                       {request.form_detail ? (
                         <p className="text-xs text-text-400 mt-1">
@@ -337,153 +363,177 @@ const WorkspaceRequestDetailPage = observer(() => {
                       {request.customer ? "Authenticated" : "Anonymous"}
                     </Badge>
                   </div>
-                  <div className="text-sm text-text-300 whitespace-pre-wrap">{request.description}</div>
-                  {Object.keys(request.form_responses || {}).length > 0 ? (
-                    <div className="mt-5 border-t border-subtle pt-4">
-                      <p className="text-xs tracking-wider text-text-400 uppercase">Form responses</p>
-                      <div className="mt-3 space-y-3">
-                        {Object.entries(request.form_responses || {}).map(([key, value]) => {
-                          const field = request.form_detail?.fields_detail?.find((item) => item.key === key);
-                          return (
-                            <div key={key} className="rounded-lg border border-subtle bg-surface-1 p-3">
-                              <p className="text-xs text-text-400">{field?.label || key}</p>
-                              <div className="text-sm text-text-100 mt-1 whitespace-pre-wrap">
-                                {typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-                </section>
+                  <div className="text-sm text-text-300 mt-3 whitespace-pre-wrap">{request.description}</div>
+                </div>
 
-                <section className="rounded-xl border border-subtle bg-surface-2">
-                  <div className="border-b border-subtle px-5 py-4">
-                    <div className="flex items-center gap-2">
-                      <MessageCircleMore className="text-text-300 size-4" />
-                      <div>
-                        <h2 className="text-base text-text-100 font-semibold">Conversation</h2>
-                        <p className="text-sm text-text-400">Visible replies and internal notes in one timeline.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 p-5">
-                    {commentsState.isLoading && comments.length === 0 ? (
-                      <div className="flex justify-center py-8">
-                        <div className="border-primary h-7 w-7 animate-spin rounded-full border-b-2" />
-                      </div>
-                    ) : comments.length === 0 ? (
-                      <p className="text-sm text-text-400 py-8 text-center">No replies yet.</p>
-                    ) : (
-                      comments.map((comment) => {
-                        const isAgent = !!comment.actor;
+                {Object.keys(request.form_responses || {}).length > 0 ? (
+                  <div className="border-t border-subtle pt-4">
+                    <p className="tracking-wider text-text-400 mb-3 text-11 uppercase">Form responses</p>
+                    <div className="space-y-3">
+                      {Object.entries(request.form_responses || {}).map(([key, value]) => {
+                        const field = request.form_detail?.fields_detail?.find((item) => item.key === key);
                         return (
-                          <div key={comment.id} className={`flex ${isAgent ? "justify-end" : "justify-start"}`}>
-                            <div
-                              className={`max-w-[90%] rounded-xl border p-4 md:max-w-[80%] ${
-                                comment.is_internal
-                                  ? "border-amber-500/20 bg-amber-500/5"
-                                  : isAgent
-                                    ? "border-primary/20 bg-primary/5"
-                                    : "border-subtle bg-surface-1"
-                              }`}
-                            >
-                              <div className="mb-2 flex items-center gap-2">
-                                {isAgent ? (
-                                  <UserRound className="size-4 text-primary" />
-                                ) : (
-                                  <MessageSquareText className="text-text-300 size-4" />
-                                )}
-                                <span className="text-sm text-text-100 font-medium">
-                                  {isAgent ? "Agent" : "Customer"}
-                                </span>
-                                {comment.is_internal && (
-                                  <Badge variant="warning" size="sm">
-                                    Internal note
-                                  </Badge>
-                                )}
-                                <span className="text-xs text-text-400">
-                                  {new Date(comment.created_at).toLocaleString()}
-                                </span>
-                              </div>
-                              <div className="text-sm text-text-300 whitespace-pre-wrap">{comment.content}</div>
+                          <div key={key}>
+                            <p className="text-text-400 text-11">{field?.label || key}</p>
+                            <div className="text-sm text-text-100 mt-0.5 whitespace-pre-wrap">
+                              {typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}
                             </div>
                           </div>
                         );
-                      })
-                    )}
+                      })}
+                    </div>
                   </div>
-                </section>
+                ) : null}
+              </div>
+            </div>
+          </aside>
+
+          {/* Main content — conversation */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center gap-2 border-b border-subtle px-4 py-3">
+              {!isRequestPanelOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsRequestPanelOpen(true)}
+                  className="text-text-300 hidden rounded-md p-1 transition-colors hover:bg-surface-2 hover:text-primary lg:block"
+                  title="Show original request"
+                >
+                  <PanelLeftOpen className="size-4" />
+                </button>
+              )}
+              <MessageCircleMore className="text-text-300 size-4" />
+              <h2 className="text-sm text-text-100 font-semibold">Conversation</h2>
+              <span className="text-xs text-text-400">· replies and internal notes</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-5">
+              <div className="mx-auto max-w-3xl space-y-5">
+                {commentsState.isLoading && comments.length === 0 ? (
+                  <div className="flex justify-center py-10">
+                    <div className="border-primary h-7 w-7 animate-spin rounded-full border-b-2" />
+                  </div>
+                ) : comments.length === 0 ? (
+                  <p className="text-sm text-text-400 py-10 text-center">No replies yet.</p>
+                ) : (
+                  comments.map((comment) => {
+                    const isAgent = !!comment.actor;
+                    return (
+                      <div key={comment.id} className="flex gap-3">
+                        <div
+                          className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${
+                            comment.is_internal
+                              ? "bg-amber-500/10 text-amber-500"
+                              : isAgent
+                                ? "bg-primary/10 text-primary"
+                                : "text-text-300 bg-surface-2"
+                          }`}
+                        >
+                          {isAgent ? <UserRound className="size-3.5" /> : <MessageSquareText className="size-3.5" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="text-sm text-text-100 font-medium">{isAgent ? "Agent" : "Customer"}</span>
+                            {comment.is_internal && (
+                              <Badge variant="warning" size="sm">
+                                Internal note
+                              </Badge>
+                            )}
+                            <span className="text-text-400 text-11">
+                              {new Date(comment.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <div
+                            className={`text-sm whitespace-pre-wrap ${
+                              comment.is_internal
+                                ? "bg-amber-500/5 text-text-200 rounded-md px-3 py-2"
+                                : "text-text-200"
+                            }`}
+                          >
+                            {comment.content}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
-            <div className="border-t border-subtle bg-surface-2 p-4">
-              <div className="mx-auto max-w-4xl rounded-xl border border-subtle bg-surface-1 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-text-100 font-medium">
-                      {isInternalNote ? "Add internal note" : "Reply to customer"}
-                    </p>
-                    <p className="text-xs text-text-400">
-                      {isInternalNote
-                        ? "Only agents will see this note."
-                        : "This message will appear in the customer conversation."}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Lock className="text-text-300 size-4" />
-                    <span className="text-xs text-text-400">Internal note</span>
-                    <Switch value={isInternalNote} onChange={() => setIsInternalNote((v) => !v)} />
-                  </div>
-                </div>
-
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder={isInternalNote ? "Capture context for the team..." : "Write a reply to the customer..."}
-                  className="text-sm text-text-100 focus:border-primary min-h-[110px] w-full resize-none rounded-lg border border-subtle bg-surface-2 p-3 transition-colors outline-none"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      handleAddComment();
+            <div className="border-t border-subtle px-4 py-3">
+              <div className="mx-auto max-w-3xl">
+                <div
+                  className={`rounded-lg border bg-surface-2 transition-colors focus-within:border-strong ${
+                    isInternalNote ? "border-amber-500/30 bg-amber-500/5" : "border-subtle"
+                  }`}
+                >
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder={
+                      isInternalNote ? "Capture context for the team..." : "Write a reply to the customer..."
                     }
-                  }}
-                />
-
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <p className="text-xs text-text-400">Press Ctrl/Cmd + Enter to send quickly.</p>
-                  <Button
-                    variant="primary"
-                    size="base"
-                    onClick={handleAddComment}
-                    disabled={submittingComment || !newComment.trim()}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Send className="size-4" />
-                      {isInternalNote ? "Save note" : "Send reply"}
-                    </span>
-                  </Button>
+                    className="text-sm text-text-100 min-h-[72px] w-full resize-none bg-transparent p-3 outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
+                  />
+                  <div className="flex items-center justify-between gap-3 px-3 pb-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsInternalNote((v) => !v)}
+                      className={`text-xs flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors ${
+                        isInternalNote ? "text-amber-500" : "text-text-400 hover:text-text-200 hover:bg-surface-1"
+                      }`}
+                    >
+                      <Lock className="size-3.5" />
+                      Internal note
+                      <Switch value={isInternalNote} onChange={() => setIsInternalNote((v) => !v)} />
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <p className="text-text-400 hidden text-11 sm:block">Ctrl/Cmd + Enter</p>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={handleAddComment}
+                        disabled={submittingComment || !newComment.trim()}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Send className="size-3.5" />
+                          {isInternalNote ? "Save note" : "Send reply"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Right sidebar */}
-          <aside className="hidden w-[340px] shrink-0 overflow-y-auto bg-surface-2 xl:block">
-            <div className="space-y-6 p-5">
+          <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-subtle bg-surface-2 xl:block">
+            <div className="flex flex-col">
               {/* Request details */}
-              <section className="rounded-xl border border-subtle bg-surface-1 p-4">
-                <h2 className="text-sm tracking-wider text-text-400 mb-4 font-semibold uppercase">Request details</h2>
-                <div className="text-sm space-y-4">
-                  <div>
-                    <p className="text-xs text-text-400 mb-1">Status</p>
+              <section className="border-b border-subtle p-4">
+                <h2 className="text-xs tracking-wider text-text-400 mb-3 font-semibold uppercase">Request details</h2>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-400 shrink-0">Status</p>
                     <select
                       value={request.status ?? ""}
                       onChange={(e) => helpdeskStore.updateRequest(wSlug, rId, { status: e.target.value })}
-                      className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-2 px-2 py-1.5 transition-colors outline-none"
+                      className="text-sm max-w-[60%] cursor-pointer rounded-md border px-2 py-1 font-medium transition-colors outline-none"
+                      style={
+                        request.status && statusMap[request.status]
+                          ? {
+                              backgroundColor: `${statusMap[request.status].color}1f`,
+                              color: statusMap[request.status].color,
+                              borderColor: `${statusMap[request.status].color}40`,
+                            }
+                          : undefined
+                      }
                     >
                       <option value="">— No status —</option>
                       {statuses.map((s) => (
@@ -493,65 +543,62 @@ const WorkspaceRequestDetailPage = observer(() => {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <p className="text-xs text-text-400 mb-1">Contact</p>
-                    <p className="text-text-100">{request.contact_email || "Authenticated customer"}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-400 shrink-0">Contact</p>
+                    <p className="text-sm text-text-100 truncate">{request.contact_email || "Authenticated"}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-text-400 mb-1">Source</p>
-                    <p className="text-text-100">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-400 shrink-0">Source</p>
+                    <p className="text-sm text-text-100">
                       {request.source === "public_form" ? "Public form" : "Internal form"}
                     </p>
                   </div>
                   {request.form_detail ? (
-                    <div>
-                      <p className="text-xs text-text-400 mb-1">Form</p>
-                      <p className="text-text-100">{request.form_detail.name}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-text-400 shrink-0">Form</p>
+                      <p className="text-sm text-text-100 truncate">{request.form_detail.name}</p>
                     </div>
                   ) : null}
-                  <div>
-                    <p className="text-xs text-text-400 mb-1">Assignees</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-400 shrink-0">Assignees</p>
                     <MemberDropdown
                       value={request.assignees}
                       onChange={(assignees: string[]) => helpdeskStore.updateRequest(wSlug, rId, { assignees })}
                       multiple
                       buttonVariant={request.assignees.length > 0 ? "transparent-without-text" : "border-without-text"}
                       buttonClassName={request.assignees.length > 0 ? "hover:bg-transparent px-0" : ""}
-                      placeholder="Assign agent"
+                      placeholder="Assign"
                     />
                   </div>
-                  <div>
-                    <p className="text-xs text-text-400 mb-1">Updated</p>
-                    <p className="text-text-100">{new Date(request.updated_at).toLocaleString()}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-400 shrink-0">Updated</p>
+                    <p className="text-sm text-text-100 truncate">
+                      {new Date(request.updated_at).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
               </section>
 
               {/* Dev pipeline — Intake links */}
-              <section className="rounded-xl border border-subtle bg-surface-1 p-4">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm tracking-wider text-text-400 font-semibold uppercase">Dev pipeline</h2>
-                    <p className="text-xs text-text-400 mt-1">Intake issues created from this ticket.</p>
-                  </div>
+              <section className="border-b border-subtle p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-xs tracking-wider text-text-400 font-semibold uppercase">Dev pipeline</h2>
                   <Button variant="secondary" size="sm" onClick={openForwardModal}>
-                    <span className="flex items-center gap-2">
-                      <ArrowUpRight className="size-4" />
+                    <span className="flex items-center gap-1.5">
+                      <ArrowUpRight className="size-3.5" />
                       Forward
                     </span>
                   </Button>
                 </div>
 
                 {intakeLinksState.isLoading && intakeLinks.length === 0 ? (
-                  <div className="flex justify-center py-6">
-                    <div className="border-primary h-7 w-7 animate-spin rounded-full border-b-2" />
+                  <div className="flex justify-center py-4">
+                    <div className="border-primary h-6 w-6 animate-spin rounded-full border-b-2" />
                   </div>
                 ) : intakeLinks.length === 0 ? (
-                  <p className="text-sm text-text-400">
-                    No intake issues yet. Forward this ticket to a project to create one.
-                  </p>
+                  <p className="text-xs text-text-400">No intake issues yet. Forward to create one.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-1">
                     {intakeLinks.map((link) => {
                       const project = getProjectById(link.forwarded_to_project);
                       const identifier = link.project_identifier || project?.identifier;
@@ -559,12 +606,15 @@ const WorkspaceRequestDetailPage = observer(() => {
                       const intakeMeta =
                         link.intake_status != null ? INTAKE_STATUS_META[link.intake_status] : INTAKE_STATUS_META[-2];
                       return (
-                        <div key={link.id} className="rounded-lg border border-subtle bg-surface-2 p-3">
-                          <div className="flex items-start justify-between gap-3">
+                        <div
+                          key={link.id}
+                          className="group -mx-2 rounded-md px-2 py-2 transition-colors hover:bg-surface-1"
+                        >
+                          <div className="flex items-start justify-between gap-2">
                             <Link to={intakeUrl} className="min-w-0 flex-1 hover:text-primary">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
                                 {identifier ? (
-                                  <span className="text-xs text-text-400 rounded bg-surface-1 px-1 py-0.5 font-semibold">
+                                  <span className="text-text-400 rounded bg-surface-1 px-1 py-0.5 text-11 font-semibold">
                                     {identifier}
                                   </span>
                                 ) : null}
@@ -572,7 +622,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                                   {project?.name || link.forwarded_to_project}
                                 </p>
                               </div>
-                              <div className="mt-2 flex items-center gap-2">
+                              <div className="mt-1.5 flex items-center gap-1.5">
                                 <Badge variant={intakeMeta.variant} size="sm">
                                   {intakeMeta.label}
                                 </Badge>
@@ -590,7 +640,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                             <button
                               type="button"
                               onClick={() => handleUnlinkIntakeIssue(link.id)}
-                              className="text-text-300 hover:bg-red-500/10 hover:text-red-500 rounded p-0.5 transition-colors"
+                              className="text-text-300 hover:bg-red-500/10 hover:text-red-500 shrink-0 rounded p-0.5 opacity-0 transition-all group-hover:opacity-100"
                               title="Remove intake link"
                             >
                               <X className="size-3.5" />
@@ -604,28 +654,25 @@ const WorkspaceRequestDetailPage = observer(() => {
               </section>
 
               {/* Linked issues */}
-              <section className="rounded-xl border border-subtle bg-surface-1 p-4">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm tracking-wider text-text-400 font-semibold uppercase">Linked issues</h2>
-                    <p className="text-xs text-text-400 mt-1">Product work connected to this request.</p>
-                  </div>
+              <section className="p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-xs tracking-wider text-text-400 font-semibold uppercase">Linked issues</h2>
                   <Button variant="secondary" size="sm" onClick={() => setIsIssueModalOpen(true)}>
-                    <span className="flex items-center gap-2">
-                      <Plus className="size-4" />
+                    <span className="flex items-center gap-1.5">
+                      <Plus className="size-3.5" />
                       Add
                     </span>
                   </Button>
                 </div>
 
                 {linkedIssuesState.isLoading && linkedIssues.length === 0 ? (
-                  <div className="flex justify-center py-6">
-                    <div className="border-primary h-7 w-7 animate-spin rounded-full border-b-2" />
+                  <div className="flex justify-center py-4">
+                    <div className="border-primary h-6 w-6 animate-spin rounded-full border-b-2" />
                   </div>
                 ) : linkedIssues.length === 0 ? (
-                  <p className="text-sm text-text-400">No linked issues yet.</p>
+                  <p className="text-xs text-text-400">No linked issues yet.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-1">
                     {linkedIssues.map((requestIssue) => {
                       const issue = issueMap[requestIssue.issue];
                       const isUnavailable = unresolvedLinkedIssues.includes(requestIssue.issue);
@@ -644,9 +691,9 @@ const WorkspaceRequestDetailPage = observer(() => {
                       return (
                         <div
                           key={requestIssue.id}
-                          className="hover:border-primary/40 rounded-lg border border-subtle bg-surface-2 p-3 transition-colors"
+                          className="group -mx-2 rounded-md px-2 py-2 transition-colors hover:bg-surface-1"
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start justify-between gap-2">
                             <Link to={workItemLink || "#"} className="min-w-0 flex-1">
                               {issue && issue.project_id && projectIdentifier ? (
                                 <IssueIdentifier
@@ -662,26 +709,23 @@ const WorkspaceRequestDetailPage = observer(() => {
                                   {isUnavailable ? "Issue unavailable" : "Linked issue"}
                                 </Badge>
                               )}
-                              <p className="text-sm text-text-100 mt-2 truncate font-medium">
+                              <p className="text-sm text-text-100 mt-1 truncate font-medium">
                                 {issue?.name || requestIssue.issue}
                               </p>
-                              <p className="text-xs text-text-400 mt-1">
+                              <p className="text-text-400 mt-0.5 text-11">
                                 {isUnavailable
-                                  ? "This issue could not be loaded. It may have been removed or is no longer accessible."
-                                  : `Linked on ${new Date(requestIssue.created_at).toLocaleDateString()}`}
+                                  ? "This issue could not be loaded."
+                                  : `Linked ${new Date(requestIssue.created_at).toLocaleDateString()}`}
                               </p>
                             </Link>
-                            <div className="flex shrink-0 items-center gap-1">
-                              <Link2 className="text-text-300 mt-0.5 size-4" />
-                              <button
-                                type="button"
-                                onClick={() => handleUnlinkIssue(requestIssue.id)}
-                                className="text-text-300 hover:bg-red-500/10 hover:text-red-500 rounded p-0.5 transition-colors"
-                                title="Unlink issue"
-                              >
-                                <X className="size-3.5" />
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleUnlinkIssue(requestIssue.id)}
+                              className="text-text-300 hover:bg-red-500/10 hover:text-red-500 shrink-0 rounded p-0.5 opacity-0 transition-all group-hover:opacity-100"
+                              title="Unlink issue"
+                            >
+                              <X className="size-3.5" />
+                            </button>
                           </div>
                         </div>
                       );
@@ -761,7 +805,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                   value={forwardDescription}
                   onChange={(e) => setForwardDescription(e.target.value)}
                   placeholder="Additional context for the dev team…"
-                  className="text-sm text-text-100 focus:border-primary min-h-[80px] w-full resize-none rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
+                  className="text-sm text-text-100 focus:border-primary min-h-20 w-full resize-none rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
                 />
               </div>
             </div>

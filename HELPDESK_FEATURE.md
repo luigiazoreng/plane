@@ -243,6 +243,15 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] Hook `apps/web/core/hooks/use-helpdesk-sse.ts` usa `fetch()` com URL relativa (same-origin via tunnel Vite — cookies enviados, sem CORS), parse manual de linhas SSE, reconexão com backoff exponencial (2s → 30s) e Page Visibility API.
   - [x] Integrado nas páginas de listagem e detalhe do agente: `request.created` / `request.updated` → `fetchRequests`; `comment.created` / `request.updated` → `fetchRequestById` + `fetchRequestComments`.
 
+- [x] **Fase 14: Filtros + Display na tela inicial (paridade com Work Items)**
+  - [x] **Tipos:** `THelpdeskGroupBy`, `THelpdeskOrderBy`, `IHelpdeskRequestFilters`, `IHelpdeskDisplayFilters` adicionados a `packages/types/src/helpdesk.ts`.
+  - [x] **Backend (filtros server-side):** `HelpdeskRequestViewSet.get_queryset` ganhou filtros multi-valor por vírgula (`status`, `portal`, `form`, `source`, `assignees` → `__in`), `search_fields` (title/description/display_id/contact_email via `SearchFilter`), intervalo de data (`created_at__gte`/`created_at__lte` por `created_at__date`), `order_by` whitelisted (fallback `-created_at`) e `.distinct()` para a M2M de assignees.
+  - [x] **Serviço/store:** `getRequests(workspaceSlug, params?)` e `fetchRequests(workspaceSlug, params?)` repassam query params (guard `Array.isArray` mantido).
+  - [x] **Helper:** `apps/web/helpers/helpdesk/filters.ts` com `buildHelpdeskRequestParams` (filtros→query string) e `groupHelpdeskRequests` (agrupamento genérico para list/kanban: status/assignee/portal/form/source/none, com grupo "None" e M2M de assignee).
+  - [x] **Componentes (`core/components/helpdesk/filters/`):** `HelpdeskFiltersDropdown`, `HelpdeskDisplayDropdown`, `HelpdeskAppliedFilters` — reutilizam os helpers domain-agnostic dos work items (`FiltersDropdown`, `FilterHeader`, `FilterOption`).
+  - [x] **Página:** chips de status únicos substituídos por toolbar (busca debounced + Filters + Display) no `AppHeader`, barra de applied filters abaixo do header, e list/kanban com agrupamento genérico. Filtros/display persistem em `localStorage` (`helpdesk-filters:{slug}` / `helpdesk-display:{slug}`); busca não persiste. Drag-and-drop e "add request" inline ficam ativos só com `group_by === "status"`.
+  - [x] **Limpeza:** `toSorted()` (ES2023, incompatível com lib ES2022 do web) → `.slice().sort()` em `helpdesk.store.ts`.
+
 ---
 
 ## Pendências Técnicas

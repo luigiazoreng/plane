@@ -136,8 +136,8 @@ export class HelpdeskService extends APIService {
 
   // --- Requests Management ---
 
-  async getRequests(workspaceSlug: string): Promise<IHelpdeskRequest[]> {
-    return this.get(`${workspaceSlug}/helpdesk/requests/`).then((res) => res?.data);
+  async getRequests(workspaceSlug: string, params?: Record<string, string | string[]>): Promise<IHelpdeskRequest[]> {
+    return this.get(`${workspaceSlug}/helpdesk/requests/`, { params }).then((res) => res?.data);
   }
 
   async getRequestById(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequest> {
