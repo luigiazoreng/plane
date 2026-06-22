@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny
 from plane.app.views.base import BaseViewSet, BaseAPIView
 from plane.db.models.helpdesk import HelpdeskRequestComment, HelpdeskRequest, HelpdeskPortal, HelpdeskCustomer
 from plane.app.serializers.helpdesk import HelpdeskRequestCommentSerializer
+from plane.app.helpdesk.sse_broker import publish
 
 
 class HelpdeskRequestCommentViewSet(BaseViewSet):
@@ -35,6 +36,7 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
             HelpdeskRequest.objects.filter(id=hd_request.id).update(
                 first_responded_at=comment.created_at
             )
+        publish(self.kwargs.get("slug", ""), {"type": "comment.created", "request_id": str(hd_request.id)})
 
 
 class PublicHelpdeskCommentEndpoint(BaseAPIView):

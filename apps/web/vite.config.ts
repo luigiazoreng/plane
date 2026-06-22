@@ -33,6 +33,26 @@ export default defineConfig(() => ({
   },
   server: {
     host: "127.0.0.1",
+    proxy: {
+      // Proxy only the SSE endpoint so cookies are sent same-origin
+      "/api/workspaces": {
+        target: process.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on("proxyRes", (proxyRes, req) => {
+            if (req.url?.includes("/helpdesk/events/")) {
+              // Django runserver sets Connection: close on streaming responses
+              // because it doesn't know the Content-Length. Override it so
+              // the Vite proxy doesn't drop the client connection mid-stream.
+              proxyRes.headers["connection"] = "keep-alive";
+              proxyRes.headers["transfer-encoding"] = "chunked";
+              delete proxyRes.headers["content-length"];
+            }
+          });
+        },
+      },
+    },
   },
   // No SSR-specific overrides needed; alias resolves to ESM build
 }));

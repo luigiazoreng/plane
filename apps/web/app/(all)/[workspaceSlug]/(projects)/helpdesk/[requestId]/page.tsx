@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useHelpdeskSSE, type THelpdeskSSEEvent } from "@/hooks/use-helpdesk-sse";
 import { observer } from "mobx-react";
 import { Link, useParams } from "react-router";
 import type { TIntakeIssueStatus } from "@plane/types";
@@ -144,6 +145,12 @@ const WorkspaceRequestDetailPage = observer(() => {
       .map((link) => link.issue_id as string);
   }, [intakeLinks]);
 
+  useHelpdeskSSE(wSlug, (event: THelpdeskSSEEvent) => {
+    if (event.request_id !== rId) return;
+    if (event.type === "request.updated") helpdeskStore.fetchRequestById(wSlug, rId);
+    if (event.type === "comment.created") helpdeskStore.fetchRequestComments(wSlug, rId);
+  });
+
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     setSubmittingComment(true);
@@ -273,7 +280,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     {request.display_id && (
-                      <span className="shrink-0 font-mono text-11 text-tertiary">{request.display_id}</span>
+                      <span className="font-mono shrink-0 text-11 text-tertiary">{request.display_id}</span>
                     )}
                     <h1 className="text-sm text-text-100 truncate font-semibold">{request.title}</h1>
                     {request.status && statusMap[request.status] && (

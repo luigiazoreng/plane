@@ -10,6 +10,7 @@ from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from .form import get_customer_from_token
 from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, generate_ticket_display_id
+from plane.app.helpdesk.sse_broker import publish
 
 
 class HelpdeskRequestViewSet(BaseViewSet):
@@ -34,6 +35,7 @@ class HelpdeskRequestViewSet(BaseViewSet):
                 HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=timezone.now())
             elif new_status and not new_status.is_terminal:
                 HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=None)
+        publish(self.kwargs.get("slug", ""), {"type": "request.updated", "request_id": str(instance.id)})
         return response
 
     def perform_create(self, serializer):
@@ -56,6 +58,7 @@ class HelpdeskRequestViewSet(BaseViewSet):
                 HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(display_id=display_id)
                 helpdesk_request.display_id = display_id
         assign_helpdesk_request_automatically(helpdesk_request, request_payload=self.request.data)
+        publish(self.kwargs.get("slug", ""), {"type": "request.created", "request_id": str(helpdesk_request.id)})
 
 
 class PublicHelpdeskRequestEndpoint(BaseViewSet):
@@ -147,6 +150,7 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                     HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(display_id=display_id)
                     helpdesk_request.display_id = display_id
                 assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
+                publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
                 return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -158,5 +162,6 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                 customer=customer,
             )
             assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
+            publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
             return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useMemo, useState } from "react";
+import { useHelpdeskSSE, type THelpdeskSSEEvent } from "@/hooks/use-helpdesk-sse";
 import { observer } from "mobx-react";
 import { useNavigate, useParams } from "react-router";
 import { useLocalStorage } from "@plane/hooks";
@@ -98,7 +99,21 @@ const WorkspaceHelpdeskPage = observer(() => {
     helpdeskStore.fetchStatuses(wSlug);
     helpdeskStore.fetchPortals(wSlug);
     helpdeskStore.fetchRequests(wSlug);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        helpdeskStore.fetchRequests(wSlug);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [wSlug, helpdeskStore]);
+
+  useHelpdeskSSE(wSlug, (event: THelpdeskSSEEvent) => {
+    if (event.type === "request.created" || event.type === "request.updated") {
+      helpdeskStore.fetchRequests(wSlug);
+    }
+  });
 
   const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
   const requests = helpdeskStore.getWorkspaceRequests(wSlug);
@@ -398,9 +413,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                   onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
                 >
                   <div className="block w-full rounded-lg border border-subtle bg-layer-2 p-3 text-13 shadow-raised-100 outline-[0.5px] outline-transparent transition-all hover:border-strong hover:shadow-raised-200">
-                    {request.display_id && (
-                      <p className="mb-1 font-mono text-11 text-tertiary">{request.display_id}</p>
-                    )}
+                    {request.display_id && <p className="font-mono mb-1 text-11 text-tertiary">{request.display_id}</p>}
                     <div className="line-clamp-1 w-full text-body-sm-medium text-primary">{request.title}</div>
                     {request.description && (
                       <p className="mt-1 line-clamp-2 text-12 text-tertiary">{request.description}</p>
