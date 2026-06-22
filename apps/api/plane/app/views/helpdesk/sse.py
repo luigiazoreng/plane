@@ -1,9 +1,10 @@
 import asyncio
+import io
 import secrets
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.http import HttpResponse, StreamingHttpResponse
+from django.http import HttpResponse
 from django.views import View
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
@@ -11,6 +12,24 @@ from rest_framework.views import APIView
 from django_redis import get_redis_connection
 
 from plane.app.helpdesk import sse_broker
+
+
+def _build_request_user_sync(scope):
+    """Build a minimal Django request and resolve its user — fully sync, run in executor."""
+    from django.core.handlers.asgi import ASGIRequest
+    from importlib import import_module
+    from django.contrib.auth.middleware import get_user
+
+    body_file = io.BytesIO()
+    request = ASGIRequest(scope, body_file)
+
+    engine = import_module(settings.SESSION_ENGINE)
+    session_key = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
+    request.session = engine.SessionStore(session_key)
+
+    # get_user reads request.session and returns the User (or AnonymousUser)
+    request.user = get_user(request)
+    return request
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -74,37 +93,17 @@ class HelpdeskSSETokenView(APIView):
 
 
 class HelpdeskSSEView(View):
+    """
+    This view is registered in URLs but the actual SSE handling happens in
+    SSEMiddleware in asgi.py — that middleware intercepts /helpdesk/events/
+    before Django's request/response cycle, which cannot keep async generators
+    streaming. This class is a fallback only.
+    """
+
     async def get(self, request, slug):
-        # Auth runs sync (ORM) — Django wraps sync views in a thread by default,
-        # but we declared this as async so we call sync helpers via sync_to_async.
-        from asgiref.sync import sync_to_async
-
-        user = await sync_to_async(_resolve_user_sync)(request)
-        if not user:
-            return HttpResponse(status=401)
-
-        q = await sse_broker.subscribe(slug)
-
-        async def stream():
-            try:
-                while True:
-                    try:
-                        payload = await asyncio.wait_for(q.get(), timeout=20.0)
-                    except asyncio.TimeoutError:
-                        yield ": heartbeat\n\n"
-                        continue
-
-                    if payload is None:  # unsubscribe sentinel
-                        return
-
-                    yield f"data: {payload}\n\n"
-            except asyncio.CancelledError:
-                pass
-            finally:
-                await sse_broker.unsubscribe(slug, q)
-
-        response = StreamingHttpResponse(stream(), content_type="text/event-stream")
-        response["Cache-Control"] = "no-cache"
-        response["X-Accel-Buffering"] = "no"
-        _cors_headers(request, response)
-        return response
+        # Should never be reached when running under SSEMiddleware in asgi.py
+        return HttpResponse(
+            "SSE middleware not active — check asgi.py",
+            status=503,
+            content_type="text/plain",
+        )

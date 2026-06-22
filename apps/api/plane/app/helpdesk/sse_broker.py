@@ -10,11 +10,14 @@ messages out to all local queues.
 """
 import asyncio
 import json
+import logging
 import os
 import threading
 from collections import defaultdict
 
 import redis as _redis_lib
+
+logger = logging.getLogger("plane.helpdesk.sse")
 
 _redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/")
 
@@ -62,22 +65,20 @@ async def _get_lock() -> asyncio.Lock:
 async def _listener_task(slug: str):
     """Async task: subscribe to Redis channel, fan out to local queues."""
     loop = asyncio.get_running_loop()
-    # Run blocking redis pubsub in a thread so we don't block the event loop.
     queue: asyncio.Queue = asyncio.Queue()
+    stop_event = threading.Event()
 
     def _redis_thread():
+        # get_message(timeout=1.0) polls instead of blocking on listen() so the
+        # thread can observe stop_event and exit cleanly on reload/shutdown.
         r = _redis_lib.from_url(_redis_url, decode_responses=True)
         ps = r.pubsub(ignore_subscribe_messages=True)
         ps.subscribe(_channel(slug))
         try:
-            for msg in ps.listen():
-                if msg["type"] != "message":
-                    continue
-                payload = msg["data"]
-                loop.call_soon_threadsafe(queue.put_nowait, payload)
-                # Stop if no local subscribers remain
-                if not _subscribers.get(slug):
-                    break
+            while not stop_event.is_set():
+                msg = ps.get_message(timeout=1.0)
+                if msg and msg["type"] == "message":
+                    loop.call_soon_threadsafe(queue.put_nowait, msg["data"])
         finally:
             ps.unsubscribe(_channel(slug))
             r.close()
@@ -88,14 +89,15 @@ async def _listener_task(slug: str):
     try:
         while True:
             payload = await queue.get()
-            subs = list(_subscribers.get(slug, []))
-            for sub_q in subs:
+            for sub_q in list(_subscribers.get(slug, [])):
                 try:
                     sub_q.put_nowait(payload)
                 except asyncio.QueueFull:
-                    pass
+                    pass  # slow subscriber — drop
     except asyncio.CancelledError:
         pass
+    finally:
+        stop_event.set()
 
 
 async def subscribe(slug: str) -> "asyncio.Queue[str | None]":
@@ -124,6 +126,5 @@ def publish(slug: str, event: dict):
     payload = json.dumps(event)
     try:
         _get_pub().publish(_channel(slug), payload)
-        print(f"[SSE] published to '{slug}': {payload}", flush=True)
-    except Exception as exc:
-        print(f"[SSE] Redis publish error: {exc}", flush=True)
+    except Exception:
+        logger.exception("Redis publish error for slug=%s", slug)
