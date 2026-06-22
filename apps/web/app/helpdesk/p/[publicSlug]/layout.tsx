@@ -15,7 +15,7 @@ const PublicHelpdeskLayout = observer(() => {
   const { customerToken, customerData, logout } = publicHelpdeskStore;
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-1">
+    <div className="flex h-full flex-col overflow-y-auto bg-surface-1">
       {/* Minimal Header */}
       <header className="sticky top-0 z-10 border-b border-subtle bg-surface-1/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
