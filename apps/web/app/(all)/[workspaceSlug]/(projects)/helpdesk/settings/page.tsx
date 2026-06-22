@@ -449,6 +449,10 @@ const HelpdeskSettingsPage = observer(() => {
     });
   };
 
+  const handleReorderDropdownOptions = (nextOptions: { label: string; value: string }[]) => {
+    handleFormFieldChange({ options: nextOptions });
+  };
+
   const handleAddCascadeOption = () => {
     const options = draftField?.options ?? [];
     const nextIndex = options.length + 1;
@@ -476,6 +480,11 @@ const HelpdeskSettingsPage = observer(() => {
     const newMapping = { ...draftField?.parent_mapping };
     if (removedValue in newMapping) delete newMapping[removedValue];
     handleFormFieldChange({ options: newOptions, parent_mapping: newMapping });
+  };
+
+  // Reordering only changes option order; values stay the same so parent_mapping is untouched.
+  const handleReorderCascadeOptions = (nextOptions: { label: string; value: string }[]) => {
+    handleFormFieldChange({ options: nextOptions });
   };
 
   const handleCascadeMappingToggle = (parentValue: string, childValue: string, checked: boolean) => {
@@ -1339,39 +1348,47 @@ const HelpdeskSettingsPage = observer(() => {
                                       </button>
                                     </div>
                                     <div className="space-y-2">
-                                      {draftField.options.map((option, index) => (
-                                        <div
-                                          key={`${draftField.id}-${option.value || option.label}`}
-                                          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2"
-                                        >
-                                          <input
-                                            value={option.label}
-                                            onChange={(e) =>
-                                              handleDropdownOptionChange(index, { label: e.target.value })
-                                            }
-                                            placeholder="Label"
-                                            className="min-w-0 rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
-                                          />
-                                          <input
-                                            value={option.value}
-                                            onChange={(e) =>
-                                              handleDropdownOptionChange(index, {
-                                                value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
-                                              })
-                                            }
-                                            placeholder="value"
-                                            className="min-w-0 rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleRemoveDropdownOption(index)}
-                                            className="text-red-500 rounded-md px-2 text-12"
-                                            disabled={draftField.options.length <= 1}
-                                          >
-                                            Remove
-                                          </button>
-                                        </div>
-                                      ))}
+                                      <Sortable
+                                        data={draftField.options}
+                                        keyExtractor={(option) => `${option.value}|${option.label}`}
+                                        onChange={handleReorderDropdownOptions}
+                                        render={(option, index) => (
+                                          <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 pb-2">
+                                            <span
+                                              className="cursor-grab text-tertiary transition-colors hover:text-primary active:cursor-grabbing"
+                                              title="Drag to reorder"
+                                            >
+                                              <GripVertical className="size-4" />
+                                            </span>
+                                            <input
+                                              value={option.label}
+                                              onChange={(e) =>
+                                                handleDropdownOptionChange(index, { label: e.target.value })
+                                              }
+                                              placeholder="Label"
+                                              className="min-w-0 rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                            />
+                                            <input
+                                              value={option.value}
+                                              onChange={(e) =>
+                                                handleDropdownOptionChange(index, {
+                                                  value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                                                })
+                                              }
+                                              placeholder="value"
+                                              className="min-w-0 rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveDropdownOption(index)}
+                                              className="text-red-500 rounded-md px-2 text-12"
+                                              disabled={draftField.options.length <= 1}
+                                            >
+                                              Remove
+                                            </button>
+                                          </div>
+                                        )}
+                                      />
                                     </div>
                                   </div>
                                 ) : null}
@@ -1414,23 +1431,34 @@ const HelpdeskSettingsPage = observer(() => {
                                         </button>
                                       </div>
                                       <div className="space-y-1.5">
-                                        {draftField.options.map((opt, idx) => (
-                                          <div key={opt.value || opt.label} className="flex items-center gap-2">
-                                            <input
-                                              value={opt.label}
-                                              onChange={(e) => handleCascadeOptionLabelChange(idx, e.target.value)}
-                                              placeholder="Option label"
-                                              className="min-w-0 flex-1 rounded-md border border-subtle bg-layer-1 px-2 py-1.5 text-12 text-primary outline-none"
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => handleRemoveCascadeOption(idx)}
-                                              className="text-red-400 hover:text-red-500 shrink-0 rounded p-1"
-                                            >
-                                              <X className="size-3" />
-                                            </button>
-                                          </div>
-                                        ))}
+                                        <Sortable
+                                          data={draftField.options}
+                                          keyExtractor={(opt) => `${opt.value}|${opt.label}`}
+                                          onChange={handleReorderCascadeOptions}
+                                          render={(opt, idx) => (
+                                            <div className="flex items-center gap-2 pb-1.5">
+                                              <span
+                                                className="cursor-grab text-tertiary transition-colors hover:text-primary active:cursor-grabbing"
+                                                title="Drag to reorder"
+                                              >
+                                                <GripVertical className="size-4" />
+                                              </span>
+                                              <input
+                                                value={opt.label}
+                                                onChange={(e) => handleCascadeOptionLabelChange(idx, e.target.value)}
+                                                placeholder="Option label"
+                                                className="min-w-0 flex-1 rounded-md border border-subtle bg-layer-1 px-2 py-1.5 text-12 text-primary outline-none"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => handleRemoveCascadeOption(idx)}
+                                                className="text-red-400 hover:text-red-500 shrink-0 rounded p-1"
+                                              >
+                                                <X className="size-3" />
+                                              </button>
+                                            </div>
+                                          )}
+                                        />
                                         {draftField.options.length === 0 && (
                                           <p className="text-11 text-tertiary">No options yet. Add some above.</p>
                                         )}
