@@ -99,6 +99,7 @@ export interface IHelpdeskStore {
     requestId: string,
     data: Partial<IHelpdeskRequestIssue>
   ) => Promise<IHelpdeskRequestIssue>;
+  deleteRequest: (workspaceSlug: string, requestId: string) => Promise<void>;
   deleteRequestIssue: (workspaceSlug: string, requestIssueId: string, requestId: string) => Promise<void>;
   hydrateLinkedIssues: (workspaceSlug: string, requestId: string) => Promise<void>;
 

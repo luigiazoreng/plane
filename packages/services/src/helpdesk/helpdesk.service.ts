@@ -156,6 +156,10 @@ export class HelpdeskService extends APIService {
     return this.patch(`${workspaceSlug}/helpdesk/requests/${requestId}/`, data).then((res) => res?.data);
   }
 
+  async deleteRequest(workspaceSlug: string, requestId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/requests/${requestId}/`).then((res) => res?.data);
+  }
+
   // --- Comments Management ---
 
   async getRequestComments(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestComment[]> {
