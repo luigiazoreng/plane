@@ -117,8 +117,15 @@ export interface IHelpdeskStore {
 
   // member actions
   fetchMembers: (workspaceSlug: string) => Promise<IHelpdeskMember[]>;
-  addMembers: (workspaceSlug: string, members: { member_id: string; role: EHelpdeskMemberRole }[]) => Promise<IHelpdeskMember[]>;
-  updateMember: (workspaceSlug: string, memberId: string, data: { role: EHelpdeskMemberRole }) => Promise<IHelpdeskMember>;
+  addMembers: (
+    workspaceSlug: string,
+    members: { member_id: string; role: EHelpdeskMemberRole }[]
+  ) => Promise<IHelpdeskMember[]>;
+  updateMember: (
+    workspaceSlug: string,
+    memberId: string,
+    data: { role: EHelpdeskMemberRole }
+  ) => Promise<IHelpdeskMember>;
   removeMember: (workspaceSlug: string, memberId: string) => Promise<void>;
 
   // computed getters
@@ -276,11 +283,7 @@ export class HelpdeskStore implements IHelpdeskStore {
     const response = await this.helpdeskService.createStatus(workspaceSlug, data);
     runInAction(() => {
       const current = this.statuses[workspaceSlug] || [];
-      set(
-        this.statuses,
-        [workspaceSlug],
-        this.sortBySequence([...current, response])
-      );
+      set(this.statuses, [workspaceSlug], this.sortBySequence([...current, response]));
     });
     return response;
   };
@@ -423,11 +426,7 @@ export class HelpdeskStore implements IHelpdeskStore {
     runInAction(() => {
       const portalId = response.portal;
       const current = this.forms[portalId] || [];
-      set(
-        this.forms,
-        [portalId],
-        this.sortBySequence([...current, response])
-      );
+      set(this.forms, [portalId], this.sortBySequence([...current, response]));
       set(this.formFields, [response.id], response.fields_detail || []);
     });
     return response;
@@ -438,11 +437,7 @@ export class HelpdeskStore implements IHelpdeskStore {
     runInAction(() => {
       const portalId = response.portal;
       const current = this.forms[portalId] || [];
-      set(
-        this.forms,
-        [portalId],
-        this.sortBySequence(current.map((form) => (form.id === formId ? response : form)))
-      );
+      set(this.forms, [portalId], this.sortBySequence(current.map((form) => (form.id === formId ? response : form))));
       set(this.formFields, [response.id], response.fields_detail || this.formFields[response.id] || []);
     });
     return response;
@@ -527,11 +522,7 @@ export class HelpdeskStore implements IHelpdeskStore {
     const response = await this.helpdeskService.createFormField(workspaceSlug, data);
     runInAction(() => {
       const current = this.formFields[response.form] || [];
-      set(
-        this.formFields,
-        [response.form],
-        this.sortBySequence([...current, response])
-      );
+      set(this.formFields, [response.form], this.sortBySequence([...current, response]));
     });
     return response;
   };

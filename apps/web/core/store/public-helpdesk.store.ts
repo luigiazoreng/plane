@@ -18,6 +18,7 @@ export class PublicHelpdeskStore {
   currentForm: IHelpdeskForm | null = null;
   myRequests: IHelpdeskRequest[] = [];
 
+  private hasHydratedCustomerSession = false;
   private publicHelpdeskService: PublicHelpdeskService;
 
   constructor() {
@@ -31,6 +32,7 @@ export class PublicHelpdeskStore {
 
       setCustomerToken: action,
       setCustomerData: action,
+      hydrateCustomerSession: action,
       logout: action,
 
       fetchPublicPortal: action,
@@ -44,28 +46,31 @@ export class PublicHelpdeskStore {
     });
 
     this.publicHelpdeskService = new PublicHelpdeskService();
+  }
 
-    // Load token from local storage if exists
-    if (typeof window !== "undefined") {
-      const storedToken = localStorage.getItem("helpdesk_customer_token");
-      if (storedToken && storedToken !== "null" && storedToken !== "undefined") {
-        try {
-          const [, payloadB64] = storedToken.split(".");
-          const payload = JSON.parse(atob(payloadB64)) as { exp?: number };
-          if (payload.exp && payload.exp * 1000 > Date.now()) {
-            this.customerToken = storedToken;
-          } else {
-            localStorage.removeItem("helpdesk_customer_token");
-          }
-        } catch {
-          localStorage.removeItem("helpdesk_customer_token");
-        }
+  hydrateCustomerSession() {
+    if (this.hasHydratedCustomerSession || typeof window === "undefined") return;
+
+    this.hasHydratedCustomerSession = true;
+    const storedToken = localStorage.getItem("helpdesk_customer_token");
+    if (!storedToken || storedToken === "null" || storedToken === "undefined") return;
+
+    try {
+      const [, payloadB64] = storedToken.split(".");
+      const payload = JSON.parse(atob(payloadB64)) as { exp?: number };
+      if (payload.exp && payload.exp * 1000 > Date.now()) {
+        this.customerToken = storedToken;
+      } else {
+        localStorage.removeItem("helpdesk_customer_token");
       }
+    } catch {
+      localStorage.removeItem("helpdesk_customer_token");
     }
   }
 
   setCustomerToken(token: string | null) {
     this.customerToken = token;
+    this.hasHydratedCustomerSession = true;
     if (typeof window !== "undefined") {
       if (token) {
         localStorage.setItem("helpdesk_customer_token", token);
@@ -96,6 +101,7 @@ export class PublicHelpdeskStore {
   }
 
   async fetchPortalForms(publicSlug: string) {
+    this.hydrateCustomerSession();
     const forms = await this.publicHelpdeskService.getPublicForms(publicSlug, this.customerToken || undefined);
     runInAction(() => {
       this.portalForms = forms;
@@ -104,6 +110,7 @@ export class PublicHelpdeskStore {
   }
 
   async fetchPortalForm(publicSlug: string, formSlug: string) {
+    this.hydrateCustomerSession();
     const form = await this.publicHelpdeskService.getPublicForm(publicSlug, formSlug, this.customerToken || undefined);
     runInAction(() => {
       this.currentForm = form;
@@ -130,6 +137,7 @@ export class PublicHelpdeskStore {
   }
 
   async fetchMyRequests(publicSlug: string) {
+    this.hydrateCustomerSession();
     if (!this.customerToken) return [];
 
     const requests = await this.publicHelpdeskService.getPublicRequests(publicSlug, this.customerToken);
@@ -140,6 +148,7 @@ export class PublicHelpdeskStore {
   }
 
   async createPublicRequest(publicSlug: string, data: Partial<IHelpdeskRequest>) {
+    this.hydrateCustomerSession();
     const request = await this.publicHelpdeskService.createPublicRequest(
       publicSlug,
       data,
@@ -154,6 +163,7 @@ export class PublicHelpdeskStore {
   }
 
   async submitPublicForm(publicSlug: string, formSlug: string, data: Record<string, unknown>) {
+    this.hydrateCustomerSession();
     const request = await this.publicHelpdeskService.submitPublicForm(
       publicSlug,
       formSlug,
