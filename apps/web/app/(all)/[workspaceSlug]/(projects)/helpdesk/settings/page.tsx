@@ -430,7 +430,11 @@ const HelpdeskSettingsPage = observer(() => {
       }
     }
     setActivationErrors([]);
-    helpdeskStore.setFormActive(wSlug, form.id, selectedPortal!.id, newValue);
+    try {
+      await helpdeskStore.setFormActive(wSlug, form.id, selectedPortal!.id, newValue);
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update form status" });
+    }
   };
 
   const handleDropdownOptionChange = (index: number, patch: Partial<{ label: string; value: string }>) => {
@@ -1125,28 +1129,21 @@ const HelpdeskSettingsPage = observer(() => {
                               </div>
                             </button>
                             <div className="mt-3 space-y-2">
-                              <input
-                                value={form.name}
-                                onChange={(e) => helpdeskStore.updateForm(wSlug, form.id, { name: e.target.value })}
-                                className="w-full rounded-md border border-subtle bg-surface-1 px-2 py-1.5 text-12 text-primary outline-none"
-                              />
-                              <select
-                                value={form.visibility}
-                                onChange={(e) =>
-                                  helpdeskStore.updateForm(wSlug, form.id, {
-                                    visibility: e.target.value as "public" | "private",
-                                  })
-                                }
-                                className="w-full rounded-md border border-subtle bg-surface-1 px-2 py-1.5 text-12 text-primary outline-none"
-                              >
-                                <option value="public">Public</option>
-                                <option value="private">Private</option>
-                              </select>
+                              <div className="rounded-md border border-subtle bg-surface-1 px-2 py-1.5">
+                                <p className="truncate text-12 font-medium text-primary">{form.name}</p>
+                                <p className="mt-0.5 text-11 text-tertiary">/{form.slug}</p>
+                              </div>
+                              <div className="flex items-center justify-between gap-3 text-12 text-secondary">
+                                <span>Visibility</span>
+                                <Badge size="sm" variant={form.visibility === "private" ? "warning" : "success"}>
+                                  {form.visibility}
+                                </Badge>
+                              </div>
                               <div className="flex items-center justify-between gap-3 text-12 text-secondary">
                                 <span>Active</span>
                                 <Switch
                                   value={form.is_active}
-                                  onChange={() => handleToggleFormActive(form, !form.is_active)}
+                                  onChange={() => void handleToggleFormActive(form, !form.is_active)}
                                 />
                               </div>
                               {activationErrors.length > 0 && selectedForm?.id === form.id && (
@@ -1282,6 +1279,46 @@ const HelpdeskSettingsPage = observer(() => {
                               placeholder="Form name"
                               className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                             />
+                            <div className="space-y-1.5">
+                              <label htmlFor="form-slug" className="text-12 font-medium text-secondary">
+                                Form slug / endpoint
+                              </label>
+                              <input
+                                id="form-slug"
+                                value={draftForm?.slug ?? ""}
+                                onChange={(e) =>
+                                  handleFormSettingsChange({
+                                    slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                                  })
+                                }
+                                placeholder="billing-support"
+                                className="font-mono w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                              />
+                              <p className="text-11 text-tertiary">
+                                Public URL:{" "}
+                                {selectedPortal?.public_slug
+                                  ? `/helpdesk/p/${selectedPortal.public_slug}/forms/${draftForm?.slug ?? selectedForm.slug}`
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label htmlFor="form-visibility" className="text-12 font-medium text-secondary">
+                                Visibility
+                              </label>
+                              <select
+                                id="form-visibility"
+                                value={draftForm?.visibility ?? "public"}
+                                onChange={(e) =>
+                                  handleFormSettingsChange({
+                                    visibility: e.target.value as "public" | "private",
+                                  })
+                                }
+                                className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                              >
+                                <option value="public">Public</option>
+                                <option value="private">Private</option>
+                              </select>
+                            </div>
                             <textarea
                               value={draftForm?.description ?? ""}
                               onChange={(e) => handleFormSettingsChange({ description: e.target.value })}
