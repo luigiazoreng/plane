@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import type { ReactNode, RefObject } from "react";
 import { useHelpdeskSSE, type THelpdeskSSEEvent } from "@/hooks/use-helpdesk-sse";
 import { observer } from "mobx-react";
@@ -126,6 +126,7 @@ const WorkspaceHelpdeskPage = observer(() => {
   const [newRequestTitle, setNewRequestTitle] = useState("");
   const kanbanAddInputRef = useRef<HTMLInputElement>(null);
   const listAddInputRef = useRef<HTMLInputElement>(null);
+  const listSentinelRef = useRef<HTMLDivElement>(null);
 
   const wSlug = workspaceSlug?.toString() || "";
   const layout = storedLayout || "list";
@@ -203,6 +204,13 @@ const WorkspaceHelpdeskPage = observer(() => {
     [groups]
   );
 
+  // Pagination state — declared before the useMemos that depend on hasMoreRequests
+  const loadMoreState = helpdeskStore.getCollectionState(`requests-more:${wSlug}`);
+  const isLoadingMore = loadMoreState.isLoading;
+  const pagination = helpdeskStore.requestPagination[wSlug];
+  const totalRequests = pagination?.totalCount ?? requests.length;
+  const hasMoreRequests = pagination?.nextPageResults ?? false;
+
   const requestItems = useMemo(() => {
     const map = requests.reduce(
       (acc, request) => {
@@ -215,27 +223,73 @@ const WorkspaceHelpdeskPage = observer(() => {
       const sentinelId = `__add__:${addingToGroup}`;
       map[sentinelId] = { id: sentinelId, status: addingToGroup } as unknown as THelpdeskKanbanItem;
     }
+    for (const g of groups) {
+      let showSentinel: boolean;
+      if (groupByStatus) {
+        const statusPag = helpdeskStore.getStatusPagination(wSlug, g.id);
+        // cold start (undefined) = first per-column fetch hasn't run yet → show sentinel
+        showSentinel = statusPag === undefined ? true : statusPag.nextPageResults;
+      } else {
+        showSentinel = hasMoreRequests;
+      }
+      if (showSentinel) {
+        const sentinelId = `__sentinel__:${g.id}`;
+        map[sentinelId] = { id: sentinelId, status: g.id } as unknown as THelpdeskKanbanItem;
+      }
+    }
     return map;
-  }, [requests, addingToGroup]);
+  }, [requests, addingToGroup, hasMoreRequests, groups, groupByStatus, helpdeskStore, wSlug]);
 
   const requestGroups = useMemo(() => {
     const next: Record<string, string[]> = {};
     for (const g of groups) {
       const ids = [...(grouped[g.id] || [])];
       if (groupByStatus && addingToGroup === g.id) ids.push(`__add__:${g.id}`);
+      let showSentinel: boolean;
+      if (groupByStatus) {
+        const statusPag = helpdeskStore.getStatusPagination(wSlug, g.id);
+        showSentinel = statusPag === undefined ? true : statusPag.nextPageResults;
+      } else {
+        showSentinel = hasMoreRequests;
+      }
+      if (showSentinel) ids.push(`__sentinel__:${g.id}`);
       next[g.id] = ids;
     }
     return next;
-  }, [groups, grouped, groupByStatus, addingToGroup]);
+  }, [groups, grouped, groupByStatus, addingToGroup, hasMoreRequests, helpdeskStore, wSlug]);
 
   const statusesState = helpdeskStore.getCollectionState(`statuses:${wSlug}`);
   const requestsState = helpdeskStore.getCollectionState(`requests:${wSlug}`);
   const isLoading = statusesState.isLoading || requestsState.isLoading;
-  const totalRequests = requests.length;
+
+  const fetchMore = useCallback(() => {
+    if (!isLoadingMore && hasMoreRequests) {
+      helpdeskStore.fetchMoreRequests(wSlug, queryParams);
+    }
+  }, [isLoadingMore, hasMoreRequests, helpdeskStore, wSlug, queryParams]);
+
+  const isLoadingMoreForStatus = useCallback(
+    (statusId: string) => helpdeskStore.getCollectionState(`requests-more:${wSlug}:${statusId}`).isLoading,
+    [helpdeskStore, wSlug]
+  );
+
+  // Infinite scroll — list view: observe the sentinel at the bottom of the scroll container
+  useEffect(() => {
+    const sentinel = listSentinelRef.current;
+    if (!sentinel || !hasMoreRequests) return;
+    const listObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) fetchMore();
+      },
+      { rootMargin: "200px" }
+    );
+    listObserver.observe(sentinel);
+    return () => listObserver.disconnect();
+  }, [hasMoreRequests, fetchMore]);
   const activeRequests = requests.filter((request) =>
     isHelpdeskRequestActive(request, statuses, portalMap[request.portal]?.auto_assignment_config)
   ).length;
-  const resolvedRequests = totalRequests - activeRequests;
+  const resolvedRequests = requests.length - activeRequests;
 
   useEffect(() => {
     if (addingToGroup) {
@@ -303,7 +357,9 @@ const WorkspaceHelpdeskPage = observer(() => {
               <span className="text-sm text-text-100 font-semibold">Helpdesk</span>
               <div className="hidden items-center gap-1.5 md:flex">
                 <span className="text-13 text-tertiary">·</span>
-                <span className="rounded-md bg-layer-1 px-2 py-0.5 text-12 text-secondary">{totalRequests} total</span>
+                <span className="rounded-md bg-layer-1 px-2 py-0.5 text-12 text-secondary">
+                  {requests.length < totalRequests ? `${requests.length} / ${totalRequests}` : `${totalRequests}`} total
+                </span>
                 <span className="bg-orange-500/10 text-orange-500 rounded-md px-2 py-0.5 text-12">
                   {activeRequests} active
                 </span>
@@ -417,100 +473,119 @@ const WorkspaceHelpdeskPage = observer(() => {
             </button>
           </div>
         ) : layout === "kanban" ? (
-          <BaseKanbanLayout<THelpdeskKanbanItem>
-            items={requestItems}
-            groups={kanbanGroups}
-            groupedItemIds={requestGroups}
-            enableDragDrop={groupByStatus}
-            onDrop={handleStatusDrop}
-            renderGroupHeader={({ group, itemCount }) => {
-              const statusObj = statusMap[group.id];
-              const realCount = itemCount - (groupByStatus && addingToGroup === group.id ? 1 : 0);
-              return (
-                <div className="relative flex w-full flex-row items-center gap-1 py-1.5">
-                  <div
-                    className="flex size-5 shrink-0 items-center justify-center rounded-xs"
-                    style={statusObj ? { backgroundColor: `${statusObj.color}1a` } : undefined}
-                  >
-                    {statusObj ? (
-                      <StatusDot color={statusObj.color} className="h-2 w-2" />
-                    ) : (
-                      <StatusDot color="#9ca3af" className="h-2 w-2" />
-                    )}
-                  </div>
-                  <div className="flex w-full flex-row items-baseline gap-1 overflow-hidden">
-                    <span className="line-clamp-1 inline-block truncate font-medium text-primary">{group.name}</span>
-                    <span className="shrink-0 pl-2 text-13 font-medium text-tertiary">{realCount}</span>
-                  </div>
-                  {groupByStatus && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddingToGroup(group.id);
-                        setNewRequestTitle("");
-                      }}
-                      className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-layer-transparent transition-all hover:bg-layer-transparent-hover"
-                      title="Add request"
-                    >
-                      <span className="text-xs leading-none font-semibold text-secondary">+</span>
-                    </button>
-                  )}
-                </div>
-              );
-            }}
-            renderItem={(request) => {
-              if (request.id.startsWith("__add__:")) {
-                const statusId = request.status as string;
+          <div className="flex h-full flex-col overflow-hidden">
+            <BaseKanbanLayout<THelpdeskKanbanItem>
+              items={requestItems}
+              groups={kanbanGroups}
+              groupedItemIds={requestGroups}
+              enableDragDrop={groupByStatus}
+              onDrop={handleStatusDrop}
+              renderGroupHeader={({ group, itemCount }) => {
+                const statusObj = statusMap[group.id];
+                const statusPag = groupByStatus ? helpdeskStore.getStatusPagination(wSlug, group.id) : undefined;
+                const groupHasMore = groupByStatus
+                  ? statusPag === undefined || statusPag.nextPageResults
+                  : hasMoreRequests;
+                const realCount =
+                  itemCount - (groupByStatus && addingToGroup === group.id ? 1 : 0) - (groupHasMore ? 1 : 0);
                 return (
-                  <div className="rounded-lg border border-accent-strong bg-layer-2 p-2 shadow-raised-100">
-                    <input
-                      ref={kanbanAddInputRef}
-                      value={newRequestTitle}
-                      onChange={(e) => setNewRequestTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddRequest(statusId);
-                        if (e.key === "Escape") {
-                          setAddingToGroup(null);
-                          setNewRequestTitle("");
-                        }
-                      }}
-                      placeholder="Request title..."
-                      className="w-full bg-transparent text-13 font-medium text-primary outline-none placeholder:text-tertiary"
-                    />
-                    <div className="mt-2 flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleAddRequest(statusId)}
-                        disabled={!newRequestTitle.trim() || !defaultPortalId}
-                        className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
-                      >
-                        Add
-                      </button>
+                  <div className="relative flex w-full flex-row items-center gap-1 py-1.5">
+                    <div
+                      className="flex size-5 shrink-0 items-center justify-center rounded-xs"
+                      style={statusObj ? { backgroundColor: `${statusObj.color}1a` } : undefined}
+                    >
+                      {statusObj ? (
+                        <StatusDot color={statusObj.color} className="h-2 w-2" />
+                      ) : (
+                        <StatusDot color="#9ca3af" className="h-2 w-2" />
+                      )}
+                    </div>
+                    <div className="flex w-full flex-row items-baseline gap-1 overflow-hidden">
+                      <span className="line-clamp-1 inline-block truncate font-medium text-primary">{group.name}</span>
+                      <span className="shrink-0 pl-2 text-13 font-medium text-tertiary">{realCount}</span>
+                    </div>
+                    {groupByStatus && (
                       <button
                         type="button"
                         onClick={() => {
-                          setAddingToGroup(null);
+                          setAddingToGroup(group.id);
                           setNewRequestTitle("");
                         }}
-                        className="rounded px-2 py-0.5 text-12 text-secondary transition-colors hover:bg-layer-transparent-hover"
+                        className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-layer-transparent transition-all hover:bg-layer-transparent-hover"
+                        title="Add request"
                       >
-                        Cancel
+                        <span className="text-xs leading-none font-semibold text-secondary">+</span>
                       </button>
-                      {!defaultPortalId && <span className="text-red-400 text-11">No portal configured</span>}
-                    </div>
+                    )}
                   </div>
                 );
-              }
-              return (
-                <HelpdeskKanbanRequestCard
-                  request={request}
-                  workspaceSlug={wSlug}
-                  helpdeskStore={helpdeskStore}
-                  navigate={navigate}
-                />
-              );
-            }}
-          />
+              }}
+              renderItem={(request, groupId) => {
+                if (request.id.startsWith("__sentinel__:")) {
+                  if (groupByStatus && groupId) {
+                    const statusId = groupId;
+                    return (
+                      <KanbanColumnSentinel
+                        isLoadingMore={isLoadingMoreForStatus(statusId)}
+                        onVisible={() => helpdeskStore.fetchMoreRequestsForStatus(wSlug, statusId, queryParams)}
+                      />
+                    );
+                  }
+                  return <KanbanColumnSentinel isLoadingMore={isLoadingMore} onVisible={fetchMore} />;
+                }
+                if (request.id.startsWith("__add__:")) {
+                  const statusId = request.status as string;
+                  return (
+                    <div className="rounded-lg border border-accent-strong bg-layer-2 p-2 shadow-raised-100">
+                      <input
+                        ref={kanbanAddInputRef}
+                        value={newRequestTitle}
+                        onChange={(e) => setNewRequestTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAddRequest(statusId);
+                          if (e.key === "Escape") {
+                            setAddingToGroup(null);
+                            setNewRequestTitle("");
+                          }
+                        }}
+                        placeholder="Request title..."
+                        className="w-full bg-transparent text-13 font-medium text-primary outline-none placeholder:text-tertiary"
+                      />
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleAddRequest(statusId)}
+                          disabled={!newRequestTitle.trim() || !defaultPortalId}
+                          className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                        >
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAddingToGroup(null);
+                            setNewRequestTitle("");
+                          }}
+                          className="rounded px-2 py-0.5 text-12 text-secondary transition-colors hover:bg-layer-transparent-hover"
+                        >
+                          Cancel
+                        </button>
+                        {!defaultPortalId && <span className="text-red-400 text-11">No portal configured</span>}
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <HelpdeskKanbanRequestCard
+                    request={request}
+                    workspaceSlug={wSlug}
+                    helpdeskStore={helpdeskStore}
+                    navigate={navigate}
+                  />
+                );
+              }}
+            />
+          </div>
         ) : (
           /* List view — grouped */
           <div className="flex h-full flex-col overflow-hidden">
@@ -694,6 +769,15 @@ const WorkspaceHelpdeskPage = observer(() => {
                   New request
                 </button>
               )}
+
+              {/* Infinite scroll sentinel — list */}
+              <div ref={listSentinelRef} className="px-4 py-1">
+                {isLoadingMore && (
+                  <div className="flex items-center justify-center py-2">
+                    <div className="size-4 animate-spin rounded-full border-b-2 border-accent-strong" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -846,6 +930,31 @@ function HelpdeskRequestContextMenu({
         />
       )}
     </>
+  );
+}
+
+function KanbanColumnSentinel({ isLoadingMore, onVisible }: { isLoadingMore: boolean; onVisible: () => void }) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const onVisibleRef = useRef(onVisible);
+  onVisibleRef.current = onVisible;
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const columnObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onVisibleRef.current();
+      },
+      { rootMargin: "100px" }
+    );
+    columnObserver.observe(el);
+    return () => columnObserver.disconnect();
+  }, []); // stable — observer created once per mount
+
+  return (
+    <div ref={sentinelRef} className="flex h-6 items-center justify-center">
+      {isLoadingMore && <div className="size-3.5 animate-spin rounded-full border-b-2 border-accent-strong" />}
+    </div>
   );
 }
 

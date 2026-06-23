@@ -319,3 +319,15 @@ export interface IHelpdeskCustomer {
   created_at: string;
   updated_at: string;
 }
+
+export interface IHelpdeskPaginatedResponse {
+  results: IHelpdeskRequest[];
+  next_cursor: string | null;
+  prev_cursor: string | null;
+  next_page_results: boolean;
+  prev_page_results: boolean;
+  total_count: number;
+  total_results: number;
+  count: number;
+  total_pages: number;
+}

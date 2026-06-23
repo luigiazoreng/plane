@@ -147,6 +147,15 @@ class HelpdeskFormFieldSerializer(BaseSerializer):
         return attrs
 
 
+class HelpdeskFormLiteSerializer(BaseSerializer):
+    """Minimal form representation used in list-level ticket serialization (no fields_detail)."""
+
+    class Meta:
+        model = HelpdeskForm
+        fields = ["id", "name", "slug", "description", "visibility", "is_active", "ticket_id_pattern", "portal"]
+        read_only_fields = fields
+
+
 class HelpdeskFormSerializer(BaseSerializer):
     fields_detail = HelpdeskFormFieldSerializer(source="fields", many=True, read_only=True)
 
@@ -158,7 +167,9 @@ class HelpdeskFormSerializer(BaseSerializer):
 
 class HelpdeskRequestSerializer(BaseSerializer):
     status_detail = HelpdeskStatusSerializer(source="status", read_only=True)
-    form_detail = HelpdeskFormSerializer(source="form", read_only=True)
+    # Use the lite serializer (no fields_detail) — avoids serializing all form
+    # fields for every ticket in the list response.
+    form_detail = HelpdeskFormLiteSerializer(source="form", read_only=True)
     # `assignees` is an M2M with a custom through model, so DRF treats it as
     # read-only. Declare it explicitly to make it writable and sync the through
     # table manually in create()/update().
@@ -208,14 +219,19 @@ class HelpdeskRequestSerializer(BaseSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # serialize assignees as a list of user IDs, reading active through-rows
-        # only (the M2M relation does not filter soft-deleted links)
-        data["assignees"] = [
-            str(uid)
-            for uid in HelpdeskRequestAssignee.objects.filter(
-                request=instance, deleted_at__isnull=True
-            ).values_list("assignee_id", flat=True)
-        ]
+        # Use the prefetched through-rows when available (set by get_queryset via
+        # Prefetch(to_attr="_prefetched_assignees")); fall back to a live query
+        # for single-object retrieves (retrieve, create, update).
+        prefetched = getattr(instance, "_prefetched_assignees", None)
+        if prefetched is not None:
+            data["assignees"] = [str(a.assignee_id) for a in prefetched]
+        else:
+            data["assignees"] = [
+                str(uid)
+                for uid in HelpdeskRequestAssignee.objects.filter(
+                    request=instance, deleted_at__isnull=True
+                ).values_list("assignee_id", flat=True)
+            ]
         return data
 
 

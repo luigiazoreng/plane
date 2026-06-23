@@ -15,6 +15,7 @@ import type {
   IHelpdeskFormField,
   IHelpdeskLinkedIssueLookupResult,
   IHelpdeskMember,
+  IHelpdeskPaginatedResponse,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -79,8 +80,22 @@ export interface IHelpdeskStore {
     items: { id: string; sequence: number }[]
   ) => Promise<void>;
 
+  // pagination state (per workspaceSlug)
+  requestPagination: Record<string, { nextCursor: string | null; nextPageResults: boolean; totalCount: number }>;
+  // pagination state per (workspaceSlug, statusId) — used by kanban per-column infinite scroll
+  requestPaginationByStatus: Record<
+    string,
+    Record<string, { nextCursor: string | null; nextPageResults: boolean; totalCount: number }>
+  >;
+
   // request actions
   fetchRequests: (workspaceSlug: string, params?: Record<string, string | string[]>) => Promise<IHelpdeskRequest[]>;
+  fetchMoreRequests: (workspaceSlug: string, params?: Record<string, string | string[]>) => Promise<IHelpdeskRequest[]>;
+  fetchMoreRequestsForStatus: (
+    workspaceSlug: string,
+    statusId: string,
+    params?: Record<string, string | string[]>
+  ) => Promise<IHelpdeskRequest[]>;
   fetchRequestById: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequest>;
   createRequest: (workspaceSlug: string, data: Partial<IHelpdeskRequest>) => Promise<IHelpdeskRequest>;
   updateRequest: (
@@ -145,6 +160,10 @@ export interface IHelpdeskStore {
   getUnresolvedLinkedIssues: (requestId: string) => string[];
   getRequestsGroupedByStatus: (workspaceSlug: string) => Record<string, IHelpdeskRequest[]>;
   getCollectionState: (key: string) => { isLoading: boolean; error: string | null };
+  getStatusPagination: (
+    workspaceSlug: string,
+    statusId: string
+  ) => { nextCursor: string | null; nextPageResults: boolean; totalCount: number } | undefined;
   getWorkspaceMembers: (workspaceSlug: string) => IHelpdeskMember[];
   // customer actions
   fetchCustomers: (workspaceSlug: string) => Promise<IHelpdeskCustomer[]>;
@@ -163,6 +182,11 @@ export class HelpdeskStore implements IHelpdeskStore {
   forms: Record<string, IHelpdeskForm[]> = {};
   formFields: Record<string, IHelpdeskFormField[]> = {};
   requests: Record<string, IHelpdeskRequest[]> = {};
+  requestPagination: Record<string, { nextCursor: string | null; nextPageResults: boolean; totalCount: number }> = {};
+  requestPaginationByStatus: Record<
+    string,
+    Record<string, { nextCursor: string | null; nextPageResults: boolean; totalCount: number }>
+  > = {};
   comments: Record<string, IHelpdeskRequestComment[]> = {};
   requestIssues: Record<string, IHelpdeskRequestIssue[]> = {};
   requestIntakeIssues: Record<string, IHelpdeskRequestIntakeIssue[]> = {};
@@ -183,6 +207,8 @@ export class HelpdeskStore implements IHelpdeskStore {
       forms: observable,
       formFields: observable,
       requests: observable,
+      requestPagination: observable,
+      requestPaginationByStatus: observable,
       comments: observable,
       requestIssues: observable,
       requestIntakeIssues: observable,
@@ -212,6 +238,8 @@ export class HelpdeskStore implements IHelpdeskStore {
       deleteFormField: action,
       reorderFormFields: action,
       fetchRequests: action,
+      fetchMoreRequests: action,
+      fetchMoreRequestsForStatus: action,
       fetchRequestById: action,
       createRequest: action,
       updateRequest: action,
@@ -605,6 +633,46 @@ export class HelpdeskStore implements IHelpdeskStore {
 
   // --- Requests ---
 
+  private _applyPaginatedResponse = (workspaceSlug: string, response: IHelpdeskPaginatedResponse, append: boolean) => {
+    runInAction(() => {
+      const incoming = Array.isArray(response?.results) ? response.results : [];
+      const existing = append ? this.requests[workspaceSlug] || [] : [];
+      let merged: IHelpdeskRequest[];
+      if (append && existing.length > 0) {
+        const existingIds = new Set(existing.map((r) => r.id));
+        const newItems = incoming.filter((r) => !existingIds.has(r.id));
+        merged = [...existing, ...newItems];
+      } else {
+        merged = [...existing, ...incoming];
+      }
+      set(this.requests, [workspaceSlug], merged);
+      set(this.requestPagination, [workspaceSlug], {
+        nextCursor: response?.next_page_results ? (response.next_cursor ?? null) : null,
+        nextPageResults: response?.next_page_results ?? false,
+        totalCount: response?.total_count ?? response?.total_results ?? existing.length + incoming.length,
+      });
+    });
+  };
+
+  private _applyPaginatedResponseForStatus = (
+    workspaceSlug: string,
+    statusId: string,
+    response: IHelpdeskPaginatedResponse
+  ) => {
+    runInAction(() => {
+      const incoming = Array.isArray(response?.results) ? response.results : [];
+      const existing = this.requests[workspaceSlug] || [];
+      const existingIds = new Set(existing.map((r) => r.id));
+      const newItems = incoming.filter((r) => !existingIds.has(r.id));
+      set(this.requests, [workspaceSlug], [...existing, ...newItems]);
+      set(this.requestPaginationByStatus, [workspaceSlug, statusId], {
+        nextCursor: response?.next_page_results ? (response.next_cursor ?? null) : null,
+        nextPageResults: response?.next_page_results ?? false,
+        totalCount: response?.total_count ?? response?.total_results ?? 0,
+      });
+    });
+  };
+
   fetchRequests = async (
     workspaceSlug: string,
     params?: Record<string, string | string[]>
@@ -613,13 +681,69 @@ export class HelpdeskStore implements IHelpdeskStore {
     this.startLoading(key);
     try {
       const response = await this.helpdeskService.getRequests(workspaceSlug, params);
-      if (Array.isArray(response)) {
-        runInAction(() => {
-          set(this.requests, [workspaceSlug], response);
-        });
-      }
+      this._applyPaginatedResponse(workspaceSlug, response, false);
+      // Reset per-status cursors so filter/search changes cause fresh per-column fetches
+      runInAction(() => {
+        set(this.requestPaginationByStatus, [workspaceSlug], {});
+      });
       this.stopLoading(key);
-      return response ?? [];
+      return this.requests[workspaceSlug] ?? [];
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  fetchMoreRequests = async (
+    workspaceSlug: string,
+    params?: Record<string, string | string[]>
+  ): Promise<IHelpdeskRequest[]> => {
+    const key = `requests-more:${workspaceSlug}`;
+    const pagination = this.requestPagination[workspaceSlug];
+    if (!pagination?.nextPageResults || !pagination.nextCursor) return this.requests[workspaceSlug] ?? [];
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getRequests(workspaceSlug, {
+        ...params,
+        cursor: pagination.nextCursor,
+      });
+      this._applyPaginatedResponse(workspaceSlug, response, true);
+      this.stopLoading(key);
+      return this.requests[workspaceSlug] ?? [];
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  fetchMoreRequestsForStatus = async (
+    workspaceSlug: string,
+    statusId: string,
+    params?: Record<string, string | string[]>
+  ): Promise<IHelpdeskRequest[]> => {
+    const key = `requests-more:${workspaceSlug}:${statusId}`;
+    const pagination = this.requestPaginationByStatus[workspaceSlug]?.[statusId];
+
+    // If we know there are no more pages for this status, bail out
+    if (pagination !== undefined && (!pagination.nextPageResults || !pagination.nextCursor)) {
+      return this.requests[workspaceSlug] ?? [];
+    }
+    // Guard against concurrent fetch for the same status column
+    if (this.loadingState[key]) return this.requests[workspaceSlug] ?? [];
+
+    this.startLoading(key);
+    try {
+      const requestParams: Record<string, string | string[]> = {
+        ...params,
+        status: statusId,
+      };
+      // cold start (pagination === undefined) → no cursor → fetches page 1 for this status
+      if (pagination?.nextCursor) requestParams.cursor = pagination.nextCursor;
+
+      const response = await this.helpdeskService.getRequests(workspaceSlug, requestParams);
+      this._applyPaginatedResponseForStatus(workspaceSlug, statusId, response);
+      this.stopLoading(key);
+      return this.requests[workspaceSlug] ?? [];
     } catch (error) {
       this.stopLoading(key, error);
       throw error;
@@ -635,11 +759,22 @@ export class HelpdeskStore implements IHelpdeskStore {
         const list = this.requests[workspaceSlug] || [];
         const idx = list.findIndex((r) => r.id === requestId);
         if (idx !== -1) {
+          // update in-place (covers request.updated events)
           list[idx] = response;
+          set(this.requests, [workspaceSlug], [...list]);
         } else {
-          list.push(response);
+          // request.created: prepend to the visible list and bump totalCount so
+          // the header counter stays accurate. Do NOT push to the end — that
+          // would place the new item behind a "Load more" boundary.
+          set(this.requests, [workspaceSlug], [response, ...list]);
+          const pagination = this.requestPagination[workspaceSlug];
+          if (pagination) {
+            set(this.requestPagination, [workspaceSlug], {
+              ...pagination,
+              totalCount: pagination.totalCount + 1,
+            });
+          }
         }
-        set(this.requests, [workspaceSlug], [...list]);
       });
       this.stopLoading(key);
       return response;
@@ -688,6 +823,13 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(this.requestIssues, [requestId], []);
       set(this.requestIntakeIssues, [requestId], []);
       set(this.unresolvedLinkedIssues, [requestId], []);
+      const pagination = this.requestPagination[workspaceSlug];
+      if (pagination) {
+        set(this.requestPagination, [workspaceSlug], {
+          ...pagination,
+          totalCount: Math.max(0, pagination.totalCount - 1),
+        });
+      }
     });
   };
 
@@ -700,6 +842,13 @@ export class HelpdeskStore implements IHelpdeskStore {
         [workspaceSlug],
         current.filter((request) => request.id !== requestId)
       );
+      const pagination = this.requestPagination[workspaceSlug];
+      if (pagination) {
+        set(this.requestPagination, [workspaceSlug], {
+          ...pagination,
+          totalCount: Math.max(0, pagination.totalCount - 1),
+        });
+      }
     });
   };
 
@@ -957,6 +1106,10 @@ export class HelpdeskStore implements IHelpdeskStore {
       isLoading: this.loadingState[key] ?? false,
       error: this.errorState[key] ?? null,
     };
+  });
+
+  getStatusPagination = computedFn((workspaceSlug: string, statusId: string) => {
+    return this.requestPaginationByStatus[workspaceSlug]?.[statusId];
   });
 
   getWorkspaceMembers = computedFn((workspaceSlug: string) => {
