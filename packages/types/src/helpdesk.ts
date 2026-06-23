@@ -121,6 +121,8 @@ export interface IHelpdeskRequest {
   title: string;
   description: string;
   display_id: string;
+  first_responded_at: string | null;
+  resolved_at: string | null;
   status: string | null; // FK UUID to IHelpdeskStatus
   status_detail: IHelpdeskStatus | null;
   form_detail: IHelpdeskForm | null;
@@ -280,4 +282,29 @@ export interface IHelpdeskAnalyticsResponse {
 export interface IHelpdeskAnalyticsFilters {
   date_filter: THelpdeskDateFilter;
   portal_id?: string;
+}
+
+export enum EHelpdeskMemberRole {
+  ADMIN = 20,
+  MEMBER = 15,
+  GUEST = 5,
+}
+
+export interface IHelpdeskMember {
+  id: string;
+  workspace: string;
+  member: string;
+  member_detail: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    display_name: string;
+    avatar: string | null;
+    avatar_url: string | null;
+    is_bot: boolean;
+  };
+  role: EHelpdeskMemberRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

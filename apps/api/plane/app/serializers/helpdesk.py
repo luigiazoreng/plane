@@ -6,6 +6,7 @@ from plane.db.models import (
     HelpdeskCustomer,
     HelpdeskForm,
     HelpdeskFormField,
+    HelpdeskMember,
     HelpdeskPortal,
     HelpdeskRequest,
     HelpdeskRequestAssignee,
@@ -15,6 +16,7 @@ from plane.db.models import (
     HelpdeskStatus,
 )
 from plane.app.serializers.base import BaseSerializer
+from plane.app.serializers.user import UserLiteSerializer
 from plane.app.helpdesk.auto_assignment import normalize_helpdesk_auto_assignment_config
 
 READ_ONLY_BASE = ["workspace", "created_at", "updated_at", "created_by", "updated_by", "deleted_at"]
@@ -251,3 +253,12 @@ class HelpdeskRequestIntakeIssueSerializer(BaseSerializer):
         model = HelpdeskRequestIntakeIssue
         fields = "__all__"
         read_only_fields = READ_ONLY_BASE + ["request", "intake_issue", "forwarded_to_project", "created_by"]
+
+
+class HelpdeskMemberSerializer(BaseSerializer):
+    member_detail = UserLiteSerializer(source="member", read_only=True)
+
+    class Meta:
+        model = HelpdeskMember
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE + ["workspace"]

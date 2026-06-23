@@ -9,9 +9,11 @@ import { computedFn } from "mobx-utils";
 import set from "lodash-es/set";
 // types
 import type {
+  EHelpdeskMemberRole,
   IHelpdeskForm,
   IHelpdeskFormField,
   IHelpdeskLinkedIssueLookupResult,
+  IHelpdeskMember,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -36,6 +38,7 @@ export interface IHelpdeskStore {
   requestIntakeIssues: Record<string, IHelpdeskRequestIntakeIssue[]>; // requestId -> intake issue links
   linkedIssueProjectMap: Record<string, string>; // issueId -> projectId
   unresolvedLinkedIssues: Record<string, string[]>; // requestId -> unresolved issue ids
+  members: Record<string, IHelpdeskMember[]>; // workspaceSlug -> helpdesk members
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
 
@@ -75,10 +78,7 @@ export interface IHelpdeskStore {
   ) => Promise<void>;
 
   // request actions
-  fetchRequests: (
-    workspaceSlug: string,
-    params?: Record<string, string | string[]>
-  ) => Promise<IHelpdeskRequest[]>;
+  fetchRequests: (workspaceSlug: string, params?: Record<string, string | string[]>) => Promise<IHelpdeskRequest[]>;
   fetchRequestById: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequest>;
   createRequest: (workspaceSlug: string, data: Partial<IHelpdeskRequest>) => Promise<IHelpdeskRequest>;
   updateRequest: (
@@ -102,6 +102,7 @@ export interface IHelpdeskStore {
     requestId: string,
     data: Partial<IHelpdeskRequestIssue>
   ) => Promise<IHelpdeskRequestIssue>;
+  deleteRequest: (workspaceSlug: string, requestId: string) => Promise<void>;
   deleteRequestIssue: (workspaceSlug: string, requestIssueId: string, requestId: string) => Promise<void>;
   hydrateLinkedIssues: (workspaceSlug: string, requestId: string) => Promise<void>;
 
@@ -113,6 +114,12 @@ export interface IHelpdeskStore {
     data: { project: string; title: string; description?: string }
   ) => Promise<IHelpdeskRequestIntakeIssue>;
   deleteRequestIntakeIssue: (workspaceSlug: string, requestIntakeIssueId: string, requestId: string) => Promise<void>;
+
+  // member actions
+  fetchMembers: (workspaceSlug: string) => Promise<IHelpdeskMember[]>;
+  addMembers: (workspaceSlug: string, members: { member_id: string; role: EHelpdeskMemberRole }[]) => Promise<IHelpdeskMember[]>;
+  updateMember: (workspaceSlug: string, memberId: string, data: { role: EHelpdeskMemberRole }) => Promise<IHelpdeskMember>;
+  removeMember: (workspaceSlug: string, memberId: string) => Promise<void>;
 
   // computed getters
   getWorkspaceStatuses: (workspaceSlug: string) => IHelpdeskStatus[];
@@ -127,6 +134,7 @@ export interface IHelpdeskStore {
   getUnresolvedLinkedIssues: (requestId: string) => string[];
   getRequestsGroupedByStatus: (workspaceSlug: string) => Record<string, IHelpdeskRequest[]>;
   getCollectionState: (key: string) => { isLoading: boolean; error: string | null };
+  getWorkspaceMembers: (workspaceSlug: string) => IHelpdeskMember[];
 }
 
 export class HelpdeskStore implements IHelpdeskStore {
@@ -140,6 +148,7 @@ export class HelpdeskStore implements IHelpdeskStore {
   requestIntakeIssues: Record<string, IHelpdeskRequestIntakeIssue[]> = {};
   linkedIssueProjectMap: Record<string, string> = {};
   unresolvedLinkedIssues: Record<string, string[]> = {};
+  members: Record<string, IHelpdeskMember[]> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
 
@@ -189,11 +198,17 @@ export class HelpdeskStore implements IHelpdeskStore {
       createRequestComment: action,
       fetchRequestIssues: action,
       createRequestIssue: action,
+      deleteRequest: action,
       deleteRequestIssue: action,
       hydrateLinkedIssues: action,
       fetchRequestIntakeIssues: action,
       createRequestIntakeIssue: action,
       deleteRequestIntakeIssue: action,
+      members: observable,
+      fetchMembers: action,
+      addMembers: action,
+      updateMember: action,
+      removeMember: action,
     });
 
     this.rootStore = _rootStore;
@@ -234,6 +249,9 @@ export class HelpdeskStore implements IHelpdeskStore {
       {} as Record<string, string[]>
     );
 
+  private sortBySequence = <T extends { sequence: number }>(items: T[]): T[] =>
+    [...items].toSorted((a: T, b: T) => a.sequence - b.sequence);
+
   // --- Statuses ---
 
   fetchStatuses = async (workspaceSlug: string): Promise<IHelpdeskStatus[]> => {
@@ -261,7 +279,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.statuses,
         [workspaceSlug],
-        [...current, response].slice().toSorted((a, b) => a.sequence - b.sequence)
+        this.sortBySequence([...current, response])
       );
     });
     return response;
@@ -304,10 +322,9 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.statuses,
         [workspaceSlug],
-        current
-          .map((s) => (seqMap[s.id] !== undefined ? Object.assign({}, s, { sequence: seqMap[s.id] }) : s))
-          .slice()
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+        this.sortBySequence(
+          current.map((s) => (seqMap[s.id] !== undefined ? Object.assign({}, s, { sequence: seqMap[s.id] }) : s))
+        )
       );
     });
     await this.helpdeskService.reorderStatuses(workspaceSlug, items);
@@ -409,7 +426,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.forms,
         [portalId],
-        [...current, response].slice().toSorted((a, b) => a.sequence - b.sequence)
+        this.sortBySequence([...current, response])
       );
       set(this.formFields, [response.id], response.fields_detail || []);
     });
@@ -424,10 +441,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.forms,
         [portalId],
-        current
-          .map((form) => (form.id === formId ? response : form))
-          .slice()
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+        this.sortBySequence(current.map((form) => (form.id === formId ? response : form)))
       );
       set(this.formFields, [response.id], response.fields_detail || this.formFields[response.id] || []);
     });
@@ -458,12 +472,11 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.forms,
         [portalId],
-        current
-          .map((form) =>
+        this.sortBySequence(
+          current.map((form) =>
             seqMap[form.id] !== undefined ? Object.assign({}, form, { sequence: seqMap[form.id] }) : form
           )
-          .slice()
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+        )
       );
     });
     const response = await this.helpdeskService.reorderForms(workspaceSlug, items);
@@ -517,7 +530,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.formFields,
         [response.form],
-        [...current, response].slice().toSorted((a, b) => a.sequence - b.sequence)
+        this.sortBySequence([...current, response])
       );
     });
     return response;
@@ -534,10 +547,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.formFields,
         [response.form],
-        current
-          .map((field) => (field.id === fieldId ? response : field))
-          .slice()
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+        this.sortBySequence(current.map((field) => (field.id === fieldId ? response : field)))
       );
     });
     return response;
@@ -566,12 +576,11 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(
         this.formFields,
         [formId],
-        current
-          .map((field) =>
+        this.sortBySequence(
+          current.map((field) =>
             seqMap[field.id] !== undefined ? Object.assign({}, field, { sequence: seqMap[field.id] }) : field
           )
-          .slice()
-          .slice().toSorted((a, b) => a.sequence - b.sequence)
+        )
       );
     });
     const response = await this.helpdeskService.reorderFormFields(workspaceSlug, items);
@@ -654,6 +663,22 @@ export class HelpdeskStore implements IHelpdeskStore {
       );
     });
     return response;
+  };
+
+  deleteRequest = async (workspaceSlug: string, requestId: string): Promise<void> => {
+    await this.helpdeskService.deleteRequest(workspaceSlug, requestId);
+    runInAction(() => {
+      const current = this.requests[workspaceSlug] || [];
+      set(
+        this.requests,
+        [workspaceSlug],
+        current.filter((request) => request.id !== requestId)
+      );
+      set(this.comments, [requestId], []);
+      set(this.requestIssues, [requestId], []);
+      set(this.requestIntakeIssues, [requestId], []);
+      set(this.unresolvedLinkedIssues, [requestId], []);
+    });
   };
 
   // --- Comments ---
@@ -900,4 +925,71 @@ export class HelpdeskStore implements IHelpdeskStore {
       error: this.errorState[key] ?? null,
     };
   });
+
+  getWorkspaceMembers = computedFn((workspaceSlug: string) => {
+    return this.members[workspaceSlug] || [];
+  });
+
+  // --- Members ---
+
+  fetchMembers = async (workspaceSlug: string): Promise<IHelpdeskMember[]> => {
+    const key = `members:${workspaceSlug}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getMembers(workspaceSlug);
+      runInAction(() => {
+        if (Array.isArray(response)) set(this.members, [workspaceSlug], response);
+      });
+      this.stopLoading(key);
+      return response ?? [];
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  addMembers = async (
+    workspaceSlug: string,
+    members: { member_id: string; role: EHelpdeskMemberRole }[]
+  ): Promise<IHelpdeskMember[]> => {
+    const response = await this.helpdeskService.addMembers(workspaceSlug, members);
+    runInAction(() => {
+      if (!Array.isArray(response)) return;
+      const current = this.members[workspaceSlug] || [];
+      const existingIds = new Set(current.map((m) => m.id));
+      const newItems = response.filter((m) => !existingIds.has(m.id));
+      const updated = current.map((m) => response.find((r) => r.id === m.id) ?? m);
+      set(this.members, [workspaceSlug], [...updated, ...newItems]);
+    });
+    return response;
+  };
+
+  updateMember = async (
+    workspaceSlug: string,
+    memberId: string,
+    data: { role: EHelpdeskMemberRole }
+  ): Promise<IHelpdeskMember> => {
+    const response = await this.helpdeskService.updateMember(workspaceSlug, memberId, data);
+    runInAction(() => {
+      const current = this.members[workspaceSlug] || [];
+      set(
+        this.members,
+        [workspaceSlug],
+        current.map((m) => (m.id === memberId ? response : m))
+      );
+    });
+    return response;
+  };
+
+  removeMember = async (workspaceSlug: string, memberId: string): Promise<void> => {
+    await this.helpdeskService.removeMember(workspaceSlug, memberId);
+    runInAction(() => {
+      const current = this.members[workspaceSlug] || [];
+      set(
+        this.members,
+        [workspaceSlug],
+        current.filter((m) => m.id !== memberId)
+      );
+    });
+  };
 }

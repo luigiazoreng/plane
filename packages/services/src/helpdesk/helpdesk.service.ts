@@ -7,11 +7,13 @@
 import { API_BASE_URL } from "@plane/constants";
 import { APIService } from "../api.service";
 import type {
+  EHelpdeskMemberRole,
   IHelpdeskAnalyticsFilters,
   IHelpdeskAnalyticsResponse,
   IHelpdeskForm,
   IHelpdeskFormField,
   IHelpdeskLinkedIssueLookupResponse,
+  IHelpdeskMember,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -156,6 +158,10 @@ export class HelpdeskService extends APIService {
     return this.patch(`${workspaceSlug}/helpdesk/requests/${requestId}/`, data).then((res) => res?.data);
   }
 
+  async deleteRequest(workspaceSlug: string, requestId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/requests/${requestId}/`).then((res) => res?.data);
+  }
+
   // --- Comments Management ---
 
   async getRequestComments(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestComment[]> {
@@ -223,6 +229,31 @@ export class HelpdeskService extends APIService {
 
   async getAnalytics(workspaceSlug: string, filters: IHelpdeskAnalyticsFilters): Promise<IHelpdeskAnalyticsResponse> {
     return this.get(`${workspaceSlug}/helpdesk/analytics/`, { params: filters }).then((res) => res?.data);
+  }
+
+  // --- Member Management ---
+
+  async getMembers(workspaceSlug: string): Promise<IHelpdeskMember[]> {
+    return this.get(`${workspaceSlug}/helpdesk/members/`).then((res) => res?.data);
+  }
+
+  async addMembers(
+    workspaceSlug: string,
+    members: { member_id: string; role: EHelpdeskMemberRole }[]
+  ): Promise<IHelpdeskMember[]> {
+    return this.post(`${workspaceSlug}/helpdesk/members/`, { members }).then((res) => res?.data);
+  }
+
+  async updateMember(
+    workspaceSlug: string,
+    memberId: string,
+    data: { role: EHelpdeskMemberRole }
+  ): Promise<IHelpdeskMember> {
+    return this.patch(`${workspaceSlug}/helpdesk/members/${memberId}/`, data).then((res) => res?.data);
+  }
+
+  async removeMember(workspaceSlug: string, memberId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/members/${memberId}/`).then((res) => res?.data);
   }
 }
 

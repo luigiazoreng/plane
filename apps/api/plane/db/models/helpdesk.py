@@ -177,6 +177,10 @@ class HelpdeskRequest(WorkspaceBaseModel):
     display_id = models.CharField(max_length=64, blank=True, default="")
     first_responded_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    sla_resolution_due_at = models.DateTimeField(null=True, blank=True)
+    external_source = models.CharField(max_length=255, blank=True, default="")
+    external_id = models.CharField(max_length=255, blank=True, default="")
+    import_metadata = models.JSONField(default=dict, blank=True)
     assignees = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
@@ -262,3 +266,26 @@ class HelpdeskRequestIntakeIssue(WorkspaceBaseModel):
 
     def __str__(self):
         return f"{self.request.title} -> {self.intake_issue_id}"
+
+
+HELPDESK_ROLE_CHOICES = ((20, "Admin"), (15, "Member"), (5, "Guest"))
+
+
+class HelpdeskMember(WorkspaceBaseModel):
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="helpdesk_memberships",
+    )
+    role = models.PositiveSmallIntegerField(choices=HELPDESK_ROLE_CHOICES, default=15)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ["workspace", "member", "deleted_at"]
+        verbose_name = "Helpdesk Member"
+        verbose_name_plural = "Helpdesk Members"
+        db_table = "helpdesk_members"
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.member.email} <Helpdesk>"
