@@ -5,7 +5,7 @@
  */
 
 import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -21,6 +21,8 @@ import { useUserProfile } from "@/hooks/store/user";
 type TStoreWrapper = {
   children: ReactNode;
 };
+
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 function StoreWrapper(props: TStoreWrapper) {
   const { children } = props;
@@ -46,7 +48,7 @@ function StoreWrapper(props: TStoreWrapper) {
    */
   useEffect(() => {
     const localValue = localStorage && localStorage.getItem("app_sidebar_collapsed");
-    const localBoolValue = localValue ? (localValue === "true" ? true : false) : false;
+    const localBoolValue = localValue ? localValue === "true" : false;
     if (localValue && sidebarCollapsed === undefined) toggleSidebar(localBoolValue);
   }, [sidebarCollapsed, setTheme, toggleSidebar]);
 
@@ -78,7 +80,7 @@ function StoreWrapper(props: TStoreWrapper) {
 
     // Mark as initialized - prevents future syncs from server
     hasInitializedThemeRef.current = true;
-  }, [userProfile?.theme?.theme, setTheme]);
+  }, [userProfile?.id, userProfile?.theme?.theme, setTheme]);
 
   /**
    * Effect 2: Custom theme CSS application (runs on every change)
@@ -112,22 +114,18 @@ function StoreWrapper(props: TStoreWrapper) {
     changeLanguage(userProfile?.language as TLanguage);
   }, [userProfile?.language, changeLanguage]);
 
-  // ─── Sync route params to MobX store ────────────────────────────
-  // We sync route params synchronously during render to ensure that
-  // the MobX store (e.g. RootIssueStore.projectId) is updated BEFORE
-  // any descendant components (like BaseKanBanRoot) render. This prevents
-  // race conditions where a child renders with stale router state.
+  // Keep the router store aligned with React Router params after hydration.
+  // Mutating MobX during render can make the first client render differ from
+  // the server HTML, which breaks production hydration.
   const prevParamsRef = useRef<Record<string, string | string[] | undefined> | undefined>(undefined);
-  
-  if (JSON.stringify(prevParamsRef.current) !== JSON.stringify(params)) {
-    console.log("[StoreWrapperDebug] syncing params synchronously during render", {
-      old: prevParamsRef.current,
-      new: params
-    });
+  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (JSON.stringify(prevParamsRef.current) === paramsKey) return;
+
     setQuery(params);
     prevParamsRef.current = params;
-  }
-  // ────────────────────────────────────────────────────────────────
+  }, [params, paramsKey, setQuery]);
 
   return <>{children}</>;
 }

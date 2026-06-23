@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Outlet, Link, useParams, useNavigate } from "react-router";
 import { observer } from "mobx-react";
 import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
@@ -13,6 +13,10 @@ const PublicHelpdeskLayout = observer(() => {
   const { publicSlug } = useParams();
   const navigate = useNavigate();
   const { customerToken, customerData, logout } = publicHelpdeskStore;
+
+  useEffect(() => {
+    publicHelpdeskStore.hydrateCustomerSession();
+  }, []);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-surface-1">
