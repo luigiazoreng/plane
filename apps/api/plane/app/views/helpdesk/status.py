@@ -5,6 +5,7 @@ from plane.app.views.base import BaseViewSet
 from plane.db.models import HelpdeskStatus, Workspace
 from plane.app.serializers.helpdesk import HelpdeskStatusSerializer
 from plane.db.models.helpdesk import DEFAULT_HELPDESK_STATUSES
+from plane.app.helpdesk.permissions import get_helpdesk_role, ADMIN
 
 
 class HelpdeskStatusViewSet(BaseViewSet):
@@ -19,11 +20,54 @@ class HelpdeskStatusViewSet(BaseViewSet):
             .order_by("sequence")
         )
 
+    def list(self, request, *args, **kwargs):
+        if get_helpdesk_role(request.user, self.kwargs.get("slug")) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        if get_helpdesk_role(request.user, self.kwargs.get("slug")) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        return super().retrieve(request, *args, **kwargs)
+
+    def _require_admin(self, request, slug):
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < ADMIN:
+            return Response({"error": "Only Helpdesk Admins can manage statuses."}, status=status.HTTP_403_FORBIDDEN)
+        return None
+
+    def create(self, request, *args, **kwargs):
+        denied = self._require_admin(request, self.kwargs.get("slug"))
+        if denied:
+            return denied
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        denied = self._require_admin(request, self.kwargs.get("slug"))
+        if denied:
+            return denied
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        denied = self._require_admin(request, self.kwargs.get("slug"))
+        if denied:
+            return denied
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        denied = self._require_admin(request, self.kwargs.get("slug"))
+        if denied:
+            return denied
+        return super().destroy(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         workspace = Workspace.objects.get(slug=self.kwargs.get("slug"))
         serializer.save(workspace=workspace)
 
     def reorder(self, request, slug):
+        denied = self._require_admin(request, slug)
+        if denied:
+            return denied
         """
         Accepts: [{"id": "<uuid>", "sequence": <float>}, ...]
         Updates the sequence of each status in bulk.
@@ -48,7 +92,9 @@ class HelpdeskStatusViewSet(BaseViewSet):
         return Response(serializer.data)
 
     def set_default(self, request, slug, pk):
-        """Sets one status as the workspace default (unsets others)."""
+        denied = self._require_admin(request, slug)
+        if denied:
+            return denied
         workspace = Workspace.objects.get(slug=slug)
         HelpdeskStatus.objects.filter(workspace=workspace).update(is_default=False)
         obj = HelpdeskStatus.objects.get(id=pk, workspace=workspace)

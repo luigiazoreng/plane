@@ -81,6 +81,14 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - `db_table`: `helpdesk_request_intake_issues`
   - `unique_together`: `["request", "intake_issue", "deleted_at"]`
 
+### 7. Controle de Acesso (RBAC)
+
+- `HelpdeskMember`: Membros do workspace com acesso ao Helpdesk e seu role.
+  - Campos: `member` (FK→`AUTH_USER_MODEL`), `role` (PositiveSmallIntegerField: Admin=20, Member=15, Guest=5), `is_active` (BooleanField, default=True).
+  - `db_table`: `helpdesk_members`
+  - `unique_together`: `["workspace", "member", "deleted_at"]` (soft-delete compatível)
+  - Workspace admins (role=20 em `WorkspaceMember`) sempre recebem role ADMIN via bypass em `get_helpdesk_role()` — não precisam de linha explícita.
+
 ---
 
 ## Tasks (Próximos Passos)
@@ -252,6 +260,26 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] **Página:** chips de status únicos substituídos por toolbar (busca debounced + Filters + Display) no `AppHeader`, barra de applied filters abaixo do header, e list/kanban com agrupamento genérico. Filtros/display persistem em `localStorage` (`helpdesk-filters:{slug}` / `helpdesk-display:{slug}`); busca não persiste. Drag-and-drop e "add request" inline ficam ativos só com `group_by === "status"`.
   - [x] **Limpeza:** `toSorted()` (ES2023, incompatível com lib ES2022 do web) → `.slice().sort()` em `helpdesk.store.ts`.
 
+- [x] **Fase 15: Controle de Acesso por Membros (RBAC)**
+  - [x] **Modelo `HelpdeskMember`** (WorkspaceBaseModel): campos `member` (FK→User), `role` (Admin=20/Member=15/Guest=5), `is_active`; `unique_together` em `[workspace, member, deleted_at]`; `db_table = "helpdesk_members"`.
+  - [x] **Migração `0135_helpdeskmember`:** `CreateModel` padrão com todos os campos de `WorkspaceBaseModel`.
+  - [x] **Migração de dados `0136_seed_helpdesk_admins`:** `RunPython` que, para cada workspace com pelo menos um `HelpdeskPortal`, adiciona todos os workspace admins (role=20) como `HelpdeskMember` com role=20. Aplicada retroativamente.
+  - [x] **Utilitário de permissão `apps/api/plane/app/helpdesk/permissions.py`:** `get_helpdesk_role(user, workspace_slug)` retorna o role efetivo (int) ou `None`. Workspace admins recebem ADMIN (20) automaticamente como bypass — nunca ficam bloqueados.
+  - [x] **`HelpdeskMemberSerializer`:** aninha `member_detail` via `UserLiteSerializer` (nome, avatar, `display_name`). Adicionado ao `apps/api/plane/app/serializers/helpdesk.py`.
+  - [x] **`HelpdeskMemberViewSet`** (`apps/api/plane/app/views/helpdesk/member.py`): `list` (≥ GUEST), `create` bulk (ADMIN only — valida que os IDs são workspace members, reativa soft-deleted), `partial_update` (ADMIN), `destroy` soft-delete (`is_active=False`, ADMIN).
+  - [x] **URLs:** `workspaces/<slug>/helpdesk/members/` e `workspaces/<slug>/helpdesk/members/<uuid>/` registradas em `apps/api/plane/app/urls/helpdesk.py`.
+  - [x] **Enforcement nas views existentes:** todas as views de agente receberam checks inline com `get_helpdesk_role()`:
+    - `portal.py`, `status.py`, `form.py` (FormViewSet + FormFieldViewSet): writes → ADMIN, reads → ≥ GUEST.
+    - `request.py`: reads → ≥ GUEST; create/update/destroy → ≥ MEMBER.
+    - `comment.py`, `issue.py`, `intake.py`: reads → ≥ GUEST; writes → ≥ MEMBER.
+    - `analytics.py`: GET → ≥ GUEST.
+    - Endpoints `Public*` e `Customer*` **não alterados** — continuam abertos.
+  - [x] **Seed automático no primeiro portal:** `HelpdeskPortalViewSet.perform_create` detecta se é o primeiro portal do workspace e, nesse caso, cria registros `HelpdeskMember` (role=20) para todos os workspace admins presentes naquele momento.
+  - [x] **Tipos frontend:** `EHelpdeskMemberRole` (enum) e `IHelpdeskMember` (interface com `member_detail` aninhado) adicionados a `packages/types/src/helpdesk.ts`.
+  - [x] **Service:** `getMembers`, `addMembers`, `updateMember`, `removeMember` adicionados ao `HelpdeskService` em `packages/services/src/helpdesk/helpdesk.service.ts`.
+  - [x] **Store:** observable `members: Record<string, IHelpdeskMember[]>` + actions `fetchMembers`, `addMembers`, `updateMember`, `removeMember` + computed `getWorkspaceMembers` adicionados ao `helpdesk.store.ts`. `fetchMembers` chamado no mount da settings page.
+  - [x] **Settings page — aba "Members":** nova aba em `/{wSlug}/helpdesk/settings`; "Add members" abre painel inline com `MemberDropdown` (multi-select de workspace members) + seletor de role (Admin/Member/Guest); lista de membros com avatar, nome, role dropdown editável inline e botão de remoção; `ConfirmModal` antes de remover; sub-component `HelpdeskMemberRow`.
+
 ---
 
 ## Pendências Técnicas
@@ -325,6 +353,17 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - **Extração form_core:** lógica de validação e criação de campos extraída de `form.py` para `helpdesk/form_core.py`; helpers frontend movidos para `helpers/helpdesk/` (alias correto `@/helpers/*`).
   - **Typecheck zerado:** todos os erros TS do módulo helpdesk corrigidos — `toSorted()` → `.slice().sort()`, `showLabel` no PieChart, `super()` sem args em `BasePage`.
   - **Pin do sidebar persistente:** `HELPDESK` adicionado a `WorkspaceUserPreference.UserPreferenceKeys` — o GET agora cria a linha no banco e o PATCH consegue salvar o estado de pin após reload.
+- **[2026-06-23]**: RBAC — Controle de Acesso por Membros (Fase 15).
+  - **Modelo `HelpdeskMember`** (`WorkspaceBaseModel`): `member` (FK→User), `role` (Admin=20/Member=15/Guest=5), `is_active`; `unique_together = ["workspace", "member", "deleted_at"]`; `db_table = "helpdesk_members"`. Exportado via `plane.db.models`.
+  - **Migração `0135_helpdeskmember`:** `CreateModel` com todos os campos de `WorkspaceBaseModel`; depende de `0134`.
+  - **Migração de dados `0136_seed_helpdesk_admins`:** `RunPython` retroativo — para cada workspace com portais existentes, cria `HelpdeskMember` (role=20) para todos os workspace admins ainda não presentes. Aplicada com sucesso.
+  - **`permissions.py` (`apps/api/plane/app/helpdesk/`):** `get_helpdesk_role(user, workspace_slug)` — workspace admins (role=20) recebem ADMIN (20) como bypass sem depender de `HelpdeskMember`; não-membros recebem `None`.
+  - **`HelpdeskMemberSerializer`:** aninha `member_detail` (nome/avatar/display_name) via `UserLiteSerializer`. Adicionado a `serializers/helpdesk.py`.
+  - **`HelpdeskMemberViewSet`** (`views/helpdesk/member.py`): `list` (≥ GUEST), `create` bulk (ADMIN — reativa soft-deleted), `partial_update` de role (ADMIN), `destroy` soft-delete (ADMIN).
+  - **URLs:** `helpdesk/members/` e `helpdesk/members/<uuid>/` registradas em `urls/helpdesk.py`.
+  - **Enforcement em todas as views existentes:** checks inline com `get_helpdesk_role()` adicionados a `portal.py`, `status.py`, `form.py`, `request.py`, `comment.py`, `issue.py`, `intake.py`, `analytics.py`. Endpoints `Public*` e `Customer*` não alterados.
+  - **Seed no primeiro portal:** `HelpdeskPortalViewSet.perform_create` detecta primeiro portal e cria `HelpdeskMember` (role=20) para todos os workspace admins.
+  - **Frontend:** `EHelpdeskMemberRole` + `IHelpdeskMember` em `@plane/types`; 4 métodos de serviço em `HelpdeskService`; observable `members` + 4 actions + computed `getWorkspaceMembers` na `helpdesk.store.ts`; aba "Members" completa na settings page com `MemberDropdown` multi-select, role select, lista editável e `ConfirmModal` de remoção.
 - **[2026-06-22]**: SSE Live Reload (Fase 13). Doc completa do debug em `docs-bugs/2026-06-22-sse-helpdesk-live-reload.md`.
   - **Causa raiz final — `StreamingHttpResponse` sob ASGI:** o sintoma persistente (`[SSE] error: Error in input stream`, conexão fechando em ~10ms) era o `ASGIHandler` do Django drenando o async generator da `StreamingHttpResponse` e fechando a requisição imediatamente. `StreamingHttpResponse` não serve para streams infinitos sob ASGI.
   - **Solução — middleware ASGI puro:** `SSEMiddleware` em `apps/api/plane/asgi.py` intercepta `/helpdesk/events/` antes do ciclo request/response do Django e fala `scope`/`receive`/`send` diretamente — mantém o stream aberto, emite heartbeats de 20s e reage a `http.disconnect`. A `HelpdeskSSEView` virou fallback 503.

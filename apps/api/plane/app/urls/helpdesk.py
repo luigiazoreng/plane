@@ -22,6 +22,7 @@ from plane.app.views.helpdesk import (
     PublicHelpdeskCommentEndpoint,
     HelpdeskStatusViewSet,
     HelpdeskAnalyticsEndpoint,
+    HelpdeskMemberViewSet,
 )
 
 urlpatterns = [
@@ -213,6 +214,18 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/requests/<uuid:request_pk>/comments/<uuid:pk>/",
         HelpdeskRequestCommentViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
         name="helpdesk-request-comment-detail",
+    ),
+
+    # --- Member management ---
+    path(
+        "workspaces/<str:slug>/helpdesk/members/",
+        HelpdeskMemberViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-member",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/members/<uuid:pk>/",
+        HelpdeskMemberViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="helpdesk-member-detail",
     ),
 
     # --- Analytics ---

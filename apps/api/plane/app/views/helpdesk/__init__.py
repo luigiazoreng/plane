@@ -19,3 +19,4 @@ from .comment import HelpdeskRequestCommentViewSet, PublicHelpdeskCommentEndpoin
 from .status import HelpdeskStatusViewSet
 from .analytics import HelpdeskAnalyticsEndpoint
 from .sse import HelpdeskSSEView, HelpdeskSSETokenView
+from .member import HelpdeskMemberViewSet

@@ -8,6 +8,7 @@ from plane.app.views.base import BaseViewSet, BaseAPIView
 from plane.db.models.helpdesk import HelpdeskRequestComment, HelpdeskRequest, HelpdeskPortal, HelpdeskCustomer
 from plane.app.serializers.helpdesk import HelpdeskRequestCommentSerializer
 from plane.app.helpdesk.sse_broker import publish
+from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
 
 
 class HelpdeskRequestCommentViewSet(BaseViewSet):
@@ -24,6 +25,37 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
                 request_id=self.kwargs.get("request_pk"),
             )
         )
+
+    def list(self, request, *args, **kwargs):
+        if get_helpdesk_role(request.user, self.kwargs.get("slug")) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        if get_helpdesk_role(request.user, self.kwargs.get("slug")) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        return super().retrieve(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can create comments."}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can update comments."}, status=status.HTTP_403_FORBIDDEN)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can delete comments."}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         hd_request = HelpdeskRequest.objects.get(id=self.kwargs.get("request_pk"))

@@ -2,12 +2,14 @@ from datetime import timedelta
 
 from django.db.models import Avg, Count, ExpressionWrapper, F, fields
 from django.db.models.functions import TruncDate, TruncMonth
+from rest_framework import status as http_status
 from rest_framework.response import Response
 
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import HelpdeskPortal, HelpdeskRequest, HelpdeskRequestAssignee, HelpdeskStatus
 from plane.app.helpdesk.statuses import get_helpdesk_active_status_ids
+from plane.app.helpdesk.permissions import get_helpdesk_role
 from plane.utils.date_utils import get_analytics_date_range, get_chart_period_range
 
 
@@ -33,6 +35,8 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
     SLA_HISTORY_CUTOFF = "2026-06-17"
 
     def get(self, request, slug):
+        if get_helpdesk_role(request.user, slug) is None:
+            return Response({"error": "Access denied."}, status=http_status.HTTP_403_FORBIDDEN)
         date_filter = request.query_params.get("date_filter", "last_30_days")
         portal_id = request.query_params.get("portal_id")
 

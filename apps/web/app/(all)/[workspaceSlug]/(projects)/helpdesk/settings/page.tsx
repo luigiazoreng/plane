@@ -12,11 +12,13 @@ import { Button } from "@plane/propel/button";
 import { Switch } from "@plane/propel/switch";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type {
+  EHelpdeskMemberRole,
   IHelpdeskAutoAssignmentConfig,
   IHelpdeskAutoAssignmentType,
   IHelpdeskFieldType,
   IHelpdeskForm,
   IHelpdeskFormField,
+  IHelpdeskMember,
   IHelpdeskPortal,
   IHelpdeskStatus,
 } from "@plane/types";
@@ -71,7 +73,7 @@ const COLOR_PALETTE = [
   "#78716C",
 ];
 
-type TSettingsTab = "statuses" | "portal-settings" | "forms";
+type TSettingsTab = "statuses" | "portal-settings" | "forms" | "members";
 
 const validateFormForActivation = (fields: IHelpdeskFormField[]): string[] => {
   const errors: string[] = [];
@@ -128,9 +130,16 @@ const HelpdeskSettingsPage = observer(() => {
   const [fieldDraft, setFieldDraft] = useState<Partial<IHelpdeskFormField>>({});
   const [formDraft, setFormDraft] = useState<Partial<IHelpdeskForm>>({});
 
+  // ---- Members state ----
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [selectedMemberRole, setSelectedMemberRole] = useState<number>(15);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!wSlug) return;
     helpdeskStore.fetchStatuses(wSlug);
+    helpdeskStore.fetchMembers(wSlug);
 
     void helpdeskStore.fetchPortals(wSlug).then((portals) => {
       if (!portals?.length) return undefined;
@@ -544,6 +553,11 @@ const HelpdeskSettingsPage = observer(() => {
               label="Statuses"
               isActive={activeTab === "statuses"}
               onClick={() => setActiveTab("statuses")}
+            />
+            <SettingsTabButton
+              label="Members"
+              isActive={activeTab === "members"}
+              onClick={() => setActiveTab("members")}
             />
           </div>
 
@@ -1567,6 +1581,108 @@ const HelpdeskSettingsPage = observer(() => {
               )}
             </section>
           )}
+
+          {/* ── Members ── */}
+          {activeTab === "members" && (
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-primary">Members</h2>
+                  <p className="mt-0.5 text-13 text-tertiary">
+                    Control who can access and manage the Helpdesk module. Workspace admins always have full access.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingMember(true)}
+                  className="flex items-center gap-1.5 rounded-md border border-subtle bg-layer-2 px-3 py-1.5 text-13 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
+                >
+                  <Plus className="size-3.5" />
+                  Add members
+                </button>
+              </div>
+
+              {isAddingMember && (
+                <div className="mb-4 space-y-3 rounded-xl border border-dashed border-subtle bg-layer-2 p-4">
+                  <p className="tracking-wider text-12 font-medium text-tertiary uppercase">Add workspace members</p>
+                  <MemberDropdown
+                    value={selectedMemberIds}
+                    onChange={(ids: string[]) => setSelectedMemberIds(ids)}
+                    multiple
+                    buttonVariant="transparent-with-text"
+                    placeholder="Select members..."
+                  />
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={selectedMemberRole}
+                      onChange={(e) => setSelectedMemberRole(Number(e.target.value))}
+                      className="rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                    >
+                      <option value={20}>Admin</option>
+                      <option value={15}>Member</option>
+                      <option value={5}>Guest</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={selectedMemberIds.length === 0}
+                      onClick={async () => {
+                        if (!selectedMemberIds.length) return;
+                        try {
+                          await helpdeskStore.addMembers(
+                            wSlug,
+                            selectedMemberIds.map((id) => ({
+                              member_id: id,
+                              role: selectedMemberRole as EHelpdeskMemberRole,
+                            }))
+                          );
+                          setSelectedMemberIds([]);
+                          setIsAddingMember(false);
+                          setToast({ type: TOAST_TYPE.SUCCESS, title: "Members added" });
+                        } catch {
+                          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to add members" });
+                        }
+                      }}
+                      className="bg-accent-strong rounded-md px-3 py-2 text-13 font-medium text-white disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingMember(false);
+                        setSelectedMemberIds([]);
+                      }}
+                      className="text-tertiary transition-colors hover:text-primary"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle bg-layer-2">
+                {helpdeskStore.getWorkspaceMembers(wSlug).map((hm) => (
+                  <HelpdeskMemberRow
+                    key={hm.id}
+                    helpdeskMember={hm}
+                    onRoleChange={async (role) => {
+                      try {
+                        await helpdeskStore.updateMember(wSlug, hm.id, { role });
+                      } catch {
+                        setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update role" });
+                      }
+                    }}
+                    onRemove={() => setRemovingMemberId(hm.id)}
+                  />
+                ))}
+                {helpdeskStore.getWorkspaceMembers(wSlug).length === 0 && (
+                  <div className="py-10 text-center text-13 text-tertiary">
+                    No members added yet. Add workspace members above to give them access.
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       </div>
 
@@ -1628,6 +1744,25 @@ const HelpdeskSettingsPage = observer(() => {
           confirmLabel="Delete form"
           onConfirm={() => handleDeleteForm(deletingFormId.formId, deletingFormId.portalId)}
           onCancel={() => setDeletingFormId(null)}
+        />
+      )}
+
+      {removingMemberId && (
+        <ConfirmModal
+          title="Remove member?"
+          body="This person will lose access to the Helpdesk module."
+          confirmLabel="Remove"
+          onConfirm={async () => {
+            try {
+              await helpdeskStore.removeMember(wSlug, removingMemberId);
+              setToast({ type: TOAST_TYPE.SUCCESS, title: "Member removed" });
+            } catch {
+              setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to remove member" });
+            } finally {
+              setRemovingMemberId(null);
+            }
+          }}
+          onCancel={() => setRemovingMemberId(null)}
         />
       )}
     </div>
@@ -1843,6 +1978,46 @@ function ConfirmModal({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function HelpdeskMemberRow({
+  helpdeskMember,
+  onRoleChange,
+  onRemove,
+}: {
+  helpdeskMember: IHelpdeskMember;
+  onRoleChange: (role: EHelpdeskMemberRole) => void;
+  onRemove: () => void;
+}) {
+  const d = helpdeskMember.member_detail;
+  const displayName = d.display_name || `${d.first_name} ${d.last_name}`.trim() || "Unknown";
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      {d.avatar_url ? (
+        <img src={d.avatar_url} alt={displayName} className="size-7 rounded-full object-cover" />
+      ) : (
+        <div className="bg-accent-strong/20 text-accent-strong flex size-7 items-center justify-center rounded-full text-11 font-medium">
+          {displayName.charAt(0).toUpperCase()}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-13 font-medium text-primary">{displayName}</p>
+      </div>
+      <select
+        value={helpdeskMember.role}
+        onChange={(e) => onRoleChange(Number(e.target.value) as EHelpdeskMemberRole)}
+        className="rounded-md border border-subtle bg-layer-1 px-2 py-1 text-12 text-secondary outline-none"
+      >
+        <option value={20}>Admin</option>
+        <option value={15}>Member</option>
+        <option value={5}>Guest</option>
+      </select>
+      <button type="button" onClick={onRemove} className="hover:text-red-500 text-tertiary transition-colors">
+        <Trash2 className="size-4" />
+      </button>
     </div>
   );
 }

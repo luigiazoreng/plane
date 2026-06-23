@@ -11,6 +11,7 @@ from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatic
 from .form import get_customer_from_token
 from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, generate_ticket_display_id
 from plane.app.helpdesk.sse_broker import publish
+from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
 
 
 class HelpdeskRequestViewSet(BaseViewSet):
@@ -69,7 +70,37 @@ class HelpdeskRequestViewSet(BaseViewSet):
         # distinct() guards against duplicate rows when filtering by the assignees M2M
         return queryset.distinct()
 
+    def list(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        if get_helpdesk_role(request.user, slug) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        if get_helpdesk_role(request.user, slug) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        return super().retrieve(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can create requests."}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can delete requests."}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+
     def partial_update(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can update requests."}, status=status.HTTP_403_FORBIDDEN)
         instance = self.get_object()
         old_status_id = str(instance.status_id) if instance.status_id else None
         response = super().partial_update(request, *args, **kwargs)

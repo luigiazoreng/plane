@@ -283,3 +283,28 @@ export interface IHelpdeskAnalyticsFilters {
   date_filter: THelpdeskDateFilter;
   portal_id?: string;
 }
+
+export enum EHelpdeskMemberRole {
+  ADMIN = 20,
+  MEMBER = 15,
+  GUEST = 5,
+}
+
+export interface IHelpdeskMember {
+  id: string;
+  workspace: string;
+  member: string;
+  member_detail: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    display_name: string;
+    avatar: string | null;
+    avatar_url: string | null;
+    is_bot: boolean;
+  };
+  role: EHelpdeskMemberRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}

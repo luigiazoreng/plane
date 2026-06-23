@@ -95,6 +95,7 @@ from .helpdesk import (
     HelpdeskCustomer,
     HelpdeskForm,
     HelpdeskFormField,
+    HelpdeskMember,
     HelpdeskPortal,
     HelpdeskRequest,
     HelpdeskRequestAssignee,
