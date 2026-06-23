@@ -23,6 +23,7 @@ from plane.app.views.helpdesk import (
     HelpdeskStatusViewSet,
     HelpdeskAnalyticsEndpoint,
     HelpdeskMemberViewSet,
+    HelpdeskCustomerViewSet,
 )
 
 urlpatterns = [
@@ -226,6 +227,18 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/members/<uuid:pk>/",
         HelpdeskMemberViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
         name="helpdesk-member-detail",
+    ),
+
+    # --- Customer management (admin) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/customers/",
+        HelpdeskCustomerViewSet.as_view({"get": "list"}),
+        name="helpdesk-customer-list",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/customers/<uuid:pk>/",
+        HelpdeskCustomerViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
+        name="helpdesk-customer-detail",
     ),
 
     # --- Analytics ---

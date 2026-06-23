@@ -308,3 +308,13 @@ export interface IHelpdeskMember {
   created_at: string;
   updated_at: string;
 }
+
+export interface IHelpdeskCustomer {
+  id: string;
+  workspace: string;
+  name: string;
+  email: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}

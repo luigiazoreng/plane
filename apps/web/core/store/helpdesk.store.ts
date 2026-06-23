@@ -10,6 +10,7 @@ import set from "lodash-es/set";
 // types
 import type {
   EHelpdeskMemberRole,
+  IHelpdeskCustomer,
   IHelpdeskForm,
   IHelpdeskFormField,
   IHelpdeskLinkedIssueLookupResult,
@@ -39,6 +40,7 @@ export interface IHelpdeskStore {
   linkedIssueProjectMap: Record<string, string>; // issueId -> projectId
   unresolvedLinkedIssues: Record<string, string[]>; // requestId -> unresolved issue ids
   members: Record<string, IHelpdeskMember[]>; // workspaceSlug -> helpdesk members
+  customers: Record<string, IHelpdeskCustomer[]>; // workspaceSlug -> helpdesk customers
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
 
@@ -142,6 +144,11 @@ export interface IHelpdeskStore {
   getRequestsGroupedByStatus: (workspaceSlug: string) => Record<string, IHelpdeskRequest[]>;
   getCollectionState: (key: string) => { isLoading: boolean; error: string | null };
   getWorkspaceMembers: (workspaceSlug: string) => IHelpdeskMember[];
+  // customer actions
+  fetchCustomers: (workspaceSlug: string) => Promise<IHelpdeskCustomer[]>;
+  updateCustomer: (workspaceSlug: string, customerId: string, data: Partial<Pick<IHelpdeskCustomer, "name" | "is_active">>) => Promise<IHelpdeskCustomer>;
+  deleteCustomer: (workspaceSlug: string, customerId: string) => Promise<void>;
+  getWorkspaceCustomers: (workspaceSlug: string) => IHelpdeskCustomer[];
 }
 
 export class HelpdeskStore implements IHelpdeskStore {
@@ -156,6 +163,7 @@ export class HelpdeskStore implements IHelpdeskStore {
   linkedIssueProjectMap: Record<string, string> = {};
   unresolvedLinkedIssues: Record<string, string[]> = {};
   members: Record<string, IHelpdeskMember[]> = {};
+  customers: Record<string, IHelpdeskCustomer[]> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
 
@@ -216,6 +224,10 @@ export class HelpdeskStore implements IHelpdeskStore {
       addMembers: action,
       updateMember: action,
       removeMember: action,
+      customers: observable,
+      fetchCustomers: action,
+      updateCustomer: action,
+      deleteCustomer: action,
     });
 
     this.rootStore = _rootStore;
@@ -980,6 +992,57 @@ export class HelpdeskStore implements IHelpdeskStore {
         this.members,
         [workspaceSlug],
         current.filter((m) => m.id !== memberId)
+      );
+    });
+  };
+
+  // --- Customer management ---
+
+  getWorkspaceCustomers = computedFn((workspaceSlug: string): IHelpdeskCustomer[] => {
+    return this.customers[workspaceSlug] || [];
+  });
+
+  fetchCustomers = async (workspaceSlug: string): Promise<IHelpdeskCustomer[]> => {
+    const key = `customers:${workspaceSlug}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getCustomers(workspaceSlug);
+      runInAction(() => {
+        if (Array.isArray(response)) set(this.customers, [workspaceSlug], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  updateCustomer = async (
+    workspaceSlug: string,
+    customerId: string,
+    data: Partial<Pick<IHelpdeskCustomer, "name" | "is_active">>
+  ): Promise<IHelpdeskCustomer> => {
+    const response = await this.helpdeskService.updateCustomer(workspaceSlug, customerId, data);
+    runInAction(() => {
+      const current = this.customers[workspaceSlug] || [];
+      set(
+        this.customers,
+        [workspaceSlug],
+        current.map((c) => (c.id === customerId ? response : c))
+      );
+    });
+    return response;
+  };
+
+  deleteCustomer = async (workspaceSlug: string, customerId: string): Promise<void> => {
+    await this.helpdeskService.deleteCustomer(workspaceSlug, customerId);
+    runInAction(() => {
+      const current = this.customers[workspaceSlug] || [];
+      set(
+        this.customers,
+        [workspaceSlug],
+        current.filter((c) => c.id !== customerId)
       );
     });
   };

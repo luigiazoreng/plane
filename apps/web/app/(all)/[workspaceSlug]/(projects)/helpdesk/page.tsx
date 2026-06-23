@@ -19,7 +19,6 @@ import type {
 } from "@plane/types";
 import { cn } from "@plane/utils";
 import {
-  BarChart2,
   CalendarDays,
   Headset,
   KanbanSquare,
@@ -329,22 +328,6 @@ const WorkspaceHelpdeskPage = observer(() => {
               />
               <HelpdeskDisplayDropdown displayFilters={displayFilters} onChange={handleDisplayChange} />
 
-              <button
-                type="button"
-                onClick={() => navigate(`/${wSlug}/helpdesk/analytics`)}
-                className="flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-13 text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
-              >
-                <BarChart2 className="size-3.5" />
-                <span className="hidden sm:inline">Analytics</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate(`/${wSlug}/helpdesk/settings`)}
-                className="flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-13 text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
-              >
-                <Settings className="size-3.5" />
-                <span className="hidden sm:inline">Settings</span>
-              </button>
               <div className="flex items-center gap-0.5 rounded-md border border-subtle bg-layer-1 p-0.5">
                 <button
                   type="button"

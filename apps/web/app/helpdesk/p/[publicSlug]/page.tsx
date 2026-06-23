@@ -9,7 +9,7 @@ import { useParams, useNavigate } from "react-router";
 import { observer } from "mobx-react";
 import { Button } from "@plane/propel/button";
 import { Badge } from "@plane/propel/badge";
-import { Plus, LifeBuoy, Inbox } from "lucide-react";
+import { Plus, LifeBuoy, Inbox, LogIn } from "lucide-react";
 import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.store";
 
 const HelpdeskPublicDashboard = observer(() => {
@@ -75,68 +75,88 @@ const HelpdeskPublicDashboard = observer(() => {
       </div>
 
       {/* Requests Table */}
-      {(customerToken || myRequests.length > 0) && (
-        <section>
-          <h2 className="text-xl text-text-100 mb-4 font-bold">My Requests</h2>
+      <section>
+        <h2 className="text-xl text-text-100 mb-4 font-bold">My Requests</h2>
 
-          {myRequests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-subtle bg-surface-2 py-16 text-center">
-              <Inbox className="text-text-400 mb-4 size-10" />
-              <h3 className="text-lg text-text-100 font-medium">No requests yet</h3>
-              <p className="text-sm text-text-400 mt-1">When you submit a request, it will appear here.</p>
+        {!customerToken ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-subtle bg-surface-2 py-16 text-center">
+            <LogIn className="text-text-400 mb-4 size-10" />
+            <h3 className="text-lg text-text-100 font-medium">Sign in to see your tickets</h3>
+            <p className="text-sm text-text-400 mt-1 mb-4">
+              Log in or create an account to track requests you have submitted.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate(`/helpdesk/p/${pSlug}/login`)}
+                className="bg-primary hover:bg-primary-hover text-sm rounded-md px-4 py-2 font-medium text-white transition-colors"
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => navigate(`/helpdesk/p/${pSlug}/register`)}
+                className="text-sm text-text-200 rounded-md border border-subtle px-4 py-2 font-medium transition-colors hover:bg-surface-1"
+              >
+                Create account
+              </button>
             </div>
-          ) : (
-            <div className="shadow-sm overflow-hidden rounded-lg border border-subtle bg-surface-2">
-              <table className="text-sm w-full text-left">
-                <thead className="text-xs text-text-400 border-b border-subtle bg-surface-1 uppercase">
-                  <tr>
-                    <th className="tracking-wider px-6 py-4 font-medium">Request ID</th>
-                    <th className="tracking-wider px-6 py-4 font-medium">Title</th>
-                    <th className="tracking-wider px-6 py-4 font-medium">Status</th>
-                    <th className="tracking-wider px-6 py-4 font-medium">Submitted On</th>
+          </div>
+        ) : myRequests.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-subtle bg-surface-2 py-16 text-center">
+            <Inbox className="text-text-400 mb-4 size-10" />
+            <h3 className="text-lg text-text-100 font-medium">No requests yet</h3>
+            <p className="text-sm text-text-400 mt-1">When you submit a request, it will appear here.</p>
+          </div>
+        ) : (
+          <div className="shadow-sm overflow-hidden rounded-lg border border-subtle bg-surface-2">
+            <table className="text-sm w-full text-left">
+              <thead className="text-xs text-text-400 border-b border-subtle bg-surface-1 uppercase">
+                <tr>
+                  <th className="tracking-wider px-6 py-4 font-medium">Request ID</th>
+                  <th className="tracking-wider px-6 py-4 font-medium">Title</th>
+                  <th className="tracking-wider px-6 py-4 font-medium">Status</th>
+                  <th className="tracking-wider px-6 py-4 font-medium">Submitted On</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-subtle">
+                {myRequests.map((req) => (
+                  <tr
+                    key={req.id}
+                    className="group cursor-pointer transition-colors hover:bg-surface-1"
+                    onClick={() => navigate(`/helpdesk/p/${pSlug}/${req.id}`)}
+                  >
+                    <td className="font-mono text-xs text-text-400 px-6 py-4">#{req.id.split("-")[0]}</td>
+                    <td className="text-text-100 px-6 py-4 font-medium transition-colors group-hover:text-primary">
+                      {req.title}
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge
+                        variant={
+                          req.status_detail?.name?.toLowerCase().includes("wait")
+                            ? "brand"
+                            : req.status_detail?.name?.toLowerCase().includes("resolv") ||
+                                req.status_detail?.name?.toLowerCase().includes("clos")
+                              ? "success"
+                              : "warning"
+                        }
+                        size="sm"
+                      >
+                        {req.status_detail?.name || "Open"}
+                      </Badge>
+                    </td>
+                    <td className="text-text-400 px-6 py-4">
+                      {new Date(req.created_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-subtle">
-                  {myRequests.map((req) => (
-                    <tr
-                      key={req.id}
-                      className="group cursor-pointer transition-colors hover:bg-surface-1"
-                      onClick={() => navigate(`/helpdesk/p/${pSlug}/${req.id}`)}
-                    >
-                      <td className="font-mono text-xs text-text-400 px-6 py-4">#{req.id.split("-")[0]}</td>
-                      <td className="text-text-100 px-6 py-4 font-medium transition-colors group-hover:text-primary">
-                        {req.title}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge
-                          variant={
-                            req.status_detail?.name?.toLowerCase().includes("wait")
-                              ? "brand"
-                              : req.status_detail?.name?.toLowerCase().includes("resolv") ||
-                                  req.status_detail?.name?.toLowerCase().includes("clos")
-                                ? "success"
-                                : "warning"
-                          }
-                          size="sm"
-                        >
-                          {req.status_detail?.name || "Open"}
-                        </Badge>
-                      </td>
-                      <td className="text-text-400 px-6 py-4">
-                        {new Date(req.created_at).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 });
