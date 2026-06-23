@@ -35,6 +35,7 @@ export const HelpMenuRoot = observer(function HelpMenuRoot() {
         customButton={
           <AppSidebarItem
             variant="button"
+            renderAs="div"
             item={{
               icon: <HelpCircle className="size-5" />,
               isActive: isNeedHelpOpen,

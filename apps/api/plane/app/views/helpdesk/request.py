@@ -13,6 +13,17 @@ from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, gene
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
 
+HELPDESK_ARCHIVABLE_STATUS_NAMES = ("resolved", "closed", "completed", "canceled", "cancelled")
+
+
+def is_archivable_helpdesk_status(status_obj):
+    if not status_obj:
+        return False
+    if status_obj.is_terminal:
+        return True
+    status_name = (status_obj.name or "").lower()
+    return any(name in status_name for name in HELPDESK_ARCHIVABLE_STATUS_NAMES)
+
 
 class HelpdeskRequestViewSet(BaseViewSet):
     serializer_class = HelpdeskRequestSerializer
@@ -44,6 +55,9 @@ class HelpdeskRequestViewSet(BaseViewSet):
             .get_queryset()
             .filter(workspace__slug=self.kwargs.get("slug"))
         )
+
+        if getattr(self, "action", "") == "list":
+            queryset = queryset.filter(archived_at__isnull=True)
 
         # multi-value filters (?status=a,b&assignees=c,d ...)
         for param, lookup in self.MULTI_VALUE_FILTERS.items():
@@ -95,6 +109,36 @@ class HelpdeskRequestViewSet(BaseViewSet):
         if role is None or role < MEMBER:
             return Response({"error": "Helpdesk Members or Admins can delete requests."}, status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)
+
+    def archive(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can archive requests."}, status=status.HTTP_403_FORBIDDEN)
+
+        instance = self.get_object()
+        if not is_archivable_helpdesk_status(instance.status):
+            return Response(
+                {"error": "Only resolved or closed helpdesk tickets can be archived."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        instance.archived_at = timezone.now()
+        instance.save(update_fields=["archived_at", "updated_at"])
+        publish(slug or "", {"type": "request.updated", "request_id": str(instance.id)})
+        return Response({"archived_at": instance.archived_at}, status=status.HTTP_200_OK)
+
+    def unarchive(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can unarchive requests."}, status=status.HTTP_403_FORBIDDEN)
+
+        instance = self.get_object()
+        instance.archived_at = None
+        instance.save(update_fields=["archived_at", "updated_at"])
+        publish(slug or "", {"type": "request.updated", "request_id": str(instance.id)})
+        return Response({"archived_at": None}, status=status.HTTP_200_OK)
 
     def partial_update(self, request, *args, **kwargs):
         slug = self.kwargs.get("slug")
@@ -155,7 +199,11 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
         if str(customer.workspace_id) != str(portal.workspace_id):
             return Response({"error": "Invalid token"}, status=status.HTTP_403_FORBIDDEN)
 
-        requests_qs = HelpdeskRequest.objects.filter(portal=portal, customer=customer).order_by("-created_at")
+        requests_qs = HelpdeskRequest.objects.filter(
+            portal=portal,
+            customer=customer,
+            archived_at__isnull=True,
+        ).order_by("-created_at")
         serializer = HelpdeskRequestSerializer(requests_qs, many=True)
         return Response(serializer.data)
 

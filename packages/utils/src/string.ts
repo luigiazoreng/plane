@@ -4,7 +4,6 @@
  * See the LICENSE file for details.
  */
 
-import sanitizeHtml from "sanitize-html";
 import type { Content, JSONContent } from "@plane/types";
 
 /**
@@ -116,6 +115,44 @@ export const getNumberCount = (number: number): string => {
  */
 export const capitalizeFirstLetter = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
+const HTML_ENTITY_MAP: Record<string, string> = {
+  amp: "&",
+  gt: ">",
+  lt: "<",
+  nbsp: " ",
+  quot: '"',
+  "#39": "'",
+};
+
+const decodeBasicHtmlEntities = (text: string): string =>
+  text.replace(/&([^;]+);/g, (match, entity) => HTML_ENTITY_MAP[entity] ?? match);
+
+const sanitizeHTMLString = (htmlString: string, allowedHTMLTags: string[] = []): string => {
+  const allowedTags = new Set(allowedHTMLTags.map((tag) => tag.toLowerCase()));
+
+  if (typeof document === "undefined") {
+    if (allowedTags.size === 0) return decodeBasicHtmlEntities(htmlString.replace(/<[^>]*>/g, ""));
+
+    return htmlString.replace(/<\/?([a-z][a-z0-9-]*)\b[^>]*>/gi, (match, tagName) =>
+      allowedTags.has(tagName.toLowerCase()) ? match : ""
+    );
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = htmlString;
+
+  if (allowedTags.size === 0) return template.content.textContent ?? "";
+
+  const elements = Array.from(template.content.querySelectorAll("*"));
+  elements.forEach((element) => {
+    if (allowedTags.has(element.tagName.toLowerCase())) return;
+
+    element.replaceWith(...Array.from(element.childNodes));
+  });
+
+  return template.innerHTML;
+};
+
 /**
  * @description : This function will remove all the HTML tags from the string
  * @param {string} htmlString
@@ -126,7 +163,7 @@ const text = stripHTML(html);
 console.log(text); // Some text
  */
 export const sanitizeHTML = (htmlString: string) => {
-  const sanitizedText = sanitizeHtml(htmlString, { allowedTags: [] }); // sanitize the string to remove all HTML tags
+  const sanitizedText = sanitizeHTMLString(htmlString); // sanitize the string to remove all HTML tags
   return sanitizedText.trim(); // trim the string to remove leading and trailing whitespaces
 };
 
@@ -161,8 +198,7 @@ export const checkEmailValidity = (email: string): boolean => {
 };
 
 export const isEmptyHtmlString = (htmlString: string, allowedHTMLTags: string[] = []) => {
-  // Remove HTML tags using sanitize-html
-  const cleanText = sanitizeHtml(htmlString, { allowedTags: allowedHTMLTags });
+  const cleanText = sanitizeHTMLString(htmlString, allowedHTMLTags);
   // Trim the string and check if it's empty
   return cleanText.trim() === "";
 };

@@ -163,6 +163,14 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/requests/${requestId}/`).then((res) => res?.data);
   }
 
+  async archiveRequest(workspaceSlug: string, requestId: string): Promise<{ archived_at: string }> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/archive/`, {}).then((res) => res?.data);
+  }
+
+  async unarchiveRequest(workspaceSlug: string, requestId: string): Promise<{ archived_at: null }> {
+    return this.delete(`${workspaceSlug}/helpdesk/requests/${requestId}/archive/`).then((res) => res?.data);
+  }
+
   // --- Comments Management ---
 
   async getRequestComments(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestComment[]> {

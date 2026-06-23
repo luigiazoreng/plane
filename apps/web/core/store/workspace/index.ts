@@ -180,7 +180,9 @@ export abstract class BaseWorkspaceRootStore implements IWorkspaceRootStore {
    * fetch user workspaces from API
    */
   fetchWorkspaces = async () => {
-    this.loader = true;
+    runInAction(() => {
+      this.loader = true;
+    });
     try {
       const workspaceResponse = await this.workspaceService.userWorkspaces();
       runInAction(() => {
@@ -190,7 +192,9 @@ export abstract class BaseWorkspaceRootStore implements IWorkspaceRootStore {
       });
       return workspaceResponse;
     } finally {
-      this.loader = false;
+      runInAction(() => {
+        this.loader = false;
+      });
     }
   };
 

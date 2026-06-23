@@ -88,6 +88,8 @@ export interface IHelpdeskStore {
     requestId: string,
     data: Partial<IHelpdeskRequest>
   ) => Promise<IHelpdeskRequest>;
+  archiveRequest: (workspaceSlug: string, requestId: string) => Promise<void>;
+  unarchiveRequest: (workspaceSlug: string, requestId: string) => Promise<void>;
 
   // comment actions
   fetchRequestComments: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequestComment[]>;
@@ -146,7 +148,11 @@ export interface IHelpdeskStore {
   getWorkspaceMembers: (workspaceSlug: string) => IHelpdeskMember[];
   // customer actions
   fetchCustomers: (workspaceSlug: string) => Promise<IHelpdeskCustomer[]>;
-  updateCustomer: (workspaceSlug: string, customerId: string, data: Partial<Pick<IHelpdeskCustomer, "name" | "is_active">>) => Promise<IHelpdeskCustomer>;
+  updateCustomer: (
+    workspaceSlug: string,
+    customerId: string,
+    data: Partial<Pick<IHelpdeskCustomer, "name" | "is_active">>
+  ) => Promise<IHelpdeskCustomer>;
   deleteCustomer: (workspaceSlug: string, customerId: string) => Promise<void>;
   getWorkspaceCustomers: (workspaceSlug: string) => IHelpdeskCustomer[];
 }
@@ -269,7 +275,8 @@ export class HelpdeskStore implements IHelpdeskStore {
     );
 
   private sortBySequence = <T extends { sequence: number }>(items: T[]): T[] =>
-    [...items].toSorted((a: T, b: T) => a.sequence - b.sequence);
+    // eslint-disable-next-line unicorn/no-array-sort -- ES2022 target does not include Array.prototype.toSorted.
+    [...items].sort((a: T, b: T) => a.sequence - b.sequence);
 
   // --- Statuses ---
 
@@ -681,6 +688,29 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(this.requestIssues, [requestId], []);
       set(this.requestIntakeIssues, [requestId], []);
       set(this.unresolvedLinkedIssues, [requestId], []);
+    });
+  };
+
+  archiveRequest = async (workspaceSlug: string, requestId: string): Promise<void> => {
+    await this.helpdeskService.archiveRequest(workspaceSlug, requestId);
+    runInAction(() => {
+      const current = this.requests[workspaceSlug] || [];
+      set(
+        this.requests,
+        [workspaceSlug],
+        current.filter((request) => request.id !== requestId)
+      );
+    });
+  };
+
+  unarchiveRequest = async (workspaceSlug: string, requestId: string): Promise<void> => {
+    await this.helpdeskService.unarchiveRequest(workspaceSlug, requestId);
+    runInAction(() => {
+      const list = this.requests[workspaceSlug] || [];
+      const next = list.slice();
+      const index = next.findIndex((request) => request.id === requestId);
+      if (index >= 0) next[index].archived_at = null;
+      set(this.requests, [workspaceSlug], next);
     });
   };
 
