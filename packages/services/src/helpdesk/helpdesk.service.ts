@@ -10,6 +10,7 @@ import type {
   EHelpdeskMemberRole,
   IHelpdeskAnalyticsFilters,
   IHelpdeskAnalyticsResponse,
+  IHelpdeskCustomer,
   IHelpdeskForm,
   IHelpdeskFormField,
   IHelpdeskLinkedIssueLookupResponse,
@@ -254,6 +255,24 @@ export class HelpdeskService extends APIService {
 
   async removeMember(workspaceSlug: string, memberId: string): Promise<void> {
     return this.delete(`${workspaceSlug}/helpdesk/members/${memberId}/`).then((res) => res?.data);
+  }
+
+  // --- Customer Management (admin) ---
+
+  async getCustomers(workspaceSlug: string): Promise<IHelpdeskCustomer[]> {
+    return this.get(`${workspaceSlug}/helpdesk/customers/`).then((res) => res?.data);
+  }
+
+  async updateCustomer(
+    workspaceSlug: string,
+    customerId: string,
+    data: Partial<Pick<IHelpdeskCustomer, "name" | "is_active">>
+  ): Promise<IHelpdeskCustomer> {
+    return this.patch(`${workspaceSlug}/helpdesk/customers/${customerId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteCustomer(workspaceSlug: string, customerId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/customers/${customerId}/`).then((res) => res?.data);
   }
 }
 

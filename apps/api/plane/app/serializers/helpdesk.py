@@ -32,6 +32,13 @@ class HelpdeskCustomerSerializer(BaseSerializer):
         }
 
 
+class HelpdeskCustomerAdminSerializer(BaseSerializer):
+    class Meta:
+        model = HelpdeskCustomer
+        fields = ["id", "workspace", "name", "email", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "workspace", "email", "created_at", "updated_at"]
+
+
 class HelpdeskStatusSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskStatus

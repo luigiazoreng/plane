@@ -133,6 +133,7 @@ export const coreRoutes: RouteConfigEntry[] = [
           route(":workspaceSlug/helpdesk", "./(all)/[workspaceSlug]/(projects)/helpdesk/page.tsx"),
           route(":workspaceSlug/helpdesk/settings", "./(all)/[workspaceSlug]/(projects)/helpdesk/settings/page.tsx"),
           route(":workspaceSlug/helpdesk/analytics", "./(all)/[workspaceSlug]/(projects)/helpdesk/analytics/page.tsx"),
+          route(":workspaceSlug/helpdesk/customers", "./(all)/[workspaceSlug]/(projects)/helpdesk/customers/page.tsx"),
           route(
             ":workspaceSlug/helpdesk/:requestId",
             "./(all)/[workspaceSlug]/(projects)/helpdesk/[requestId]/page.tsx"
