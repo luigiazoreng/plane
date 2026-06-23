@@ -175,6 +175,11 @@ urlpatterns = [
         }),
         name="helpdesk-request-detail",
     ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/archive/",
+        HelpdeskRequestViewSet.as_view({"post": "archive", "delete": "unarchive"}),
+        name="helpdesk-request-archive-unarchive",
+    ),
 
     # --- Request → Issue links ---
     path(

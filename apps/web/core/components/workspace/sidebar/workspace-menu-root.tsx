@@ -98,6 +98,7 @@ export const WorkspaceMenuRoot = observer(function WorkspaceMenuRoot(props: Work
               >
                 <AppSidebarItem
                   variant="button"
+                  renderAs="div"
                   item={{
                     icon: (
                       <WorkspaceLogo

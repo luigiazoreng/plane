@@ -172,7 +172,7 @@ class HelpdeskRequestSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskRequest
         fields = "__all__"
-        read_only_fields = READ_ONLY_BASE + ["portal", "customer", "display_id"]
+        read_only_fields = READ_ONLY_BASE + ["portal", "customer", "display_id", "archived_at"]
 
     def _sync_assignees(self, instance, assignee_ids):
         # hard delete so soft-deleted rows don't linger in the M2M relation

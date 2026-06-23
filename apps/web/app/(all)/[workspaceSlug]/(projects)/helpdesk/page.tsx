@@ -5,10 +5,13 @@
  */
 
 import { useEffect, useRef, useMemo, useState } from "react";
+import type { ReactNode, RefObject } from "react";
 import { useHelpdeskSSE, type THelpdeskSSEEvent } from "@/hooks/use-helpdesk-sse";
 import { observer } from "mobx-react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, type NavigateFunction } from "react-router";
 import { useLocalStorage } from "@plane/hooks";
+import { Button } from "@plane/propel/button";
+import { ArchiveIcon, CopyIcon, EditIcon, LinkIcon, NewTabIcon, TrashIcon } from "@plane/propel/icons";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type {
   IBaseLayoutsBaseGroup,
@@ -17,7 +20,9 @@ import type {
   IHelpdeskRequestFilters,
   IHelpdeskStatus,
 } from "@plane/types";
-import { cn } from "@plane/utils";
+import type { TContextMenuItem } from "@plane/ui";
+import { ContextMenu } from "@plane/ui";
+import { cn, copyUrlToClipboard } from "@plane/utils";
 import {
   CalendarDays,
   Headset,
@@ -43,6 +48,7 @@ import { isHelpdeskRequestActive } from "@/helpers/helpdesk/statuses";
 import useDebounce from "@/hooks/use-debounce";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { useMember } from "@/hooks/store/use-member";
+import type { IHelpdeskStore } from "@/store/helpdesk.store";
 
 type THelpdeskAgentLayout = "list" | "kanban";
 type THelpdeskKanbanItem = IHelpdeskRequest & Record<string, unknown>;
@@ -496,36 +502,12 @@ const WorkspaceHelpdeskPage = observer(() => {
                 );
               }
               return (
-                <button
-                  type="button"
-                  className="group/kanban-block relative mb-2 w-full cursor-pointer text-left"
-                  onClick={() => navigate(`/${wSlug}/helpdesk/${request.id}`)}
-                >
-                  <div className="block w-full rounded-lg border border-subtle bg-layer-2 p-3 text-13 shadow-raised-100 outline-[0.5px] outline-transparent transition-all hover:border-strong hover:shadow-raised-200">
-                    {request.display_id && <p className="font-mono mb-1 text-11 text-tertiary">{request.display_id}</p>}
-                    <div className="line-clamp-1 w-full text-body-sm-medium text-primary">{request.title}</div>
-                    {request.description && (
-                      <p className="mt-1 line-clamp-2 text-12 text-tertiary">{request.description}</p>
-                    )}
-                    <div className="mt-2 flex flex-wrap items-center gap-2 pt-1 text-tertiary">
-                      <div className="flex items-center gap-1.5 text-13">
-                        <UserRound className="size-3 shrink-0" />
-                        <span className="max-w-[120px] truncate text-12">
-                          {request.contact_email || "Authenticated"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 text-13">
-                        <CalendarDays className="size-3 shrink-0" />
-                        <span className="text-12">
-                          {new Date(request.created_at).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </button>
+                <HelpdeskKanbanRequestCard
+                  request={request}
+                  workspaceSlug={wSlug}
+                  helpdeskStore={helpdeskStore}
+                  navigate={navigate}
+                />
               );
             }}
           />
@@ -575,9 +557,12 @@ const WorkspaceHelpdeskPage = observer(() => {
                         const statusObj = request.status ? statusMap[request.status] : null;
                         const isStatusOpen = inlineStatusRequest === request.id;
                         return (
-                          <div
+                          <HelpdeskListRequestRow
                             key={request.id}
-                            className="group relative flex items-center gap-3 border-b border-subtle px-4 py-2.5 transition-colors hover:bg-layer-1"
+                            request={request}
+                            workspaceSlug={wSlug}
+                            helpdeskStore={helpdeskStore}
+                            navigate={navigate}
                           >
                             {/* Status badge — clickable inline */}
                             <div className="relative shrink-0">
@@ -641,7 +626,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                                 })}
                               </div>
                             </div>
-                          </div>
+                          </HelpdeskListRequestRow>
                         );
                       })}
 
@@ -716,5 +701,267 @@ const WorkspaceHelpdeskPage = observer(() => {
     </div>
   );
 });
+
+type THelpdeskRequestContextMenuProps = {
+  request: IHelpdeskRequest;
+  workspaceSlug: string;
+  helpdeskStore: IHelpdeskStore;
+  navigate: NavigateFunction;
+  parentRef: RefObject<HTMLElement>;
+};
+
+const HELPDESK_ARCHIVABLE_STATUS_NAMES = ["resolved", "closed", "completed", "canceled", "cancelled"];
+
+const isHelpdeskRequestArchivable = (request: IHelpdeskRequest): boolean => {
+  if (request.status_detail?.is_terminal) return true;
+  const statusName = request.status_detail?.name?.toLowerCase() ?? "";
+  return HELPDESK_ARCHIVABLE_STATUS_NAMES.some((name) => statusName.includes(name));
+};
+
+function HelpdeskRequestContextMenu({
+  request,
+  workspaceSlug,
+  helpdeskStore,
+  navigate,
+  parentRef,
+}: THelpdeskRequestContextMenuProps) {
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const requestPath = `/${workspaceSlug}/helpdesk/${request.id}`;
+  const isArchivable = isHelpdeskRequestArchivable(request);
+
+  const handleCopyLink = () =>
+    copyUrlToClipboard(requestPath).then(() =>
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: "Link copied",
+        message: "Helpdesk ticket link copied to clipboard",
+      })
+    );
+
+  const handleDuplicate = async () => {
+    try {
+      await helpdeskStore.createRequest(workspaceSlug, {
+        portal: request.portal,
+        form: request.form,
+        title: `${request.title} (copy)`,
+        description: request.description,
+        status: request.status,
+        form_responses: request.form_responses,
+        assignees: request.assignees,
+        contact_email: request.contact_email,
+      });
+      setToast({ type: TOAST_TYPE.SUCCESS, title: "Ticket copied" });
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to copy ticket." });
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await helpdeskStore.deleteRequest(workspaceSlug, request.id);
+      setDeleteModalOpen(false);
+      setToast({ type: TOAST_TYPE.SUCCESS, title: "Ticket deleted" });
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to delete ticket." });
+    }
+  };
+
+  const handleArchive = async () => {
+    try {
+      await helpdeskStore.archiveRequest(workspaceSlug, request.id);
+      setArchiveModalOpen(false);
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: "Ticket archived",
+        message: "Your archived tickets can be restored later.",
+      });
+    } catch (_error) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to archive ticket." });
+    }
+  };
+
+  const menuItems: TContextMenuItem[] = [
+    {
+      key: "edit",
+      title: "Edit",
+      icon: EditIcon,
+      action: () => navigate(requestPath),
+    },
+    {
+      key: "make-a-copy",
+      title: "Make a copy",
+      icon: CopyIcon,
+      action: handleDuplicate,
+    },
+    {
+      key: "open-in-new-tab",
+      title: "Open in new tab",
+      icon: NewTabIcon,
+      action: () => window.open(requestPath, "_blank"),
+    },
+    {
+      key: "copy-link",
+      title: "Copy link",
+      icon: LinkIcon,
+      action: handleCopyLink,
+    },
+    {
+      key: "archive",
+      title: "Archive",
+      description: isArchivable ? undefined : "Only completed or canceled\nwork items can be archived",
+      icon: ArchiveIcon,
+      className: "items-start",
+      iconClassName: isArchivable ? undefined : "mt-1",
+      action: () => setArchiveModalOpen(true),
+      disabled: !isArchivable,
+    },
+    {
+      key: "delete",
+      title: "Delete",
+      icon: TrashIcon,
+      action: () => setDeleteModalOpen(true),
+    },
+  ];
+
+  return (
+    <>
+      <ContextMenu parentRef={parentRef} items={menuItems} />
+      {archiveModalOpen && (
+        <ConfirmModal
+          title="Archive ticket"
+          body={`Are you sure you want to archive "${request.title}"? You can restore archived tickets later.`}
+          confirmLabel="Archive"
+          onConfirm={handleArchive}
+          onCancel={() => setArchiveModalOpen(false)}
+        />
+      )}
+      {deleteModalOpen && (
+        <ConfirmModal
+          title="Delete ticket"
+          body={`Are you sure you want to permanently delete "${request.title}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteModalOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function HelpdeskKanbanRequestCard({
+  request,
+  workspaceSlug,
+  helpdeskStore,
+  navigate,
+}: {
+  request: IHelpdeskRequest;
+  workspaceSlug: string;
+  helpdeskStore: IHelpdeskStore;
+  navigate: NavigateFunction;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div ref={cardRef} className="group/kanban-block relative mb-2 w-full">
+      <HelpdeskRequestContextMenu
+        request={request}
+        workspaceSlug={workspaceSlug}
+        helpdeskStore={helpdeskStore}
+        navigate={navigate}
+        parentRef={cardRef}
+      />
+      <button
+        type="button"
+        className="w-full cursor-pointer text-left"
+        onClick={() => navigate(`/${workspaceSlug}/helpdesk/${request.id}`)}
+      >
+        <div className="block w-full rounded-lg border border-subtle bg-layer-2 p-3 text-13 shadow-raised-100 outline-[0.5px] outline-transparent transition-all hover:border-strong hover:shadow-raised-200">
+          {request.display_id && <p className="font-mono mb-1 text-11 text-tertiary">{request.display_id}</p>}
+          <div className="line-clamp-1 w-full text-body-sm-medium text-primary">{request.title}</div>
+          {request.description && <p className="mt-1 line-clamp-2 text-12 text-tertiary">{request.description}</p>}
+          <div className="mt-2 flex flex-wrap items-center gap-2 pt-1 text-tertiary">
+            <div className="flex items-center gap-1.5 text-13">
+              <UserRound className="size-3 shrink-0" />
+              <span className="max-w-[120px] truncate text-12">{request.contact_email || "Authenticated"}</span>
+            </div>
+            <div className="flex items-center gap-1 text-13">
+              <CalendarDays className="size-3 shrink-0" />
+              <span className="text-12">
+                {new Date(request.created_at).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </div>
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+function HelpdeskListRequestRow({
+  request,
+  workspaceSlug,
+  helpdeskStore,
+  navigate,
+  children,
+}: {
+  request: IHelpdeskRequest;
+  workspaceSlug: string;
+  helpdeskStore: IHelpdeskStore;
+  navigate: NavigateFunction;
+  children: ReactNode;
+}) {
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={rowRef}
+      className="group relative flex items-center gap-3 border-b border-subtle px-4 py-2.5 transition-colors hover:bg-layer-1"
+    >
+      <HelpdeskRequestContextMenu
+        request={request}
+        workspaceSlug={workspaceSlug}
+        helpdeskStore={helpdeskStore}
+        navigate={navigate}
+        parentRef={rowRef}
+      />
+      {children}
+    </div>
+  );
+}
+
+function ConfirmModal({
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="shadow-xl w-full max-w-sm rounded-xl border border-subtle bg-layer-1 p-6">
+        <h3 className="text-base font-semibold text-primary">{title}</h3>
+        <p className="mt-2 text-13 text-tertiary">{body}</p>
+        <div className="mt-5 flex justify-end gap-3">
+          <Button variant="ghost" size="base" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="error-fill" size="base" onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default WorkspaceHelpdeskPage;

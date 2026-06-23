@@ -177,6 +177,7 @@ class HelpdeskRequest(WorkspaceBaseModel):
     display_id = models.CharField(max_length=64, blank=True, default="")
     first_responded_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
     sla_resolution_due_at = models.DateTimeField(null=True, blank=True)
     external_source = models.CharField(max_length=255, blank=True, default="")
     external_id = models.CharField(max_length=255, blank=True, default="")

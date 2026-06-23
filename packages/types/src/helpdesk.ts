@@ -123,6 +123,7 @@ export interface IHelpdeskRequest {
   display_id: string;
   first_responded_at: string | null;
   resolved_at: string | null;
+  archived_at: string | null;
   status: string | null; // FK UUID to IHelpdeskStatus
   status_detail: IHelpdeskStatus | null;
   form_detail: IHelpdeskForm | null;

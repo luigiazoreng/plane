@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart2, ChevronRight, Headset, Settings, Ticket, Users } from "lucide-react";
@@ -21,6 +21,8 @@ const SUB_ITEMS = [
 
 const STORAGE_KEY = "helpdesk_sidebar_open";
 
+const isPathMatch = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
 type Props = {
   workspaceSlug: string;
 };
@@ -35,14 +37,6 @@ export function HelpdeskSidebarItem({ workspaceSlug }: Props) {
     return stored === null ? pathname.includes("/helpdesk") : stored === "true";
   });
 
-  // Auto-open when navigating into helpdesk
-  useEffect(() => {
-    if (pathname.includes("/helpdesk") && !isOpen) {
-      setIsOpen(true);
-      localStorage.setItem(STORAGE_KEY, "true");
-    }
-  }, [pathname, isOpen]);
-
   const handleToggle = () => {
     const next = !isOpen;
     setIsOpen(next);
@@ -54,12 +48,23 @@ export function HelpdeskSidebarItem({ workspaceSlug }: Props) {
     if (isExtendedSidebarOpened) toggleExtendedSidebar(false);
   };
 
-  const isHelpdeskActive = pathname.includes(`/${workspaceSlug}/helpdesk`);
+  const helpdeskHref = `/${workspaceSlug}/helpdesk`;
+  const isHelpdeskActive = isPathMatch(pathname, helpdeskHref);
+  const activeSubItem = SUB_ITEMS.find(({ key, href }) => {
+    const fullHref = `/${workspaceSlug}${href}`;
+
+    if (key === "tickets") return false;
+
+    return isPathMatch(pathname, fullHref);
+  });
 
   return (
     <div>
       <button type="button" className="w-full" onClick={handleToggle}>
         <SidebarNavItem isActive={isHelpdeskActive && !isOpen}>
+          {isHelpdeskActive && !isOpen && (
+            <span className="absolute top-1/2 left-0 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent-primary" />
+          )}
           <div className="flex items-center gap-1.5 py-px">
             <Headset className="size-4 shrink-0" />
             <p className="text-13 leading-5 font-medium">Helpdesk</p>
@@ -76,14 +81,14 @@ export function HelpdeskSidebarItem({ workspaceSlug }: Props) {
         <div className="mt-0.5 flex flex-col gap-0.5 pl-7">
           {SUB_ITEMS.map(({ key, label, href, Icon }) => {
             const fullHref = `/${workspaceSlug}${href}`;
-            const isActive =
-              key === "tickets"
-                ? // "Tickets" only active on exact /helpdesk (not sub-routes)
-                  pathname === fullHref
-                : pathname.startsWith(fullHref);
+            const isActive = key === "tickets" ? isHelpdeskActive && !activeSubItem : isPathMatch(pathname, fullHref);
+
             return (
               <Link key={key} href={fullHref} onClick={handleLinkClick}>
                 <SidebarNavItem isActive={isActive}>
+                  {isActive && (
+                    <span className="absolute top-1/2 left-0 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent-primary" />
+                  )}
                   <div className="flex items-center gap-1.5 py-px">
                     <Icon className="size-3.5 shrink-0" />
                     <p className="text-13 leading-5 font-medium">{label}</p>
