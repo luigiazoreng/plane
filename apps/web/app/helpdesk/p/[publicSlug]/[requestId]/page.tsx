@@ -5,9 +5,9 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router";
+import { useParams, Link, useNavigate } from "react-router";
 import { observer } from "mobx-react";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, Send, Lock } from "lucide-react";
 import { PublicHelpdeskService } from "@plane/services";
 import type { IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskPortal } from "@plane/types";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
@@ -17,6 +17,7 @@ const publicHelpdeskService = new PublicHelpdeskService();
 
 const HelpdeskPublicRequestPage = observer(() => {
   const { publicSlug, requestId } = useParams();
+  const navigate = useNavigate();
 
   const [portal, setPortal] = useState<IHelpdeskPortal | null>(null);
   const [request, setRequest] = useState<IHelpdeskRequest | null>(null);
@@ -31,6 +32,11 @@ const HelpdeskPublicRequestPage = observer(() => {
       const pSlug = publicSlug.toString();
       const rId = requestId.toString();
       const token = publicHelpdeskStore.customerToken || undefined;
+
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
       Promise.all([
         publicHelpdeskService.getPublicPortal(pSlug),
@@ -78,6 +84,44 @@ const HelpdeskPublicRequestPage = observer(() => {
     return (
       <div className="flex h-40 items-center justify-center">
         <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
+      </div>
+    );
+  }
+
+  if (!publicHelpdeskStore.customerToken) {
+    const loginUrl = `/helpdesk/p/${publicSlug}/login?next=/helpdesk/p/${publicSlug}/${requestId}`;
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <div className="mb-4 flex justify-center">
+          <div className="bg-primary/10 flex h-14 w-14 items-center justify-center rounded-full">
+            <Lock className="size-7 text-primary" />
+          </div>
+        </div>
+        <h2 className="text-xl text-text-100 font-bold">Sign in to view this ticket</h2>
+        <p className="text-text-400 text-sm mt-2">
+          You need an account to access ticket details and follow the conversation.
+        </p>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <button
+            onClick={() => navigate(loginUrl)}
+            className="bg-primary hover:bg-primary-hover text-sm rounded-md px-5 py-2 font-medium text-white transition-colors"
+          >
+            Sign in
+          </button>
+          <button
+            onClick={() =>
+              navigate(
+                `/helpdesk/p/${publicSlug}/register?next=${encodeURIComponent(`/helpdesk/p/${publicSlug}/${requestId}`)}`
+              )
+            }
+            className="text-sm text-text-200 rounded-md border border-subtle px-5 py-2 font-medium transition-colors hover:bg-surface-2"
+          >
+            Create account
+          </button>
+        </div>
+        <Link to={`/helpdesk/p/${publicSlug}`} className="text-sm text-text-400 mt-6 block hover:underline">
+          Return to Portal
+        </Link>
       </div>
     );
   }

@@ -22,6 +22,7 @@ const HelpdeskPublicFormPage = observer(() => {
   const [fieldValues, setFieldValues] = useState<Record<string, unknown>>({});
   const [successEmail, setSuccessEmail] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
+  const [submittedRequestId, setSubmittedRequestId] = useState<string | null>(null);
 
   const pSlug = publicSlug?.toString() || "";
   const fSlug = formSlug?.toString() || "";
@@ -35,7 +36,7 @@ const HelpdeskPublicFormPage = observer(() => {
         await publicStore.fetchPortalForm(pSlug, fSlug);
       } catch (_error: any) {
         if (_error?.response?.status === 401) {
-          navigate(`/helpdesk/p/${pSlug}/login`, { replace: true });
+          navigate(`/helpdesk/p/${pSlug}/login?next=/helpdesk/p/${pSlug}/forms/${fSlug}`, { replace: true });
           return;
         }
         setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to load form." });
@@ -94,6 +95,7 @@ const HelpdeskPublicFormPage = observer(() => {
       if (publicStore.customerToken) {
         navigate(`/helpdesk/p/${pSlug}/${response.id}`);
       } else {
+        setSubmittedRequestId(response.id);
         setIsSuccess(true);
       }
     } catch (_error: any) {
@@ -126,12 +128,29 @@ const HelpdeskPublicFormPage = observer(() => {
   }
 
   if (isSuccess) {
+    const nextParam = submittedRequestId ? `?next=/helpdesk/p/${pSlug}/${submittedRequestId}` : "";
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
         <h1 className="text-3xl text-text-100 font-bold">Request submitted successfully</h1>
         <p className="text-text-400 mt-3">{form.success_message || "Your request has been submitted successfully."}</p>
         {successEmail ? <p className="text-sm text-text-300 mt-2">We will contact you at {successEmail}.</p> : null}
-        <Button className="mt-6" variant="primary" onClick={() => navigate(`/helpdesk/p/${pSlug}`)}>
+
+        {submittedRequestId && (
+          <div className="mt-8 rounded-xl border border-subtle bg-surface-2 p-6">
+            <p className="text-text-200 font-medium">Want to track your ticket?</p>
+            <p className="text-sm text-text-400 mt-1">Create an account or sign in to follow up on this request.</p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Button variant="primary" onClick={() => navigate(`/helpdesk/p/${pSlug}/register${nextParam}`)}>
+                Create account
+              </Button>
+              <Button variant="secondary" onClick={() => navigate(`/helpdesk/p/${pSlug}/login${nextParam}`)}>
+                Sign in
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <Button className="mt-6" variant="ghost" onClick={() => navigate(`/helpdesk/p/${pSlug}`)}>
           Return to Portal
         </Button>
       </div>
@@ -166,11 +185,7 @@ const HelpdeskPublicFormPage = observer(() => {
             </div>
           )}
 
-          <HelpdeskFormRenderer
-            fields={orderedFields}
-            values={fieldValues}
-            onValueChange={handleValueChange}
-          />
+          <HelpdeskFormRenderer fields={orderedFields} values={fieldValues} onValueChange={handleValueChange} />
 
           <div className="flex items-center justify-end gap-3 border-t border-subtle pt-6">
             <Button variant="secondary" type="button" onClick={() => navigate(`/helpdesk/p/${pSlug}/new`)}>

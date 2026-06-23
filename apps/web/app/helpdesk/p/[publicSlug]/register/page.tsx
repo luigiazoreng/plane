@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from "react";
-import { useParams, useNavigate, Link } from "react-router";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router";
 import { observer } from "mobx-react";
 import { Input } from "@plane/propel/input";
 import { Button } from "@plane/propel/button";
@@ -15,7 +15,9 @@ import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.stor
 const HelpdeskRegisterPage = observer(() => {
   const { publicSlug } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const pSlug = publicSlug?.toString() || "";
+  const nextPath = searchParams.get("next");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -34,7 +36,7 @@ const HelpdeskRegisterPage = observer(() => {
         title: "Welcome",
         message: "Account created successfully",
       });
-      navigate(`/helpdesk/p/${pSlug}`);
+      navigate(nextPath || `/helpdesk/p/${pSlug}`);
     } catch (_err) {
       setToast({
         type: TOAST_TYPE.ERROR,
@@ -107,7 +109,10 @@ const HelpdeskRegisterPage = observer(() => {
 
       <p className="text-sm text-text-400 mt-6 text-center">
         Already have an account?{" "}
-        <Link to={`/helpdesk/p/${pSlug}/login`} className="font-medium text-primary hover:underline">
+        <Link
+          to={`/helpdesk/p/${pSlug}/login${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
+          className="font-medium text-primary hover:underline"
+        >
           Sign in
         </Link>
       </p>
