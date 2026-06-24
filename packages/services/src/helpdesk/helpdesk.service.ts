@@ -15,6 +15,7 @@ import type {
   IHelpdeskFormField,
   IHelpdeskLinkedIssueLookupResponse,
   IHelpdeskMember,
+  IHelpdeskPaginatedResponse,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestComment,
@@ -139,7 +140,10 @@ export class HelpdeskService extends APIService {
 
   // --- Requests Management ---
 
-  async getRequests(workspaceSlug: string, params?: Record<string, string | string[]>): Promise<IHelpdeskRequest[]> {
+  async getRequests(
+    workspaceSlug: string,
+    params?: Record<string, string | string[]>
+  ): Promise<IHelpdeskPaginatedResponse> {
     return this.get(`${workspaceSlug}/helpdesk/requests/`, { params }).then((res) => res?.data);
   }
 

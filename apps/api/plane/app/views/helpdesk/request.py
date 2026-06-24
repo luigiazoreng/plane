@@ -1,11 +1,19 @@
 from django.utils import timezone
+from django.db.models import Prefetch
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import ValidationError
 
 from plane.app.views.base import BaseViewSet
-from plane.db.models.helpdesk import HelpdeskForm, HelpdeskFormVisibility, HelpdeskPortal, HelpdeskRequest, HelpdeskStatus
+from plane.db.models.helpdesk import (
+    HelpdeskForm,
+    HelpdeskFormVisibility,
+    HelpdeskPortal,
+    HelpdeskRequest,
+    HelpdeskRequestAssignee,
+    HelpdeskStatus,
+)
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from .form import get_customer_from_token
@@ -82,13 +90,33 @@ class HelpdeskRequestViewSet(BaseViewSet):
         queryset = queryset.order_by(order_by)
 
         # distinct() guards against duplicate rows when filtering by the assignees M2M
-        return queryset.distinct()
+        queryset = queryset.distinct()
+
+        # Eager-load related objects to avoid N+1 queries on serialization.
+        # _prefetched_assignees is read by HelpdeskRequestSerializer.to_representation.
+        queryset = queryset.select_related("status", "portal", "form").prefetch_related(
+            Prefetch(
+                "request_assignees",
+                queryset=HelpdeskRequestAssignee.objects.filter(deleted_at__isnull=True),
+                to_attr="_prefetched_assignees",
+            )
+        )
+
+        return queryset
 
     def list(self, request, *args, **kwargs):
         slug = self.kwargs.get("slug")
         if get_helpdesk_role(request.user, slug) is None:
             return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-        return super().list(request, *args, **kwargs)
+
+        queryset = self.get_queryset()
+        return self.paginate(
+            request=request,
+            queryset=queryset,
+            on_results=lambda results: HelpdeskRequestSerializer(results, many=True).data,
+            default_per_page=50,
+            max_per_page=200,
+        )
 
     def retrieve(self, request, *args, **kwargs):
         slug = self.kwargs.get("slug")
