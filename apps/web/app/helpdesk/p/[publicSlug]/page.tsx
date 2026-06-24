@@ -25,7 +25,7 @@ const HelpdeskPublicDashboard = observer(() => {
       try {
         const portal = await publicStore.fetchPublicPortal(pSlug);
         if (portal?.require_login && !publicStore.customerToken) {
-          window.location.href = `/helpdesk/p/${pSlug}/login`;
+          navigate(`/helpdesk/p/${pSlug}/login`);
         } else {
           await publicStore.fetchMyRequests(pSlug);
         }
@@ -36,7 +36,7 @@ const HelpdeskPublicDashboard = observer(() => {
       }
     };
     loadPortalData();
-  }, [pSlug]);
+  }, [pSlug, navigate]);
 
   const { currentPortal, myRequests, customerToken } = publicStore;
 

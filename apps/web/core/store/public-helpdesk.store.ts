@@ -60,15 +60,25 @@ export class PublicHelpdeskStore {
       const payload = JSON.parse(atob(payloadB64)) as { exp?: number };
       if (payload.exp && payload.exp * 1000 > Date.now()) {
         this.customerToken = storedToken;
+        const storedData = localStorage.getItem("helpdesk_customer_data");
+        if (storedData) {
+          try {
+            this.customerData = JSON.parse(storedData);
+          } catch {
+            // ignore malformed data
+          }
+        }
       } else {
         localStorage.removeItem("helpdesk_customer_token");
+        localStorage.removeItem("helpdesk_customer_data");
       }
     } catch {
       localStorage.removeItem("helpdesk_customer_token");
+      localStorage.removeItem("helpdesk_customer_data");
     }
   }
 
-  setCustomerToken(token: string | null) {
+  setCustomerToken = (token: string | null) => {
     this.customerToken = token;
     this.hasHydratedCustomerSession = true;
     if (typeof window !== "undefined") {
@@ -78,19 +88,26 @@ export class PublicHelpdeskStore {
         localStorage.removeItem("helpdesk_customer_token");
       }
     }
-  }
+  };
 
-  setCustomerData(data: any) {
+  setCustomerData = (data: any) => {
     this.customerData = data;
-  }
+    if (typeof window !== "undefined") {
+      if (data) {
+        localStorage.setItem("helpdesk_customer_data", JSON.stringify(data));
+      } else {
+        localStorage.removeItem("helpdesk_customer_data");
+      }
+    }
+  };
 
-  logout() {
+  logout = () => {
     this.setCustomerToken(null);
     this.setCustomerData(null);
     this.portalForms = [];
     this.currentForm = null;
     this.myRequests = [];
-  }
+  };
 
   async fetchPublicPortal(publicSlug: string) {
     const portal = await this.publicHelpdeskService.getPublicPortal(publicSlug);
