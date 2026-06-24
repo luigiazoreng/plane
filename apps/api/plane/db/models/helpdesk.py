@@ -179,6 +179,8 @@ class HelpdeskRequest(WorkspaceBaseModel):
     resolved_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     sla_resolution_due_at = models.DateTimeField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    target_date = models.DateField(null=True, blank=True)
     external_source = models.CharField(max_length=255, blank=True, default="")
     external_id = models.CharField(max_length=255, blank=True, default="")
     import_metadata = models.JSONField(default=dict, blank=True)

@@ -130,6 +130,8 @@ export interface IHelpdeskRequest {
   source: THelpdeskRequestSource;
   form_responses: Record<string, unknown>;
   assignees: string[];
+  start_date: string | null;
+  target_date: string | null;
   created_at: string;
   updated_at: string;
 }

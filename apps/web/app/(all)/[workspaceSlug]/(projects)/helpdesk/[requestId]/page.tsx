@@ -15,7 +15,8 @@ import { Switch } from "@plane/propel/switch";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { IHelpdeskStatus, ISearchIssueResponse } from "@plane/types";
 import { AppHeader } from "@/components/core/app-header";
-import { generateWorkItemLink } from "@plane/utils";
+import { DateDropdown } from "@/components/dropdowns/date";
+import { generateWorkItemLink, getDate, renderFormattedPayloadDate } from "@plane/utils";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -568,6 +569,44 @@ const WorkspaceRequestDetailPage = observer(() => {
                       buttonVariant={request.assignees.length > 0 ? "transparent-without-text" : "border-without-text"}
                       buttonClassName={request.assignees.length > 0 ? "hover:bg-transparent px-0" : ""}
                       placeholder="Assign"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-400 shrink-0">Start date</p>
+                    <DateDropdown
+                      placeholder="Add start date"
+                      value={request.start_date}
+                      onChange={(val) =>
+                        helpdeskStore.updateRequest(wSlug, rId, {
+                          start_date: val ? renderFormattedPayloadDate(val) : null,
+                        })
+                      }
+                      maxDate={request.target_date ? (getDate(request.target_date) ?? undefined) : undefined}
+                      buttonVariant="transparent-with-text"
+                      className="group w-full grow"
+                      buttonContainerClassName="w-full text-right h-7"
+                      buttonClassName={`text-sm ${request.start_date ? "text-text-100" : "text-text-400"}`}
+                      hideIcon
+                      clearIconClassName="h-3 w-3 hidden group-hover:inline"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-400 shrink-0">Due date</p>
+                    <DateDropdown
+                      placeholder="Add due date"
+                      value={request.target_date}
+                      onChange={(val) =>
+                        helpdeskStore.updateRequest(wSlug, rId, {
+                          target_date: val ? renderFormattedPayloadDate(val) : null,
+                        })
+                      }
+                      minDate={request.start_date ? (getDate(request.start_date) ?? undefined) : undefined}
+                      buttonVariant="transparent-with-text"
+                      className="group w-full grow"
+                      buttonContainerClassName="w-full text-right h-7"
+                      buttonClassName={`text-sm ${request.target_date ? "text-text-100" : "text-text-400"}`}
+                      hideIcon
+                      clearIconClassName="h-3 w-3 hidden group-hover:inline"
                     />
                   </div>
                   <div className="flex items-center justify-between gap-2">

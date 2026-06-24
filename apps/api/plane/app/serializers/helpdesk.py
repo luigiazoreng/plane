@@ -203,6 +203,13 @@ class HelpdeskRequestSerializer(BaseSerializer):
                 ignore_conflicts=True,
             )
 
+    def validate(self, data):
+        start = data.get("start_date")
+        target = data.get("target_date")
+        if start and target and start > target:
+            raise serializers.ValidationError("Start date cannot exceed target date.")
+        return data
+
     def create(self, validated_data):
         assignees = validated_data.pop("assignees", None)
         instance = super().create(validated_data)
