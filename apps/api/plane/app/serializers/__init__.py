@@ -133,6 +133,10 @@ from .helpdesk import (
     HelpdeskRequestCommentSerializer,
     HelpdeskRequestIssueSerializer,
 )
+from .kpi import (
+    KpiConfigSerializer,
+    KpiIssueAttributeSerializer,
+)
 from .favorite import UserFavoriteSerializer
 
 from .draft import (
