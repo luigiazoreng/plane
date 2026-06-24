@@ -25,6 +25,7 @@ export default {
     upgrade: "Upgrade",
     stickies: "Stickies",
     helpdesk: "Helpdesk",
+    kpi: "KPI",
   },
 
   auth: {

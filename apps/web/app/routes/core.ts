@@ -172,6 +172,18 @@ export const coreRoutes: RouteConfigEntry[] = [
             "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/issues/(detail)/[issueId]/page.tsx"
           ),
 
+          // KPI
+          layout("./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/kpi/layout.tsx", [
+            route(
+              ":workspaceSlug/projects/:projectId/kpi",
+              "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/kpi/page.tsx"
+            ),
+            route(
+              ":workspaceSlug/projects/:projectId/kpi/settings",
+              "./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/kpi/settings/page.tsx"
+            ),
+          ]),
+
           // Cycle Detail
           layout("./(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/cycles/(detail)/layout.tsx", [
             route(
