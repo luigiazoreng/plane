@@ -104,3 +104,7 @@ from .helpdesk import (
     HelpdeskRequestIssue,
     HelpdeskStatus,
 )
+from .kpi import (
+    KpiConfig,
+    KpiIssueAttribute,
+)
