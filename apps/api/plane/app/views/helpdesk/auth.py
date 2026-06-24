@@ -7,8 +7,18 @@ from rest_framework.permissions import AllowAny
 
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Workspace
-from plane.db.models.helpdesk import HelpdeskCustomer, HelpdeskPortal
+from plane.db.models.helpdesk import HelpdeskCustomer, HelpdeskPortal, HelpdeskRequest
 from plane.app.serializers.helpdesk import HelpdeskCustomerSerializer
+
+
+def _claim_anonymous_requests(customer):
+    """Link any anonymous requests with matching contact_email to this customer."""
+    HelpdeskRequest.objects.filter(
+        portal__workspace=customer.workspace,
+        contact_email__iexact=customer.email,
+        customer__isnull=True,
+        deleted_at__isnull=True,
+    ).update(customer=customer)
 
 def get_customer_token(customer):
     payload = {
@@ -41,6 +51,7 @@ class HelpdeskCustomerRegisterEndpoint(BaseAPIView):
         customer = HelpdeskCustomer(email=email, name=name, workspace=workspace)
         customer.set_password(password)
         customer.save()
+        _claim_anonymous_requests(customer)
 
         token = get_customer_token(customer)
         return Response(
@@ -69,6 +80,7 @@ class HelpdeskCustomerLoginEndpoint(BaseAPIView):
         if not customer or not customer.check_password(password):
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
+        _claim_anonymous_requests(customer)
         token = get_customer_token(customer)
         return Response(
             {
@@ -101,6 +113,7 @@ class PublicHelpdeskCustomerRegisterEndpoint(BaseAPIView):
         customer = HelpdeskCustomer(email=email, name=name, workspace=workspace)
         customer.set_password(password)
         customer.save()
+        _claim_anonymous_requests(customer)
 
         token = get_customer_token(customer)
         return Response(
@@ -131,6 +144,7 @@ class PublicHelpdeskCustomerLoginEndpoint(BaseAPIView):
         if not customer or not customer.check_password(password):
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
+        _claim_anonymous_requests(customer)
         token = get_customer_token(customer)
         return Response(
             {

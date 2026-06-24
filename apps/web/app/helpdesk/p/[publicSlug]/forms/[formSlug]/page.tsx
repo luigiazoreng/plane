@@ -188,7 +188,15 @@ const HelpdeskPublicFormPage = observer(() => {
           <HelpdeskFormRenderer fields={orderedFields} values={fieldValues} onValueChange={handleValueChange} />
 
           <div className="flex items-center justify-end gap-3 border-t border-subtle pt-6">
-            <Button variant="secondary" type="button" onClick={() => navigate(`/helpdesk/p/${pSlug}/new`)}>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() =>
+                publicStore.portalForms.length > 1
+                  ? navigate(`/helpdesk/p/${pSlug}/new`)
+                  : navigate(`/helpdesk/p/${pSlug}`)
+              }
+            >
               Back
             </Button>
             <Button variant="primary" type="submit" loading={submitting}>
