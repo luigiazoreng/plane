@@ -17,16 +17,47 @@ import type { IHelpdeskStatus, ISearchIssueResponse } from "@plane/types";
 import { AppHeader } from "@/components/core/app-header";
 import { DateDropdown } from "@/components/dropdowns/date";
 import { generateWorkItemLink, getDate, renderFormattedPayloadDate } from "@plane/utils";
+
+const FORM_RESPONSE_LABELS: Record<string, string> = {
+  category_1: "Categoria",
+  category_2: "Subcategoria",
+  category_3: "Detalhe",
+  erpnext_name: "ERP ID",
+  erpnext_status: "Status ERP",
+  erpnext_creation: "Criado no ERP",
+  erpnext_modified: "Modificado no ERP",
+  resolution_deadline: "Prazo de resolução",
+  resolved_at: "Resolvido em",
+  first_responded_at: "Primeira resposta em",
+  sector_applicant: "Departamento do solicitante",
+  employee_name: "Nome do funcionário",
+  employee_sector: "Departamento do funcionário",
+  employee_id: "ID do funcionário",
+  date_entry: "Data de abertura",
+  owner: "Responsável ERP",
+  assigned_user: "Atribuído a (ERP)",
+  attach: "Anexo",
+  link_doc: "Links de documentos",
+};
+
+const HIDDEN_FORM_RESPONSE_KEYS = new Set(["erpnext_creation", "erpnext_modified"]);
+
+function labelFor(key: string): string {
+  return FORM_RESPONSE_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatFormValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
+  return String(value);
+}
 import {
   ArrowLeft,
   ArrowUpRight,
-  FileText,
   Link2,
   Lock,
   MessageCircleMore,
   MessageSquareText,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Send,
   UserRound,
@@ -57,7 +88,6 @@ const WorkspaceRequestDetailPage = observer(() => {
   const [newComment, setNewComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [isInternalNote, setIsInternalNote] = useState(false);
-  const [isRequestPanelOpen, setIsRequestPanelOpen] = useState(true);
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   // Intake forwarding state
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
@@ -323,85 +353,9 @@ const WorkspaceRequestDetailPage = observer(() => {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Left panel — original request (collapsible) */}
-          <aside
-            className={`hidden shrink-0 overflow-hidden border-r border-subtle bg-surface-2 transition-[width,opacity] duration-200 ease-in-out lg:block ${
-              isRequestPanelOpen ? "w-[360px] opacity-100" : "w-0 border-r-0 opacity-0"
-            }`}
-          >
-            <div className="flex h-full w-[360px] flex-col overflow-y-auto">
-              <div className="flex items-center justify-between gap-2 border-b border-subtle px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="text-text-300 size-4" />
-                  <h2 className="text-sm text-text-100 font-semibold">Original request</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsRequestPanelOpen(false)}
-                  className="text-text-300 rounded-md p-1 transition-colors hover:bg-surface-1 hover:text-primary"
-                  title="Collapse panel"
-                >
-                  <PanelLeftClose className="size-4" />
-                </button>
-              </div>
-              <div className="flex-1 space-y-4 p-4">
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {request.display_id && (
-                          <span className="font-mono text-11 text-tertiary">{request.display_id}</span>
-                        )}
-                        <h3 className="text-sm text-text-100 font-semibold">{request.title}</h3>
-                      </div>
-                      {request.form_detail ? (
-                        <p className="text-xs text-text-400 mt-1">
-                          Submitted via form: <span className="text-text-100">{request.form_detail.name}</span>
-                        </p>
-                      ) : null}
-                    </div>
-                    <Badge variant="neutral" size="sm">
-                      {request.customer ? "Authenticated" : "Anonymous"}
-                    </Badge>
-                  </div>
-                  <div className="text-sm text-text-300 mt-3 whitespace-pre-wrap">{request.description}</div>
-                </div>
-
-                {Object.keys(request.form_responses || {}).length > 0 ? (
-                  <div className="border-t border-subtle pt-4">
-                    <p className="tracking-wider text-text-400 mb-3 text-11 uppercase">Form responses</p>
-                    <div className="space-y-3">
-                      {Object.entries(request.form_responses || {}).map(([key, value]) => {
-                        const field = request.form_detail?.fields_detail?.find((item) => item.key === key);
-                        return (
-                          <div key={key}>
-                            <p className="text-text-400 text-11">{field?.label || key}</p>
-                            <div className="text-sm text-text-100 mt-0.5 whitespace-pre-wrap">
-                              {typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </aside>
-
-          {/* Main content — conversation */}
+          {/* Main content — conversation (70%) */}
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center gap-2 border-b border-subtle px-4 py-3">
-              {!isRequestPanelOpen && (
-                <button
-                  type="button"
-                  onClick={() => setIsRequestPanelOpen(true)}
-                  className="text-text-300 hidden rounded-md p-1 transition-colors hover:bg-surface-2 hover:text-primary lg:block"
-                  title="Show original request"
-                >
-                  <PanelLeftOpen className="size-4" />
-                </button>
-              )}
               <MessageCircleMore className="text-text-300 size-4" />
               <h2 className="text-sm text-text-100 font-semibold">Conversation</h2>
               <span className="text-xs text-text-400">· replies and internal notes</span>
@@ -409,33 +363,52 @@ const WorkspaceRequestDetailPage = observer(() => {
 
             <div className="flex-1 overflow-y-auto px-4 py-5">
               <div className="mx-auto max-w-3xl space-y-5">
+                {/* Original customer message — always shown as first bubble */}
+                <div className="shadow-sm rounded-xl border border-subtle bg-surface-2 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="text-text-300 flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-1">
+                      <MessageSquareText className="size-3.5" />
+                    </div>
+                    <span className="text-sm text-text-100 font-medium">{request.contact_email || "Customer"}</span>
+                    <Badge variant="neutral" size="sm">
+                      Original request
+                    </Badge>
+                    <span className="text-text-400 ml-auto text-11">
+                      {new Date(request.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  {request.description ? (
+                    <div
+                      className="prose-sm prose-invert text-sm text-text-200 max-w-none prose [&_li]:my-0.5 [&_ol]:my-1 [&_p]:my-1 [&_ul]:my-1"
+                      // eslint-disable-next-line react/no-danger
+                      dangerouslySetInnerHTML={{ __html: request.description }}
+                    />
+                  ) : (
+                    <p className="text-sm text-text-400 italic">No description provided.</p>
+                  )}
+                </div>
+
                 {commentsState.isLoading && comments.length === 0 ? (
                   <div className="flex justify-center py-10">
                     <div className="border-primary h-7 w-7 animate-spin rounded-full border-b-2" />
                   </div>
-                ) : comments.length === 0 ? (
-                  <p className="text-sm text-text-400 py-10 text-center">No replies yet.</p>
                 ) : (
                   comments.map((comment) => {
                     const isAgent = !!comment.actor;
+                    const avatarClass = isAgent ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-300";
                     return (
-                      <div key={comment.id} className="flex gap-3">
+                      <div key={comment.id} className={`flex gap-3 ${isAgent ? "flex-row-reverse" : "flex-row"}`}>
                         <div
-                          className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${
-                            comment.is_internal
-                              ? "bg-amber-500/10 text-amber-500"
-                              : isAgent
-                                ? "bg-primary/10 text-primary"
-                                : "text-text-300 bg-surface-2"
-                          }`}
+                          className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${comment.is_internal ? "text-blue-400" : avatarClass}`}
+                          style={comment.is_internal ? { backgroundColor: "rgba(59,130,246,0.15)" } : undefined}
                         >
                           {isAgent ? <UserRound className="size-3.5" /> : <MessageSquareText className="size-3.5" />}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-1 flex items-center gap-2">
+                        <div className={`flex max-w-[80%] min-w-0 flex-col ${isAgent ? "items-end" : "items-start"}`}>
+                          <div className={`mb-1.5 flex items-center gap-2 ${isAgent ? "flex-row-reverse" : ""}`}>
                             <span className="text-sm text-text-100 font-medium">{isAgent ? "Agent" : "Customer"}</span>
                             {comment.is_internal && (
-                              <Badge variant="warning" size="sm">
+                              <Badge variant="neutral" size="sm">
                                 Internal note
                               </Badge>
                             )}
@@ -444,13 +417,18 @@ const WorkspaceRequestDetailPage = observer(() => {
                             </span>
                           </div>
                           <div
-                            className={`text-sm whitespace-pre-wrap ${
+                            className={`text-sm shadow-sm rounded-xl border px-4 py-3 ${comment.is_internal ? "" : "text-text-100 border-subtle bg-surface-2"}`}
+                            style={
                               comment.is_internal
-                                ? "bg-amber-500/5 text-text-200 rounded-md px-3 py-2"
-                                : "text-text-200"
-                            }`}
+                                ? {
+                                    backgroundColor: "rgba(59,130,246,0.12)",
+                                    borderColor: "rgba(59,130,246,0.35)",
+                                    color: "#bfdbfe",
+                                  }
+                                : undefined
+                            }
                           >
-                            {comment.content}
+                            <p className="whitespace-pre-wrap">{comment.content}</p>
                           </div>
                         </div>
                       </div>
@@ -513,8 +491,8 @@ const WorkspaceRequestDetailPage = observer(() => {
             </div>
           </div>
 
-          {/* Right sidebar */}
-          <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-subtle bg-surface-2 xl:block">
+          {/* Right sidebar (30%) */}
+          <aside className="w-[30%] max-w-[380px] min-w-[260px] shrink-0 overflow-y-auto border-l border-subtle bg-surface-2">
             <div className="flex flex-col">
               {/* Request details */}
               <section className="border-b border-subtle p-4">
@@ -617,6 +595,28 @@ const WorkspaceRequestDetailPage = observer(() => {
                   </div>
                 </div>
               </section>
+
+              {/* Form responses */}
+              {Object.keys(request.form_responses || {}).filter((k) => !HIDDEN_FORM_RESPONSE_KEYS.has(k)).length > 0 ? (
+                <section className="border-b border-subtle p-4">
+                  <h2 className="text-xs tracking-wider text-text-400 mb-3 font-semibold uppercase">
+                    Detalhes do formulário
+                  </h2>
+                  <div className="space-y-2.5">
+                    {Object.entries(request.form_responses || {})
+                      .filter(([key, value]) => !HIDDEN_FORM_RESPONSE_KEYS.has(key) && formatFormValue(value) !== "—")
+                      .map(([key, value]) => {
+                        const field = request.form_detail?.fields_detail?.find((item) => item.key === key);
+                        return (
+                          <div key={key} className="flex items-start justify-between gap-2">
+                            <p className="text-xs text-text-400 shrink-0 pt-0.5">{field?.label || labelFor(key)}</p>
+                            <p className="text-sm text-text-100 text-right break-all">{formatFormValue(value)}</p>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </section>
+              ) : null}
 
               {/* Dev pipeline — Intake links */}
               <section className="border-b border-subtle p-4">
