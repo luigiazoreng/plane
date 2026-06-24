@@ -1,7 +1,7 @@
 from datetime import timedelta
 
-from django.db.models import Avg, Count, ExpressionWrapper, F, fields
-from django.db.models.functions import TruncDate, TruncMonth
+from django.db.models import Avg, Count, ExpressionWrapper, F, Min, fields
+from django.db.models.functions import Coalesce, TruncDate, TruncMonth
 from rest_framework import status as http_status
 from rest_framework.response import Response
 
@@ -31,8 +31,18 @@ def _get_trunc_fn(date_filter):
     return TruncMonth
 
 
+def _ref_date_expr():
+    """COALESCE(start_date, DATE(created_at)) — the canonical ticket date for analytics.
+
+    Imported ERP tickets carry the original open date in start_date; tickets
+    created directly in Plane fall back to created_at. Using this expression
+    consistently across all queries prevents imported tickets from clustering
+    at their import date (June 2026) instead of their actual historical dates.
+    """
+    return Coalesce(F("start_date"), TruncDate("created_at"))
+
+
 class HelpdeskAnalyticsEndpoint(BaseAPIView):
-    SLA_HISTORY_CUTOFF = "2026-06-17"
 
     def get(self, request, slug):
         if get_helpdesk_role(request.user, slug) is None:
@@ -49,14 +59,21 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         current_range = date_ranges["current"]
         previous_range = date_ranges.get("previous")
 
-        base_qs = HelpdeskRequest.objects.filter(workspace__slug=slug)
+        base_qs = HelpdeskRequest.objects.filter(
+            workspace__slug=slug,
+            archived_at__isnull=True,  # exclude archived tickets from all analytics
+        )
         if portal_id:
             base_qs = base_qs.filter(portal_id=portal_id)
 
+        # Annotate every row with its canonical reference date once so all
+        # downstream filters and groupings use the same expression.
+        base_qs = base_qs.annotate(ref_date=_ref_date_expr())
+
         # --- KPIs ---
         current_qs = base_qs.filter(
-            created_at__gte=current_range["gte"],
-            created_at__lte=current_range["lte"],
+            ref_date__gte=current_range["gte"],
+            ref_date__lte=current_range["lte"],
         )
         total_current = current_qs.count()
 
@@ -74,8 +91,8 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         pct_change = None
         if previous_range:
             total_previous = base_qs.filter(
-                created_at__gte=previous_range["gte"],
-                created_at__lte=previous_range["lte"],
+                ref_date__gte=previous_range["gte"],
+                ref_date__lte=previous_range["lte"],
             ).count()
             pct_change = _safe_pct_change(total_current, total_previous)
 
@@ -109,11 +126,8 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             "sla_first_response_hours": None,
             "sla_resolution_hours": None,
             "scope": "ambiguous",
-            "historical_cutoff": self.SLA_HISTORY_CUTOFF,
-            "historical_note": (
-                f"SLA compliance is reliable for requests created on or after {self.SLA_HISTORY_CUTOFF} "
-                "or when response/resolution timestamps are present."
-            ),
+            "historical_cutoff": None,
+            "historical_note": None,
         }
         if portal_id:
             portal = HelpdeskPortal.objects.filter(id=portal_id, workspace__slug=slug).first()
@@ -130,6 +144,20 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         if portal:
             sla_data["sla_first_response_hours"] = portal.sla_first_response_hours
             sla_data["sla_resolution_hours"] = portal.sla_resolution_hours
+
+            # Compute historical cutoff dynamically: earliest ticket with a response timestamp.
+            # If that date is later than the start of the current period, warn about reliability.
+            earliest_with_response = (
+                HelpdeskRequest.objects.filter(workspace__slug=slug, portal=portal, first_responded_at__isnull=False)
+                .aggregate(earliest=Min("created_at"))["earliest"]
+            )
+            if earliest_with_response:
+                cutoff_str = str(earliest_with_response.date())
+                sla_data["historical_cutoff"] = cutoff_str
+                sla_data["historical_note"] = (
+                    f"SLA compliance is reliable for requests created on or after {cutoff_str} "
+                    "or when response/resolution timestamps are present."
+                )
 
             if portal.sla_first_response_hours:
                 sla_threshold = timedelta(hours=portal.sla_first_response_hours)
@@ -160,8 +188,10 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         # --- Charts ---
         trunc_fn = _get_trunc_fn(date_filter)
 
+        # Group by ref_date (start_date when available) so imported tickets distribute
+        # across their original historical dates rather than clustering at import time.
         requests_over_time = list(
-            current_qs.annotate(date=trunc_fn("created_at"))
+            current_qs.annotate(date=trunc_fn("ref_date"))
             .values("date")
             .annotate(count=Count("id"))
             .order_by("date")
@@ -191,7 +221,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         resolution_time_trend = list(
             current_qs.filter(resolved_at__isnull=False)
             .annotate(
-                date=trunc_fn("created_at"),
+                date=trunc_fn("ref_date"),
                 resolution_duration=ExpressionWrapper(
                     F("resolved_at") - F("created_at"),
                     output_field=fields.DurationField(),
@@ -209,12 +239,23 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             for row in resolution_time_trend
         ]
 
+        # Top agents: count resolved tickets in the current period using the same
+        # ref_date logic (COALESCE(request__start_date, DATE(request__created_at))).
         top_agents = list(
             HelpdeskRequestAssignee.objects.filter(
                 request__workspace__slug=slug,
+                request__archived_at__isnull=True,
                 request__status_id__in=terminal_ids,
-                request__resolved_at__gte=current_range["gte"],
-                request__resolved_at__lte=current_range["lte"],
+            )
+            .annotate(
+                req_ref_date=Coalesce(
+                    F("request__start_date"),
+                    TruncDate("request__created_at"),
+                )
+            )
+            .filter(
+                req_ref_date__gte=current_range["gte"],
+                req_ref_date__lte=current_range["lte"],
             )
             .values("assignee_id", "assignee__display_name")
             .annotate(count=Count("request_id", distinct=True))

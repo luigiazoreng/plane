@@ -13,21 +13,26 @@ type Props = {
 const SOURCE_COLORS: Record<string, string> = {
   public_form: "#1192E8",
   internal_form: "#F97316",
+  unknown: "#64748B",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
   public_form: "Public form",
   internal_form: "Internal form",
+  unknown: "Sem origem",
 };
 
 export const RequestsBySourceChart = observer(function RequestsBySourceChart({ data, isLoading }: Props) {
   const chartData = useMemo(
     () =>
-      (data ?? []).map((point) => ({
-        key: point.source,
-        name: SOURCE_LABELS[point.source] ?? point.source,
-        value: point.count,
-      })),
+      (data ?? []).map((point) => {
+        const key = point.source ?? "unknown";
+        return {
+          key,
+          name: SOURCE_LABELS[key] ?? key,
+          value: point.count,
+        };
+      }),
     [data]
   );
 
