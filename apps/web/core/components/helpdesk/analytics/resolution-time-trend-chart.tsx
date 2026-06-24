@@ -31,7 +31,7 @@ export const ResolutionTimeTrendChart = observer(function ResolutionTimeTrendCha
         .filter((point) => point.avg_hours !== null)
         .map((point) => ({
           name: point.date,
-          avg_hours: point.avg_hours ?? 0,
+          avg_hours: point.avg_hours as number,
         })),
     [data]
   );

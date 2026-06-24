@@ -12,7 +12,7 @@ import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
 const PublicHelpdeskLayout = observer(() => {
   const { publicSlug } = useParams();
   const navigate = useNavigate();
-  const { customerToken, customerData, logout } = publicHelpdeskStore;
+  const { customerToken, customerData } = publicHelpdeskStore;
 
   useEffect(() => {
     publicHelpdeskStore.hydrateCustomerSession();
@@ -35,7 +35,7 @@ const PublicHelpdeskLayout = observer(() => {
                 <span className="text-text-300 text-sm">{customerData?.name || customerData?.email}</span>
                 <button
                   onClick={() => {
-                    logout();
+                    publicHelpdeskStore.logout();
                     navigate(`/helpdesk/p/${publicSlug}`);
                   }}
                   className="text-text-300 hover:text-red-400 transition-colors"
