@@ -11,7 +11,7 @@ import { useParams } from "next/navigation";
 import { AlertCircle, Award, CheckCircle2, Clock, Layers, Settings, TrendingUp } from "lucide-react";
 import { EUserPermissionsLevel } from "@plane/constants";
 import { EUserProjectRoles } from "@plane/types";
-import type { IKpiIssueRow } from "@plane/types";
+import type { IKpiAggregates, IKpiIssueRow } from "@plane/types";
 import { Spinner } from "@plane/ui";
 // components
 import { KpiCurveChart } from "@/components/kpi/curve-chart";
@@ -21,32 +21,142 @@ import { PageHead } from "@/components/core/page-title";
 import { useKpi } from "@/hooks/store/use-kpi";
 import { useUserPermissions } from "@/hooks/store/user";
 
-type StatCardProps = {
-  label: string;
-  value: string;
-  icon: React.ElementType;
-  iconClass: string;
-  valueClass: string;
-  accentClass: string;
-  sublabel?: string;
-};
+// ── Stat cards ─────────────────────────────────────────────────────────────
+// Each card is written explicitly (not via a shared dynamic-class component)
+// so that all Tailwind class strings are present in the source and included
+// by the JIT scanner. Accent color uses inline style to guarantee rendering.
 
-const StatCard = ({ label, value, icon: Icon, iconClass, valueClass, accentClass, sublabel }: StatCardProps) => (
-  <div className="border-custom-border-200 bg-custom-background-100 relative overflow-hidden rounded-xl border">
-    {/* colored top accent bar */}
-    <div className={`absolute inset-x-0 top-0 h-[3px] ${accentClass}`} />
-    <div className="px-4 pt-5 pb-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className={`bg-custom-background-90 ring-custom-border-200 rounded-lg p-2 ring-1`}>
-          <Icon className={`size-3.5 ${iconClass}`} />
+const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString());
+
+function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
+  const onTime = agg ? agg.counts.on_time + agg.counts.early : null;
+  const effNum = agg?.efficiency != null ? agg.efficiency * 100 : null;
+  const effStr = effNum != null ? `${effNum.toFixed(1)}%` : "—";
+  const isLate = agg != null && agg.counts.late > 0;
+  const effHigh = effNum != null && effNum >= 100;
+
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* Σ Vp */}
+      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+        <div
+          className="absolute inset-y-0 left-0 w-1"
+          style={{ backgroundColor: "var(--color-border-300, #374151)" }}
+        />
+        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
+          <div className="bg-custom-background-80 shrink-0 rounded-lg p-2.5">
+            <Layers className="text-custom-text-400 size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl text-custom-text-100 leading-none font-bold tabular-nums">{fmt(agg?.sum_vp)}</p>
+            <p className="text-xs text-custom-text-400 mt-1 truncate">Raw points</p>
+          </div>
         </div>
-        {sublabel && <span className="text-custom-text-400 text-10 font-medium">{sublabel}</span>}
       </div>
-      <p className={`text-2xl mt-3 leading-none font-bold tabular-nums ${valueClass}`}>{value}</p>
-      <p className="text-xs text-custom-text-400 mt-1 font-medium">{label}</p>
+
+      {/* Σ Vf */}
+      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+        <div className="bg-custom-primary-100 absolute inset-y-0 left-0 w-1" />
+        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
+          <div className="bg-custom-primary-100/10 shrink-0 rounded-lg p-2.5">
+            <Award className="text-custom-primary-100 size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl text-custom-primary-100 leading-none font-bold tabular-nums">{fmt(agg?.sum_vf)}</p>
+            <p className="text-xs text-custom-text-400 mt-1 truncate">Final score</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Efficiency */}
+      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+        <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: effHigh ? "#22c55e" : "#eab308" }} />
+        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
+          <div
+            className="shrink-0 rounded-lg p-2.5"
+            style={{ backgroundColor: effHigh ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)" }}
+          >
+            <TrendingUp className="size-4" style={{ color: effHigh ? "#22c55e" : "#eab308" }} />
+          </div>
+          <div className="min-w-0">
+            <p
+              className="text-2xl leading-none font-bold tabular-nums"
+              style={{ color: effHigh ? "#22c55e" : "#eab308" }}
+            >
+              {effStr}
+            </p>
+            <p className="text-xs text-custom-text-400 mt-1 truncate">Efficiency</p>
+          </div>
+        </div>
+      </div>
+
+      {/* On time */}
+      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+        <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: "#22c55e" }} />
+        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
+          <div className="shrink-0 rounded-lg p-2.5" style={{ backgroundColor: "rgba(34,197,94,0.1)" }}>
+            <CheckCircle2 className="size-4" style={{ color: "#22c55e" }} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl leading-none font-bold tabular-nums" style={{ color: "#22c55e" }}>
+              {onTime !== null ? String(onTime) : "—"}
+            </p>
+            <p className="text-xs text-custom-text-400 mt-1 truncate">On time / Early</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Late */}
+      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+        <div
+          className="absolute inset-y-0 left-0 w-1"
+          style={{ backgroundColor: isLate ? "#ef4444" : "var(--color-border-300, #374151)" }}
+        />
+        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
+          <div
+            className="shrink-0 rounded-lg p-2.5"
+            style={{ backgroundColor: isLate ? "rgba(239,68,68,0.1)" : undefined }}
+          >
+            <AlertCircle
+              className={`size-4 ${isLate ? "" : "text-custom-text-400"}`}
+              style={isLate ? { color: "#ef4444" } : undefined}
+            />
+          </div>
+          <div className="min-w-0">
+            <p
+              className={`text-2xl leading-none font-bold tabular-nums ${isLate ? "" : "text-custom-text-300"}`}
+              style={isLate ? { color: "#ef4444" } : undefined}
+            >
+              {fmt(agg?.counts.late)}
+            </p>
+            <p className="text-xs text-custom-text-400 mt-1 truncate">Late</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Pending */}
+      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+        <div
+          className="absolute inset-y-0 left-0 w-1"
+          style={{ backgroundColor: "var(--color-border-300, #374151)" }}
+        />
+        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
+          <div className="bg-custom-background-80 shrink-0 rounded-lg p-2.5">
+            <Clock className="text-custom-text-400 size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl text-custom-text-300 leading-none font-bold tabular-nums">
+              {fmt(agg?.counts.pending)}
+            </p>
+            <p className="text-xs text-custom-text-400 mt-1 truncate">Pending</p>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
 
 function ProjectKpiPage() {
   const { workspaceSlug, projectId } = useParams() as { workspaceSlug: string; projectId: string };
@@ -91,74 +201,17 @@ function ProjectKpiPage() {
     );
   }
 
-  const onTimeCount = agg ? agg.counts.on_time + agg.counts.early : 0;
-  const efficiencyPct = agg?.efficiency != null ? `${(agg.efficiency * 100).toFixed(1)}%` : "—";
-  const isLate = agg && agg.counts.late > 0;
-  const efficiencyHigh = agg?.efficiency != null && agg.efficiency >= 1;
-
   return (
     <>
       <PageHead title="KPI" />
       <div className="h-full w-full overflow-y-auto p-6">
-        {/* Stat cards */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <StatCard
-            label="Raw points"
-            value={agg ? String(agg.sum_vp) : "—"}
-            icon={Layers}
-            iconClass="text-custom-text-300"
-            valueClass="text-custom-text-100"
-            accentClass="bg-custom-border-300"
-            sublabel="Σ Vp"
-          />
-          <StatCard
-            label="Final score"
-            value={agg ? String(agg.sum_vf) : "—"}
-            icon={Award}
-            iconClass="text-custom-primary-100"
-            valueClass="text-custom-primary-100"
-            accentClass="bg-custom-primary-100"
-            sublabel="Σ Vf"
-          />
-          <StatCard
-            label="Efficiency"
-            value={efficiencyPct}
-            icon={TrendingUp}
-            iconClass={efficiencyHigh ? "text-green-500" : "text-yellow-500"}
-            valueClass={efficiencyHigh ? "text-green-500" : "text-yellow-500"}
-            accentClass={efficiencyHigh ? "bg-green-500" : "bg-yellow-400"}
-          />
-          <StatCard
-            label="On time / Early"
-            value={agg ? String(onTimeCount) : "—"}
-            icon={CheckCircle2}
-            iconClass="text-green-500"
-            valueClass="text-green-500"
-            accentClass="bg-green-500"
-          />
-          <StatCard
-            label="Late"
-            value={agg ? String(agg.counts.late) : "—"}
-            icon={AlertCircle}
-            iconClass={isLate ? "text-red-500" : "text-custom-text-400"}
-            valueClass={isLate ? "text-red-500" : "text-custom-text-300"}
-            accentClass={isLate ? "bg-red-500" : "bg-custom-border-300"}
-          />
-          <StatCard
-            label="Pending"
-            value={agg ? String(agg.counts.pending) : "—"}
-            icon={Clock}
-            iconClass="text-custom-text-400"
-            valueClass="text-custom-text-300"
-            accentClass="bg-custom-border-300"
-          />
-        </div>
+        <StatCards agg={agg} />
 
         {/* Section header */}
-        <div className="mb-3 flex items-center justify-between">
+        <div className="border-custom-border-200 mb-3 flex items-center justify-between border-t pt-4">
           <div>
             <h3 className="text-sm text-custom-text-100 font-semibold">Work item scoring</h3>
-            <p className="text-xs text-custom-text-400">
+            <p className="text-xs text-custom-text-400 mt-0.5">
               <span className="capitalize">{config.penalty_mode.replace("_", " ")}</span>
               {" · "}k = {config.k}
               {config.inherited && " · inherited config"}
@@ -166,7 +219,7 @@ function ProjectKpiPage() {
           </div>
           <Link
             href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
-            className="border-custom-border-200 bg-custom-background-100 text-xs text-custom-text-300 hover:bg-custom-background-90 hover:text-custom-text-100 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium transition-colors"
+            className="border-custom-border-200 bg-custom-background-90 text-xs text-custom-text-300 hover:bg-custom-background-80 hover:text-custom-text-100 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium transition-colors"
           >
             <Settings className="size-3" />
             Settings
@@ -187,14 +240,14 @@ function ProjectKpiPage() {
             />
           </div>
 
-          <div className="border-custom-border-200 bg-custom-background-100 flex flex-col rounded-xl border">
-            <div className="border-custom-border-200 border-b px-4 py-3">
+          <div className="border-custom-border-200 bg-custom-background-100 flex flex-col overflow-hidden rounded-xl border">
+            <div className="border-custom-border-200 bg-custom-background-90 border-b px-4 py-3">
               <h4 className="text-sm text-custom-text-100 font-semibold">Penalty curve p(d)</h4>
               <p className="text-xs text-custom-text-400 mt-0.5 truncate">
-                {selectedRow ? `${selectedRow.name} · b=${selectedB}` : "Click a row to mark its position on the curve"}
+                {selectedRow ? `${selectedRow.name} · b = ${selectedB}` : "Click a row to mark its position"}
               </p>
             </div>
-            <div className="flex-1 p-3">
+            <div className="flex-1 p-4">
               <KpiCurveChart config={config} b={selectedB || 0.25} markerD={selectedRow?.d ?? null} />
             </div>
           </div>
