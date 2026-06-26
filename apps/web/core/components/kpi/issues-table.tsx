@@ -8,7 +8,10 @@ import { useState } from "react";
 import { observer } from "mobx-react";
 import { ClipboardList } from "lucide-react";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import type { IKpiConfig, IKpiIssueRow } from "@plane/types";
+import type { IKpiConfig, IKpiIssueRow, TIssuePriorities } from "@plane/types";
+import { cn } from "@plane/utils";
+import { EstimateDropdown } from "@/components/dropdowns/estimate";
+import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { useKpi } from "@/hooks/store/use-kpi";
 
 type Props = {
@@ -21,34 +24,11 @@ type Props = {
   selectedRowId?: string | null;
 };
 
-const ROW_BORDER: Record<string, string> = {
-  on_time: "border-l-green-500",
-  early: "border-l-blue-500",
-  late: "border-l-red-500",
-  pending: "border-l-transparent",
-};
-
-const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
-  on_time: {
-    bg: "bg-green-500/10 border border-green-500/25",
-    text: "text-green-600 dark:text-green-400",
-    label: "On time",
-  },
-  early: { bg: "bg-blue-500/10 border border-blue-500/25", text: "text-blue-600 dark:text-blue-400", label: "Early" },
-  late: { bg: "bg-red-500/10 border border-red-500/25", text: "text-red-600 dark:text-red-400", label: "Late" },
-  pending: {
-    bg: "bg-custom-background-80 border border-custom-border-200",
-    text: "text-custom-text-400",
-    label: "Pending",
-  },
-};
-
-const PRIORITY_DOT: Record<string, string> = {
-  urgent: "bg-red-500",
-  high: "bg-orange-500",
-  medium: "bg-yellow-400",
-  low: "bg-blue-500",
-  none: "bg-custom-border-300",
+const STATUS_BADGE: Record<string, { className: string; label: string }> = {
+  on_time: { className: "bg-success-subtle text-success-primary", label: "On time" },
+  early: { className: "bg-accent-subtle text-accent-primary", label: "Early" },
+  late: { className: "bg-danger-subtle text-danger-primary", label: "Late" },
+  pending: { className: "bg-layer-1 text-tertiary", label: "Pending" },
 };
 
 const fmt = (value: number | null | undefined) =>
@@ -57,56 +37,47 @@ const fmt = (value: number | null | undefined) =>
 const StatusBadge = ({ status }: { status: string }) => {
   const s = STATUS_BADGE[status] ?? STATUS_BADGE.pending;
   return (
-    <span className={`text-xs inline-flex items-center rounded-full px-2 py-0.5 font-medium ${s.bg} ${s.text}`}>
+    <span className={cn("inline-flex items-center rounded px-2 py-0.5 text-11 font-medium", s.className)}>
       {s.label}
     </span>
   );
 };
 
-const PriorityCell = ({ priority }: { priority: string }) => (
-  <div className="flex items-center gap-1.5">
-    <span className={`size-1.5 shrink-0 rounded-full ${PRIORITY_DOT[priority] ?? PRIORITY_DOT.none}`} />
-    <span className="text-custom-text-300 capitalize">{priority}</span>
-  </div>
-);
-
-const LevelSelect = (props: {
-  value: string | null;
-  options: string[];
-  disabled?: boolean;
-  onChange: (value: string | null) => void;
-}) => (
-  <select
-    className="border-custom-border-200 bg-custom-background-90 text-xs text-custom-text-200 hover:border-custom-border-300 focus:border-custom-primary-100 w-full rounded-md border px-2 py-1 transition-colors focus:outline-none disabled:opacity-50"
-    value={props.value ?? ""}
-    disabled={props.disabled}
-    onChange={(e) => props.onChange(e.target.value || null)}
-    onClick={(e) => e.stopPropagation()}
-  >
-    <option value="">—</option>
-    {props.options.map((opt) => (
-      <option key={opt} value={opt}>
-        {opt}
-      </option>
-    ))}
-  </select>
-);
+const HEAD = "h-11 bg-layer-1 px-page-x text-11 font-medium text-tertiary";
 
 export const KpiIssuesTable = observer((props: Props) => {
   const { workspaceSlug, projectId, rows, config, canEdit, onSelectRow, selectedRowId } = props;
-  const { updateIssueAttributes } = useKpi();
+  const { updateIssueDifficultyEstimate, updateIssueRepetitiveEstimate, updateIssuePriority } = useKpi();
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  const difficultyLevels = Object.keys(config.tables.difficulty ?? {});
-  const repetitiveLevels = Object.keys(config.tables.repetitive ?? {});
-  const importanceLevels = Object.keys(config.tables.importance ?? {});
-
-  const handleAttr = async (issueId: string, field: string, value: string | null) => {
+  const handleDifficultyEstimate = async (issueId: string, estimatePointId: string | null) => {
     setSavingId(issueId);
     try {
-      await updateIssueAttributes(workspaceSlug, projectId, issueId, { [field]: value });
+      await updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
     } catch {
-      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not update attribute." });
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not update difficulty." });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleRepetitiveEstimate = async (issueId: string, estimatePointId: string | null) => {
+    setSavingId(issueId);
+    try {
+      await updateIssueRepetitiveEstimate(workspaceSlug, projectId, issueId, estimatePointId);
+    } catch {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not update repetitive estimate." });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handlePriority = async (issueId: string, priority: TIssuePriorities) => {
+    setSavingId(issueId);
+    try {
+      await updateIssuePriority(workspaceSlug, projectId, issueId, priority);
+    } catch {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not update priority." });
     } finally {
       setSavingId(null);
     }
@@ -114,94 +85,108 @@ export const KpiIssuesTable = observer((props: Props) => {
 
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
-        <ClipboardList className="text-custom-text-400 size-8" strokeWidth={1.5} />
-        <p className="text-sm text-custom-text-300 font-medium">No work items to score yet</p>
-        <p className="text-xs text-custom-text-400">Add issues to this project to see them scored here.</p>
+      <div className="flex flex-col items-center justify-center gap-2 px-page-x py-16 text-center">
+        <ClipboardList className="size-8 text-placeholder" strokeWidth={1.5} />
+        <p className="text-13 font-medium text-secondary">No work items to score yet</p>
+        <p className="text-12 text-tertiary">Add work items to this project to see them scored here.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="text-sm w-full border-collapse">
-        <thead>
+    <table className="w-full border-collapse bg-surface-1 text-13">
+      <thead>
+        <tr className="border-b border-subtle">
+          <th className={cn(HEAD, "sticky left-0 z-10 text-left")}>Work item</th>
+          <th className={cn(HEAD, "w-36 text-left")}>Priority</th>
+          <th className={cn(HEAD, "w-32 text-left")}>Difficulty</th>
+          <th className={cn(HEAD, "w-32 text-left")}>Repetitive</th>
+          <th className={cn(HEAD, "text-right")}>Vp</th>
+          <th className={cn(HEAD, "text-right")}>d</th>
+          <th className={cn(HEAD, "text-right")}>p</th>
+          <th className={cn(HEAD, "text-right")}>Vf</th>
+          <th className={cn(HEAD, "text-left")}>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
           <tr
-            className="border-custom-border-200 bg-custom-background-80 border-b"
-            style={{ boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.04)" }}
+            key={row.id}
+            onClick={() => onSelectRow?.(row)}
+            className={cn(
+              "group h-11 cursor-pointer border-b-[0.5px] border-subtle transition-colors",
+              selectedRowId === row.id ? "bg-accent-primary/5 hover:bg-accent-primary/10" : "hover:bg-layer-1"
+            )}
           >
-            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Work item</th>
-            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Priority</th>
-            <th className="text-xs text-custom-text-400 w-28 px-3 py-2.5 text-left font-semibold">Difficulty</th>
-            <th className="text-xs text-custom-text-400 w-28 px-3 py-2.5 text-left font-semibold">Repetitive</th>
-            <th className="text-xs text-custom-text-400 w-28 px-3 py-2.5 text-left font-semibold">Importance</th>
-            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">Vp</th>
-            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">d</th>
-            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">p</th>
-            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">Vf</th>
-            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Status</th>
-          </tr>
-        </thead>
-        <tbody className="divide-custom-border-100 divide-y">
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              onClick={() => onSelectRow?.(row)}
-              className={`hover:bg-custom-background-90 cursor-pointer border-l-2 transition-colors ${
-                ROW_BORDER[row.status] ?? "border-l-transparent"
-              } ${selectedRowId === row.id ? "bg-custom-primary-100/5" : ""}`}
+            <td
+              className={cn(
+                "sticky left-0 z-10 max-w-[260px] truncate px-page-x text-13 text-primary transition-colors",
+                selectedRowId === row.id
+                  ? "bg-accent-primary/5 group-hover:bg-accent-primary/10"
+                  : "bg-surface-1 group-hover:bg-layer-1"
+              )}
             >
-              <td className="text-sm text-custom-text-200 max-w-[200px] truncate px-3 py-2.5">{row.name}</td>
-              <td className="text-xs px-3 py-2.5">
-                <PriorityCell priority={row.priority} />
-              </td>
-              <td className="px-3 py-2.5">
-                <LevelSelect
-                  value={row.difficulty}
-                  options={difficultyLevels}
-                  disabled={!canEdit || savingId === row.id}
-                  onChange={(v) => handleAttr(row.id, "difficulty", v)}
-                />
-              </td>
-              <td className="px-3 py-2.5">
-                <LevelSelect
-                  value={row.repetitive}
-                  options={repetitiveLevels}
-                  disabled={!canEdit || savingId === row.id}
-                  onChange={(v) => handleAttr(row.id, "repetitive", v)}
-                />
-              </td>
-              <td className="px-3 py-2.5">
-                <LevelSelect
-                  value={row.importance}
-                  options={importanceLevels}
-                  disabled={!canEdit || savingId === row.id}
-                  onChange={(v) => handleAttr(row.id, "importance", v)}
-                />
-              </td>
-              <td className="text-custom-text-200 px-3 py-2.5 text-right tabular-nums">{fmt(row.vp)}</td>
-              <td
-                className={`text-xs px-3 py-2.5 text-right tabular-nums ${
-                  row.d !== null && row.d !== undefined
-                    ? row.d > 0
-                      ? "text-red-500"
-                      : row.d < 0
-                        ? "text-blue-500"
-                        : "text-green-500"
-                    : "text-custom-text-400"
-                }`}
-              >
-                {fmt(row.d)}
-              </td>
-              <td className="text-xs text-custom-text-300 px-3 py-2.5 text-right tabular-nums">{fmt(row.p)}</td>
-              <td className="text-custom-text-100 px-3 py-2.5 text-right font-semibold tabular-nums">{fmt(row.vf)}</td>
-              <td className="px-3 py-2.5">
-                <StatusBadge status={row.status} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+              {row.name}
+            </td>
+            <td className="p-0" onClick={(e) => e.stopPropagation()}>
+              <PriorityDropdown
+                value={row.priority as TIssuePriorities}
+                disabled={!canEdit || savingId === row.id}
+                onChange={(val) => handlePriority(row.id, val)}
+                buttonVariant="transparent-with-text"
+                buttonClassName="w-full rounded-none px-page-x text-left text-13"
+                buttonContainerClassName="w-full"
+              />
+            </td>
+            <td className="p-0" onClick={(e) => e.stopPropagation()}>
+              <EstimateDropdown
+                value={row.difficulty_estimate_point || undefined}
+                estimateId={config.difficulty_estimate ?? undefined}
+                projectId={projectId}
+                placeholder="—"
+                disabled={!canEdit || savingId === row.id || !config.difficulty_estimate}
+                onChange={(val) => handleDifficultyEstimate(row.id, val ?? null)}
+                buttonVariant="transparent-with-text"
+                buttonClassName="w-full rounded-none px-page-x text-left text-13"
+                buttonContainerClassName="w-full"
+              />
+            </td>
+            <td className="p-0" onClick={(e) => e.stopPropagation()}>
+              <EstimateDropdown
+                value={row.repetitive_estimate_point || undefined}
+                estimateId={config.repetitive_estimate ?? undefined}
+                projectId={projectId}
+                placeholder="—"
+                disabled={!canEdit || savingId === row.id || !config.repetitive_estimate}
+                onChange={(val) => handleRepetitiveEstimate(row.id, val ?? null)}
+                buttonVariant="transparent-with-text"
+                buttonClassName="w-full rounded-none px-page-x text-left text-13"
+                buttonContainerClassName="w-full"
+              />
+            </td>
+            <td className="px-page-x text-right text-secondary tabular-nums">{fmt(row.vp)}</td>
+            <td
+              className={cn(
+                "px-page-x text-right tabular-nums",
+                row.d !== null && row.d !== undefined
+                  ? row.d > 0
+                    ? "text-danger-primary"
+                    : row.d < 0
+                      ? "text-accent-primary"
+                      : "text-success-primary"
+                  : "text-placeholder"
+              )}
+            >
+              {fmt(row.d)}
+            </td>
+            <td className="px-page-x text-right text-tertiary tabular-nums">{fmt(row.p)}</td>
+            <td className="px-page-x text-right font-medium text-primary tabular-nums">{fmt(row.vf)}</td>
+            <td className="px-page-x">
+              <StatusBadge status={row.status} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 });

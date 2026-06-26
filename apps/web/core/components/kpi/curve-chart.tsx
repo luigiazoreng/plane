@@ -67,7 +67,8 @@ export const KpiCurveChart = (props: Props) => {
   const gridDs = [5, 10, 15].filter((d) => d > dMin && d < dMax);
 
   return (
-    // stroke="currentColor" + className="text-custom-*" is the required SVG+Tailwind pattern
+    // Flat aesthetic to match the spreadsheet design: semantic tokens via
+    // stroke="currentColor" + text-* classes, no glow/halo layers.
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible select-none">
       {/* ── Plot area background ── */}
       <rect
@@ -77,7 +78,7 @@ export const KpiCurveChart = (props: Props) => {
         height={chartH}
         fill="currentColor"
         fillOpacity={0.04}
-        className="text-custom-text-100"
+        className="text-tertiary"
         rx={2}
       />
 
@@ -89,8 +90,8 @@ export const KpiCurveChart = (props: Props) => {
           width={earlyW}
           height={chartH}
           fill="currentColor"
-          fillOpacity={0.06}
-          className="text-green-500"
+          fillOpacity={0.07}
+          className="text-success-primary"
           rx={2}
         />
       )}
@@ -106,7 +107,7 @@ export const KpiCurveChart = (props: Props) => {
           stroke="currentColor"
           strokeWidth={0.5}
           strokeDasharray="3 4"
-          className="text-custom-border-300"
+          className="text-placeholder"
         />
       ))}
 
@@ -121,7 +122,7 @@ export const KpiCurveChart = (props: Props) => {
           stroke="currentColor"
           strokeWidth={0.5}
           strokeDasharray="3 4"
-          className="text-custom-border-300"
+          className="text-placeholder"
         />
       ))}
 
@@ -134,7 +135,7 @@ export const KpiCurveChart = (props: Props) => {
         stroke="currentColor"
         strokeWidth={1}
         strokeDasharray="4 5"
-        className="text-custom-border-200"
+        className="text-tertiary"
       />
       {/* ── p=0 guide ── */}
       <line
@@ -145,7 +146,7 @@ export const KpiCurveChart = (props: Props) => {
         stroke="currentColor"
         strokeWidth={1}
         strokeDasharray="4 5"
-        className="text-custom-border-200"
+        className="text-tertiary"
       />
       {/* ── d=0 vertical (deadline) ── */}
       <line
@@ -156,7 +157,7 @@ export const KpiCurveChart = (props: Props) => {
         stroke="currentColor"
         strokeWidth={1}
         strokeDasharray="3 4"
-        className="text-custom-border-200"
+        className="text-tertiary"
       />
 
       {/* ── Axes ── */}
@@ -167,59 +168,33 @@ export const KpiCurveChart = (props: Props) => {
         y2={H - PB}
         stroke="currentColor"
         strokeWidth={1}
-        className="text-custom-border-200"
+        className="text-secondary"
       />
-      <line
-        x1={PL}
-        y1={PT}
-        x2={PL}
-        y2={H - PB}
-        stroke="currentColor"
-        strokeWidth={1}
-        className="text-custom-border-200"
-      />
+      <line x1={PL} y1={PT} x2={PL} y2={H - PB} stroke="currentColor" strokeWidth={1} className="text-secondary" />
 
       {/* ── Area fill under curve ── */}
-      <path d={fillPath} fill="currentColor" fillOpacity={0.12} className="text-custom-primary-100" />
+      <path d={fillPath} fill="currentColor" fillOpacity={0.1} className="text-accent-primary" />
 
-      {/* ── Curve: glow layer (wide + transparent = soft halo) ── */}
-      <path
-        d={curvePath}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={8}
-        strokeOpacity={0.15}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="text-custom-primary-100"
-      />
       {/* ── Curve: main line ── */}
       <path
         d={curvePath}
         fill="none"
         stroke="currentColor"
-        strokeWidth={2.5}
+        strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="text-custom-primary-100"
+        className="text-accent-primary"
       />
 
       {/* ── Y axis labels ── */}
-      <text x={PL - 5} y={zeroY + 3} textAnchor="end" fontSize={8} fill="currentColor" className="text-custom-text-400">
+      <text x={PL - 5} y={zeroY + 3} textAnchor="end" fontSize={8} fill="currentColor" className="text-tertiary">
         0
       </text>
-      <text x={PL - 5} y={oneY + 3} textAnchor="end" fontSize={8} fill="currentColor" className="text-custom-text-400">
+      <text x={PL - 5} y={oneY + 3} textAnchor="end" fontSize={8} fill="currentColor" className="text-tertiary">
         1
       </text>
       {pMax > 1.05 && (
-        <text
-          x={PL - 5}
-          y={yFor(pMax) + 3}
-          textAnchor="end"
-          fontSize={8}
-          fill="currentColor"
-          className="text-custom-text-400"
-        >
+        <text x={PL - 5} y={yFor(pMax) + 3} textAnchor="end" fontSize={8} fill="currentColor" className="text-tertiary">
           {pMax.toFixed(1)}
         </text>
       )}
@@ -231,22 +206,14 @@ export const KpiCurveChart = (props: Props) => {
           textAnchor="end"
           fontSize={7}
           fill="currentColor"
-          className="text-custom-text-400"
-          fillOpacity={0.6}
+          className="text-placeholder"
         >
           {p}
         </text>
       ))}
 
       {/* ── X axis labels ── */}
-      <text
-        x={x0}
-        y={H - PB + 11}
-        textAnchor="middle"
-        fontSize={8}
-        fill="currentColor"
-        className="text-custom-text-300"
-      >
+      <text x={x0} y={H - PB + 11} textAnchor="middle" fontSize={8} fill="currentColor" className="text-secondary">
         0
       </text>
       {gridDs.map((d) => (
@@ -257,30 +224,15 @@ export const KpiCurveChart = (props: Props) => {
           textAnchor="middle"
           fontSize={7}
           fill="currentColor"
-          className="text-custom-text-400"
-          fillOpacity={0.7}
+          className="text-placeholder"
         >
           {d}d
         </text>
       ))}
-      <text
-        x={PL + chartW}
-        y={H - PB + 11}
-        textAnchor="end"
-        fontSize={8}
-        fill="currentColor"
-        className="text-custom-text-400"
-      >
+      <text x={PL + chartW} y={H - PB + 11} textAnchor="end" fontSize={8} fill="currentColor" className="text-tertiary">
         {dMax}d
       </text>
-      <text
-        x={PL + 2}
-        y={H - PB + 11}
-        textAnchor="start"
-        fontSize={8}
-        fill="currentColor"
-        className="text-custom-text-400"
-      >
+      <text x={PL + 2} y={H - PB + 11} textAnchor="start" fontSize={8} fill="currentColor" className="text-tertiary">
         {dMin}d
       </text>
 
@@ -292,8 +244,7 @@ export const KpiCurveChart = (props: Props) => {
           textAnchor="middle"
           fontSize={7}
           fill="currentColor"
-          className="text-green-500"
-          fillOpacity={0.6}
+          className="text-success-primary"
         >
           early
         </text>
@@ -311,29 +262,20 @@ export const KpiCurveChart = (props: Props) => {
             stroke="currentColor"
             strokeWidth={1}
             strokeDasharray="2 3"
-            className="text-custom-primary-100"
+            className="text-accent-primary"
             strokeOpacity={0.5}
           />
-          {/* outer ring glow */}
-          <circle
-            cx={markerPoint.x}
-            cy={markerPoint.y}
-            r={7}
-            fill="currentColor"
-            fillOpacity={0.15}
-            className="text-custom-primary-100"
-          />
           {/* solid dot */}
-          <circle cx={markerPoint.x} cy={markerPoint.y} r={4} fill="currentColor" className="text-custom-primary-100" />
-          {/* inner white */}
-          <circle cx={markerPoint.x} cy={markerPoint.y} r={1.5} fill="white" />
+          <circle cx={markerPoint.x} cy={markerPoint.y} r={3.5} fill="currentColor" className="text-accent-primary" />
+          {/* inner contrast core */}
+          <circle cx={markerPoint.x} cy={markerPoint.y} r={1.25} fill="currentColor" className="text-on-color" />
           {/* label */}
           <text
-            x={markerPoint.x + 9}
+            x={markerPoint.x + 8}
             y={markerPoint.y + 3}
             fontSize={9}
             fill="currentColor"
-            className="text-custom-text-100"
+            className="text-primary"
             fontWeight={600}
           >
             {markerPoint.p.toFixed(2)}

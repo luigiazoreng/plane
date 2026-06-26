@@ -15,9 +15,11 @@ type Props = {
   saving: boolean;
   onSave: (data: Partial<IKpiConfig>) => void;
   onReset?: () => void;
+  estimateOptions?: { id: string; name: string; type?: string }[];
+  estimateValuesById?: Record<string, string[]>;
 };
 
-type SimpleTableKey = "difficulty" | "repetitive" | "importance" | "type";
+type SimpleTableKey = "type";
 
 const SimpleTableEditor = (props: {
   title: string;
@@ -85,6 +87,112 @@ const SimpleTableEditor = (props: {
   );
 };
 
+/**
+ * Estimate-backed dimensions use a selected project estimate system. The rows
+ * are that estimate's point values; unmapped values add 0.
+ */
+const EstimateMappingEditor = (props: {
+  title: string;
+  description: string;
+  table: Record<string, number>;
+  estimateId: string | null;
+  estimateOptions: { id: string; name: string; type?: string }[];
+  estimateValues: string[];
+  disabled: boolean;
+  onEstimateChange: (estimateId: string | null) => void;
+  onChange: (table: Record<string, number>) => void;
+}) => {
+  const {
+    title,
+    description,
+    table,
+    estimateId,
+    estimateOptions,
+    estimateValues,
+    disabled,
+    onEstimateChange,
+    onChange,
+  } = props;
+
+  const setPoints = (key: string, points: number) => onChange({ ...table, [key]: points });
+  const removeKey = (key: string) => {
+    const next = { ...table };
+    delete next[key];
+    onChange(next);
+  };
+
+  // Keys present in the mapping but no longer in the active estimate.
+  const orphanKeys = Object.keys(table).filter((k) => !estimateValues.includes(k));
+
+  return (
+    <div className="border-custom-border-200 rounded-lg border p-4">
+      <h4 className="text-sm text-custom-text-100 mb-1 font-semibold">{title}</h4>
+      <p className="text-xs text-custom-text-400 mb-3">{description}</p>
+
+      <div className="mb-3">
+        <p className="text-xs text-custom-text-300 mb-1">Estimate system</p>
+        <select
+          className="border-custom-border-200 bg-custom-background-100 text-sm w-full rounded border px-2 py-1.5"
+          value={estimateId ?? ""}
+          disabled={disabled}
+          onChange={(e) => onEstimateChange(e.target.value || null)}
+        >
+          <option value="">Not configured</option>
+          {estimateOptions.map((estimate) => (
+            <option key={estimate.id} value={estimate.id}>
+              {estimate.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {estimateValues.length === 0 && orphanKeys.length === 0 ? (
+        <p className="text-xs text-custom-text-400 italic">
+          Select an estimate system in this project to score this dimension.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {estimateValues.map((val) => (
+            <div key={val} className="flex items-center gap-2">
+              <span className="text-sm text-custom-text-200 flex-1 truncate">{val}</span>
+              <input
+                type="number"
+                className="border-custom-border-200 bg-custom-background-100 text-sm w-20 rounded border px-2 py-1"
+                value={table[val] ?? 0}
+                disabled={disabled}
+                onChange={(e) => setPoints(val, Number(e.target.value))}
+              />
+            </div>
+          ))}
+          {orphanKeys.map((val) => (
+            <div key={val} className="flex items-center gap-2 opacity-70">
+              <span className="text-sm text-custom-text-300 flex-1 truncate">
+                {val} <span className="text-xs text-custom-text-400 italic">(not in current estimate)</span>
+              </span>
+              <input
+                type="number"
+                className="border-custom-border-200 bg-custom-background-100 text-sm w-20 rounded border px-2 py-1"
+                value={table[val] ?? 0}
+                disabled={disabled}
+                onChange={(e) => setPoints(val, Number(e.target.value))}
+              />
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => removeKey(val)}
+                  className="text-custom-text-400 hover:text-red-500"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PriorityTableEditor = (props: {
   table: Record<string, IKpiPriorityRow>;
   disabled: boolean;
@@ -96,9 +204,10 @@ const PriorityTableEditor = (props: {
 
   return (
     <div className="border-custom-border-200 rounded-lg border p-4">
-      <h4 className="text-sm text-custom-text-100 mb-1 font-semibold">Priority (P)</h4>
+      <h4 className="text-sm text-custom-text-100 mb-1 font-semibold">Priority / Importance (I)</h4>
       <p className="text-xs text-custom-text-400 mb-3">
-        Keyed by the work item priority. <code>points</code> add to Vp; <code>b</code> sets how fast the penalty grows.
+        Importance is the work item&apos;s <strong>priority</strong>. <code>points</code> are the Importance (I)
+        contribution to Vp; <code>b</code> sets how fast the delay penalty grows.
       </p>
       <div className="space-y-2">
         <div className="text-xs text-custom-text-300 grid grid-cols-[1fr_5rem_5rem_1fr] gap-2">
@@ -139,7 +248,7 @@ const PriorityTableEditor = (props: {
 };
 
 export const KpiConfigEditor = (props: Props) => {
-  const { config, canEdit, saving, onSave, onReset } = props;
+  const { config, canEdit, saving, onSave, onReset, estimateOptions = [], estimateValuesById = {} } = props;
   const [draft, setDraft] = useState<IKpiConfig>(config);
 
   useEffect(() => setDraft(config), [config]);
@@ -158,15 +267,12 @@ export const KpiConfigEditor = (props: Props) => {
       allow_negative: draft.allow_negative,
       max_multiplier: draft.max_multiplier,
       vf_decimals: draft.vf_decimals,
+      difficulty_estimate: draft.difficulty_estimate,
+      repetitive_estimate: draft.repetitive_estimate,
     });
   };
 
-  const simpleTables: { key: SimpleTableKey; title: string }[] = [
-    { key: "difficulty", title: "Difficulty (D)" },
-    { key: "repetitive", title: "Repetitive (R)" },
-    { key: "importance", title: "Importance (I)" },
-    { key: "type", title: "Type (T)" },
-  ];
+  const simpleTables: { key: SimpleTableKey; title: string }[] = [{ key: "type", title: "Type (T)" }];
 
   return (
     <div className="space-y-6">
@@ -277,6 +383,30 @@ export const KpiConfigEditor = (props: Props) => {
           </div>
         </div>
       </div>
+
+      <EstimateMappingEditor
+        title="Difficulty (D)"
+        description="Choose which project estimate system represents difficulty, then map each point to the value it adds to Vp."
+        table={draft.tables.difficulty ?? {}}
+        estimateId={draft.difficulty_estimate}
+        estimateOptions={estimateOptions}
+        estimateValues={draft.difficulty_estimate ? (estimateValuesById[draft.difficulty_estimate] ?? []) : []}
+        disabled={!canEdit}
+        onEstimateChange={(estimateId) => patch({ difficulty_estimate: estimateId })}
+        onChange={(table) => patchTable("difficulty", table)}
+      />
+
+      <EstimateMappingEditor
+        title="Repetitive (R)"
+        description="Choose which project estimate system represents repetition, then map each point to the value it adds to Vp."
+        table={draft.tables.repetitive ?? {}}
+        estimateId={draft.repetitive_estimate}
+        estimateOptions={estimateOptions}
+        estimateValues={draft.repetitive_estimate ? (estimateValuesById[draft.repetitive_estimate] ?? []) : []}
+        disabled={!canEdit}
+        onEstimateChange={(estimateId) => patch({ repetitive_estimate: estimateId })}
+        onChange={(table) => patchTable("repetitive", table)}
+      />
 
       {/* Point tables */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

@@ -75,8 +75,7 @@ export const calcular = (task: IKpiTaskInput, config: IKpiConfig): IKpiCalcResul
   const vp =
     (tables.difficulty?.[task.difficulty ?? ""] ?? 0) +
     (tables.repetitive?.[task.repetitive ?? ""] ?? 0) +
-    (tables.importance?.[task.importance ?? ""] ?? 0) +
-    (priorityRow.points ?? 0) +
+    (priorityRow.points ?? 0) + // Importance (I) = native priority points
     (tables.type?.[task.type ?? ""] ?? 0);
 
   const d = calcularDias(task.delivered_date, task.due_date, config);

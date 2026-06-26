@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -18,18 +18,47 @@ import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { KpiConfigEditor } from "@/components/kpi/config-editor";
 import { PageHead } from "@/components/core/page-title";
 // hooks
+import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useKpi } from "@/hooks/store/use-kpi";
 import { useUserPermissions } from "@/hooks/store/user";
 
 function ProjectKpiSettingsPage() {
   const { workspaceSlug, projectId } = useParams() as { workspaceSlug: string; projectId: string };
   const { projectConfig, fetchProjectConfig, updateProjectConfig, resetProjectConfig } = useKpi();
+  const { getProjectEstimates, estimateIdsByProjectId, estimateById } = useProjectEstimates();
   const { allowPermissions } = useUserPermissions();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const config = projectConfig[projectId];
+
+  const estimateIds = estimateIdsByProjectId(projectId) ?? [];
+  const estimateOptions = useMemo(
+    () =>
+      estimateIds
+        .map((id) => {
+          const estimate = estimateById(id);
+          if (!estimate) return undefined;
+          return { id, name: estimate.name ?? "Untitled estimate" };
+        })
+        .filter((estimate): estimate is { id: string; name: string } => !!estimate),
+    [estimateIds, estimateById]
+  );
+  const estimateValuesById = useMemo(
+    () =>
+      Object.fromEntries(
+        estimateIds.map((id) => {
+          const estimate = estimateById(id);
+          const values =
+            estimate?.estimatePointIds
+              ?.map((pointId) => estimate.estimatePointById(pointId)?.value)
+              .filter((value): value is string => typeof value === "string") ?? [];
+          return [id, values];
+        })
+      ),
+    [estimateIds, estimateById]
+  );
   const canEdit = allowPermissions(
     [EUserProjectRoles.ADMIN, EUserProjectRoles.MEMBER],
     EUserPermissionsLevel.PROJECT,
@@ -40,11 +69,12 @@ function ProjectKpiSettingsPage() {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    getProjectEstimates(workspaceSlug, projectId).catch(() => {});
     fetchProjectConfig(workspaceSlug, projectId).finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, projectId, fetchProjectConfig]);
+  }, [workspaceSlug, projectId, fetchProjectConfig, getProjectEstimates]);
 
   const handleSave = async (data: Partial<IKpiConfig>) => {
     setSaving(true);
@@ -95,7 +125,15 @@ function ProjectKpiSettingsPage() {
         <p className="text-sm text-custom-text-400 mb-6">
           Edit the point tables, priority factors and global parameters. Changes apply immediately to scoring.
         </p>
-        <KpiConfigEditor config={config} canEdit={canEdit} saving={saving} onSave={handleSave} onReset={handleReset} />
+        <KpiConfigEditor
+          config={config}
+          canEdit={canEdit}
+          saving={saving}
+          onSave={handleSave}
+          onReset={handleReset}
+          estimateOptions={estimateOptions}
+          estimateValuesById={estimateValuesById}
+        />
       </div>
     </>
   );

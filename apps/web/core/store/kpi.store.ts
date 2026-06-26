@@ -42,6 +42,25 @@ export interface IKpiStore {
     issueId: string,
     data: Partial<IKpiIssueAttribute>
   ) => Promise<IKpiIssueAttribute>;
+  updateIssueEstimate: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ) => Promise<void>;
+  updateIssueDifficultyEstimate: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ) => Promise<void>;
+  updateIssueRepetitiveEstimate: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ) => Promise<void>;
+  updateIssuePriority: (workspaceSlug: string, projectId: string, issueId: string, priority: string) => Promise<void>;
   preview: (
     workspaceSlug: string,
     projectId: string,
@@ -74,6 +93,10 @@ export class KpiStore implements IKpiStore {
       resetProjectConfig: action,
       fetchProjectIssues: action,
       updateIssueAttributes: action,
+      updateIssueEstimate: action,
+      updateIssueDifficultyEstimate: action,
+      updateIssueRepetitiveEstimate: action,
+      updateIssuePriority: action,
       preview: action,
     });
     this.kpiService = new KpiService();
@@ -151,6 +174,46 @@ export class KpiStore implements IKpiStore {
     // Refresh the scored list so Vp/Vf reflect the new attributes.
     await this.fetchProjectIssues(workspaceSlug, projectId);
     return attribute;
+  };
+
+  updateIssueEstimate = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ): Promise<void> => {
+    await this.updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
+  };
+
+  updateIssueDifficultyEstimate = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ): Promise<void> => {
+    await this.kpiService.updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
+    await this.fetchProjectIssues(workspaceSlug, projectId);
+  };
+
+  updateIssueRepetitiveEstimate = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ): Promise<void> => {
+    await this.kpiService.updateIssueRepetitiveEstimate(workspaceSlug, projectId, issueId, estimatePointId);
+    await this.fetchProjectIssues(workspaceSlug, projectId);
+  };
+
+  updateIssuePriority = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    priority: string
+  ): Promise<void> => {
+    await this.kpiService.updateIssuePriority(workspaceSlug, projectId, issueId, priority);
+    // Importance is derived from priority -> refresh so Vp/Vf update.
+    await this.fetchProjectIssues(workspaceSlug, projectId);
   };
 
   preview = async (

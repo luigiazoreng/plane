@@ -13,43 +13,55 @@ import { EUserPermissionsLevel } from "@plane/constants";
 import { EUserProjectRoles } from "@plane/types";
 import type { IKpiAggregates, IKpiIssueRow } from "@plane/types";
 import { Spinner } from "@plane/ui";
+import { cn } from "@plane/utils";
 // components
 import { KpiCurveChart } from "@/components/kpi/curve-chart";
 import { KpiIssuesTable } from "@/components/kpi/issues-table";
 import { PageHead } from "@/components/core/page-title";
 // hooks
+import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useKpi } from "@/hooks/store/use-kpi";
 import { useUserPermissions } from "@/hooks/store/user";
 
-// ── Dark-mode depth techniques ──────────────────────────────────────────────
-//
-// Dark shadows (rgba(0,0,0,...)) are invisible on dark backgrounds — they blend
-// in. The correct technique used by Linear/Vercel/GitHub dark:
-//
-//  1. White ring:  box-shadow "0 0 0 1px rgba(255,255,255,0.12)" — acts as a
-//     glowing border that's clearly visible against any dark background.
-//
-//  2. Light gradient: backgroundImage with a very subtle white gradient from
-//     top-left to transparent — simulates a raised surface catching ambient
-//     light. Does NOT override bg-custom-background-100 (uses backgroundImage,
-//     not background, so Tailwind's background-color is preserved underneath).
-//
-//  3. Inner top highlight: "inset 0 1px 0 rgba(255,255,255,0.06)" added to the
-//     ring shadow — a bright 1px edge at the very top of the card.
-
-// Stat card style: ring replaces the dark border completely.
-const CARD_RING = "0 0 0 1px rgba(255,255,255,0.12), inset 0 1px 0 rgba(255,255,255,0.07)";
-const CARD_GRADIENT =
-  "linear-gradient(145deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 50%, rgba(255,255,255,0) 75%)";
-
-// Panel style (table, curve): keep Tailwind border, add inner highlight only.
-const PANEL_HIGHLIGHT = "inset 0 1px 0 rgba(255,255,255,0.06)";
-
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString());
 
-// ── Stat cards ─────────────────────────────────────────────────────────────
+// ── Stat bar ─────────────────────────────────────────────────────────────────
+// Flat, bordered strip that mirrors the spreadsheet header chrome: no rounded
+// cards, no shadows — just dividers and semantic tokens.
 
-function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
+type StatTone = "neutral" | "accent" | "success" | "warning" | "danger";
+
+const TONE_TEXT: Record<StatTone, string> = {
+  neutral: "text-primary",
+  accent: "text-accent-primary",
+  success: "text-success-primary",
+  warning: "text-warning-primary",
+  danger: "text-danger-primary",
+};
+
+function Stat({
+  icon: Icon,
+  value,
+  label,
+  tone = "neutral",
+}: {
+  icon: typeof Layers;
+  value: string;
+  label: string;
+  tone?: StatTone;
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-3 px-page-x py-4">
+      <Icon className={cn("size-4 shrink-0", tone === "neutral" ? "text-tertiary" : TONE_TEXT[tone])} />
+      <div className="min-w-0">
+        <p className={cn("text-20 leading-none font-semibold tabular-nums", TONE_TEXT[tone])}>{value}</p>
+        <p className="mt-1.5 truncate text-12 text-tertiary">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatBar({ agg }: { agg: IKpiAggregates | undefined }) {
   const onTime = agg ? agg.counts.on_time + agg.counts.early : null;
   const effNum = agg?.efficiency != null ? agg.efficiency * 100 : null;
   const effStr = effNum != null ? `${effNum.toFixed(1)}%` : "—";
@@ -57,143 +69,13 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
   const effHigh = effNum != null && effNum >= 100;
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      {/* Σ Vp — neutral */}
-      <div
-        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
-        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
-      >
-        <div
-          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
-          style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-        />
-        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="bg-custom-background-80 ring-custom-border-200 shrink-0 rounded-lg p-2.5 ring-1">
-            <Layers className="text-custom-text-400 size-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-2xl text-custom-text-100 leading-none font-bold tabular-nums">{fmt(agg?.sum_vp)}</p>
-            <p className="text-xs text-custom-text-400 mt-1 truncate">Raw points</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Σ Vf — primary blue */}
-      <div
-        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
-        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
-      >
-        <div className="bg-custom-primary-100 absolute inset-y-0 left-0 w-1 rounded-l-xl" />
-        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="bg-custom-primary-100/10 ring-custom-primary-100/20 shrink-0 rounded-lg p-2.5 ring-1">
-            <Award className="text-custom-primary-100 size-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-2xl text-custom-primary-100 leading-none font-bold tabular-nums">{fmt(agg?.sum_vf)}</p>
-            <p className="text-xs text-custom-text-400 mt-1 truncate">Final score</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Efficiency — green or yellow */}
-      <div
-        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
-        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
-      >
-        <div
-          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
-          style={{ backgroundColor: effHigh ? "#22c55e" : "#eab308" }}
-        />
-        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div
-            className="shrink-0 rounded-lg p-2.5"
-            style={{ backgroundColor: effHigh ? "rgba(34,197,94,0.12)" : "rgba(234,179,8,0.12)" }}
-          >
-            <TrendingUp className="size-4" style={{ color: effHigh ? "#22c55e" : "#eab308" }} />
-          </div>
-          <div className="min-w-0">
-            <p
-              className="text-2xl leading-none font-bold tabular-nums"
-              style={{ color: effHigh ? "#22c55e" : "#eab308" }}
-            >
-              {effStr}
-            </p>
-            <p className="text-xs text-custom-text-400 mt-1 truncate">Efficiency</p>
-          </div>
-        </div>
-      </div>
-
-      {/* On time / Early — green */}
-      <div
-        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
-        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
-      >
-        <div className="absolute inset-y-0 left-0 w-1 rounded-l-xl" style={{ backgroundColor: "#22c55e" }} />
-        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="shrink-0 rounded-lg p-2.5" style={{ backgroundColor: "rgba(34,197,94,0.12)" }}>
-            <CheckCircle2 className="size-4" style={{ color: "#22c55e" }} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-2xl leading-none font-bold tabular-nums" style={{ color: "#22c55e" }}>
-              {onTime !== null ? String(onTime) : "—"}
-            </p>
-            <p className="text-xs text-custom-text-400 mt-1 truncate">On time / Early</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Late — red if any, neutral otherwise */}
-      <div
-        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
-        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
-      >
-        <div
-          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
-          style={{ backgroundColor: isLate ? "#ef4444" : "rgba(255,255,255,0.12)" }}
-        />
-        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div
-            className="shrink-0 rounded-lg p-2.5"
-            style={{ backgroundColor: isLate ? "rgba(239,68,68,0.12)" : "transparent" }}
-          >
-            <AlertCircle
-              className={`size-4 ${isLate ? "" : "text-custom-text-400"}`}
-              style={isLate ? { color: "#ef4444" } : undefined}
-            />
-          </div>
-          <div className="min-w-0">
-            <p
-              className={`text-2xl leading-none font-bold tabular-nums ${isLate ? "" : "text-custom-text-300"}`}
-              style={isLate ? { color: "#ef4444" } : undefined}
-            >
-              {fmt(agg?.counts.late)}
-            </p>
-            <p className="text-xs text-custom-text-400 mt-1 truncate">Late</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Pending — neutral */}
-      <div
-        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
-        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
-      >
-        <div
-          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
-          style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
-        />
-        <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="bg-custom-background-80 ring-custom-border-200 shrink-0 rounded-lg p-2.5 ring-1">
-            <Clock className="text-custom-text-400 size-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-2xl text-custom-text-300 leading-none font-bold tabular-nums">
-              {fmt(agg?.counts.pending)}
-            </p>
-            <p className="text-xs text-custom-text-400 mt-1 truncate">Pending</p>
-          </div>
-        </div>
-      </div>
+    <div className="flex flex-wrap divide-x divide-subtle border-b border-subtle bg-surface-1">
+      <Stat icon={Layers} value={fmt(agg?.sum_vp)} label="Raw points" />
+      <Stat icon={Award} value={fmt(agg?.sum_vf)} label="Final score" tone="accent" />
+      <Stat icon={TrendingUp} value={effStr} label="Efficiency" tone={effHigh ? "success" : "warning"} />
+      <Stat icon={CheckCircle2} value={onTime !== null ? String(onTime) : "—"} label="On time / Early" tone="success" />
+      <Stat icon={AlertCircle} value={fmt(agg?.counts.late)} label="Late" tone={isLate ? "danger" : "neutral"} />
+      <Stat icon={Clock} value={fmt(agg?.counts.pending)} label="Pending" />
     </div>
   );
 }
@@ -203,6 +85,7 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
 function ProjectKpiPage() {
   const { workspaceSlug, projectId } = useParams() as { workspaceSlug: string; projectId: string };
   const { projectConfig, issues, aggregates, fetchProjectConfig, fetchProjectIssues } = useKpi();
+  const { getProjectEstimates } = useProjectEstimates();
   const { allowPermissions } = useUserPermissions();
 
   const [loading, setLoading] = useState(true);
@@ -222,13 +105,16 @@ function ProjectKpiPage() {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    // Difficulty is the issue's native estimate -> preload so the dropdown can
+    // resolve and display the currently selected estimate value.
+    getProjectEstimates(workspaceSlug, projectId).catch(() => {});
     Promise.all([fetchProjectConfig(workspaceSlug, projectId), fetchProjectIssues(workspaceSlug, projectId)]).finally(
       () => mounted && setLoading(false)
     );
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, projectId, fetchProjectConfig, fetchProjectIssues]);
+  }, [workspaceSlug, projectId, fetchProjectConfig, fetchProjectIssues, getProjectEstimates]);
 
   const selectedB = useMemo(() => {
     if (!config || !selectedRow) return 0;
@@ -246,35 +132,31 @@ function ProjectKpiPage() {
   return (
     <>
       <PageHead title="KPI" />
-      <div className="h-full w-full overflow-y-auto p-6">
-        <StatCards agg={agg} />
+      <div className="flex h-full w-full flex-col overflow-hidden bg-surface-1">
+        <StatBar agg={agg} />
 
         {/* Section header */}
-        <div className="border-custom-border-200 mb-3 flex items-center justify-between border-t pt-4">
-          <div>
-            <h3 className="text-sm text-custom-text-100 font-semibold">Work item scoring</h3>
-            <p className="text-xs text-custom-text-400 mt-0.5">
+        <div className="flex h-11 shrink-0 items-center justify-between border-b border-subtle px-page-x">
+          <div className="flex items-baseline gap-2 truncate">
+            <h3 className="text-13 font-medium text-primary">Work item scoring</h3>
+            <span className="truncate text-12 text-tertiary">
               <span className="capitalize">{config.penalty_mode.replace("_", " ")}</span>
               {" · "}k = {config.k}
               {config.inherited && " · inherited config"}
-            </p>
+            </span>
           </div>
           <Link
             href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
-            className="border-custom-border-200 bg-custom-background-90 text-xs text-custom-text-300 hover:bg-custom-background-80 hover:text-custom-text-100 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium transition-colors"
+            className="flex items-center gap-1.5 rounded text-12 font-medium text-secondary transition-colors hover:text-primary"
           >
-            <Settings className="size-3" />
+            <Settings className="size-3.5" />
             Settings
           </Link>
         </div>
 
-        {/* Table + Curve — same panel treatment */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
-          {/* Issues table */}
-          <div
-            className="border-custom-border-200 bg-custom-background-100 overflow-hidden rounded-xl border"
-            style={{ boxShadow: PANEL_HIGHLIGHT }}
-          >
+        {/* Table + curve */}
+        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+          <div className="vertical-scrollbar horizontal-scrollbar scrollbar-lg min-h-0 flex-1 overflow-auto">
             <KpiIssuesTable
               workspaceSlug={workspaceSlug}
               projectId={projectId}
@@ -287,17 +169,14 @@ function ProjectKpiPage() {
           </div>
 
           {/* Penalty curve */}
-          <div
-            className="border-custom-border-200 bg-custom-background-100 flex flex-col overflow-hidden rounded-xl border"
-            style={{ boxShadow: PANEL_HIGHLIGHT }}
-          >
-            <div className="border-custom-border-200 bg-custom-background-90 border-b px-4 py-3">
-              <h4 className="text-sm text-custom-text-100 font-semibold">Penalty curve p(d)</h4>
-              <p className="text-xs text-custom-text-400 mt-0.5 truncate">
+          <div className="flex shrink-0 flex-col border-t border-subtle bg-surface-1 lg:w-[360px] lg:border-t-0 lg:border-l">
+            <div className="flex h-11 shrink-0 flex-col justify-center border-b border-subtle px-page-x">
+              <h4 className="text-13 font-medium text-primary">Penalty curve p(d)</h4>
+              <p className="truncate text-12 text-tertiary">
                 {selectedRow ? `${selectedRow.name} · b = ${selectedB}` : "Click a row to mark its position"}
               </p>
             </div>
-            <div className="flex-1 p-4">
+            <div className="p-page-x">
               <KpiCurveChart config={config} b={selectedB || 0.25} markerD={selectedRow?.d ?? null} />
             </div>
           </div>
