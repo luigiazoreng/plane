@@ -43,7 +43,7 @@ export interface IEstimateFormData {
     type?: string;
     last_used?: boolean;
   };
-  estimate_points: {
+  estimate_points?: {
     id?: string | undefined;
     key: number;
     value: string;

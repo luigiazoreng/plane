@@ -451,6 +451,7 @@ def track_estimate_points(
             if requested_data.get("estimate_point") is not None
             else None
         )
+        activity_estimate = new_estimate or old_estimate
         issue_activities.append(
             IssueActivity(
                 issue_id=issue_id,
@@ -466,7 +467,7 @@ def track_estimate_points(
                 ),
                 old_value=old_estimate.value if old_estimate else None,
                 new_value=new_estimate.value if new_estimate else None,
-                field="estimate_" + new_estimate.estimate.type,
+                field=("estimate_" + activity_estimate.estimate.type) if activity_estimate else "estimate_point",
                 project_id=project_id,
                 workspace_id=workspace_id,
                 comment="updated the estimate point to ",

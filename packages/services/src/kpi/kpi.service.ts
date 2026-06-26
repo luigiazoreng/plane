@@ -8,6 +8,8 @@ import { API_BASE_URL } from "@plane/constants";
 import type {
   IKpiConfig,
   IKpiIssueAttribute,
+  IKpiIssueEstimate,
+  IKpiIssuePriority,
   IKpiIssueListResponse,
   IKpiPreviewResponse,
   IKpiTaskInput,
@@ -62,6 +64,52 @@ export class KpiService extends APIService {
     return this.put(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/attributes/`, data).then(
       (res) => res?.data
     );
+  }
+
+  // --- Difficulty / Repetitive (KPI estimate points) ---
+
+  async updateIssueDifficultyEstimate(
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ): Promise<IKpiIssueEstimate> {
+    return this.put(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/estimate/`, {
+      estimate_point: estimatePointId,
+    }).then((res) => res?.data);
+  }
+
+  async updateIssueEstimate(
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ): Promise<IKpiIssueEstimate> {
+    return this.updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
+  }
+
+  async updateIssueRepetitiveEstimate(
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    estimatePointId: string | null
+  ): Promise<IKpiIssueEstimate> {
+    return this.put(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/repetitive-estimate/`, {
+      estimate_point: estimatePointId,
+    }).then((res) => res?.data);
+  }
+
+  // --- Importance (native priority) ---
+
+  async updateIssuePriority(
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    priority: string
+  ): Promise<IKpiIssuePriority> {
+    return this.put(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/priority/`, {
+      priority,
+    }).then((res) => res?.data);
   }
 
   // --- Preview / curve ---

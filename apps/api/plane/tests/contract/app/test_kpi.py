@@ -11,6 +11,8 @@ from django.urls import reverse
 from rest_framework import status
 
 from plane.db.models import (
+    Estimate,
+    EstimatePoint,
     Issue,
     KpiConfig,
     KpiIssueAttribute,
@@ -18,6 +20,7 @@ from plane.db.models import (
     ProjectMember,
     State,
 )
+from plane.db.models.kpi import default_kpi_tables
 
 
 @pytest.fixture
@@ -73,7 +76,11 @@ class TestKpiConfig:
         assert data["id"] is None
         assert data["is_default_seed"] is True
         assert data["penalty_mode"] == "continuous"
-        assert data["tables"]["difficulty"]["Hard-High"] == 50
+        # Difficulty is now driven by the project's estimate; the seed mapping
+        # starts empty (configured per project against its estimate points).
+        assert data["tables"]["difficulty"] == {}
+        # Importance is now the native priority -> no separate importance table.
+        assert "importance" not in data["tables"]
 
     def test_project_config_put_and_get(self, session_client, workspace, project):
         url = reverse("kpi-project-config", kwargs={"slug": workspace.slug, "project_id": project.id})
@@ -110,13 +117,12 @@ class TestKpiIssueAttributes:
             "kpi-issue-attributes",
             kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
         )
-        put = session_client.put(url, {"difficulty": "Hard-High", "importance": "High"}, format="json")
+        put = session_client.put(url, {"repetitive": "High"}, format="json")
         assert put.status_code == status.HTTP_200_OK
-        assert put.json()["difficulty"] == "Hard-High"
+        assert put.json()["repetitive"] == "High"
 
         get = session_client.get(url)
-        assert get.json()["difficulty"] == "Hard-High"
-        assert get.json()["importance"] == "High"
+        assert get.json()["repetitive"] == "High"
 
     def test_invalid_level_rejected(self, session_client, workspace, project, state, create_user):
         issue = _make_issue(project, workspace, state, create_user)
@@ -124,7 +130,7 @@ class TestKpiIssueAttributes:
             "kpi-issue-attributes",
             kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
         )
-        response = session_client.put(url, {"difficulty": "Nonexistent"}, format="json")
+        response = session_client.put(url, {"repetitive": "Nonexistent"}, format="json")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
@@ -132,31 +138,178 @@ class TestKpiIssueAttributes:
 @pytest.mark.django_db
 class TestKpiIssueList:
     def test_scoring_matches_spec_case(self, session_client, workspace, project, state, create_user):
-        # Mirror the "atraso_leve" spec case: high priority (b=0.25, points 27),
-        # Hard-Low (45) + importance High (20), d=2 -> Vp=92, p=0.5, Vf=46.
+        # Difficulty comes from the issue's estimate (mapped "Hard-Low" -> 45);
+        # Importance is the native priority (high -> points 27). With high
+        # priority (b=0.25), d=2 -> Vp = 45 + 27 = 72, p=0.5, Vf=36.
+        tables = default_kpi_tables()
+        tables["difficulty"] = {"Hard-Low": 45}
+        KpiConfig.objects.create(workspace=workspace, project=project, tables=tables)
+
+        estimate = Estimate.objects.create(name="Points", project=project, type="points", created_by=create_user)
+        point = EstimatePoint.objects.create(
+            estimate=estimate, project=project, key=0, value="Hard-Low", created_by=create_user
+        )
+
         issue = _make_issue(
             project, workspace, state, create_user,
             priority="high",
             target_date=date(2026, 1, 15),
             completed_at=datetime(2026, 1, 17, 12, 0, tzinfo=dt_timezone.utc),
         )
-        KpiIssueAttribute.objects.create(
-            workspace=workspace, project=project, issue=issue,
-            difficulty="Hard-Low", importance="High",
-        )
+        Issue.objects.filter(id=issue.id).update(estimate_point=point)
 
         url = reverse("kpi-issues", kwargs={"slug": workspace.slug, "project_id": project.id})
         response = session_client.get(url)
         assert response.status_code == status.HTTP_200_OK
         body = response.json()
         row = next(r for r in body["results"] if r["id"] == str(issue.id))
-        assert row["vp"] == 92
+        assert row["vp"] == 72
         assert row["d"] == 2
         assert row["p"] == pytest.approx(0.5)
-        assert row["vf"] == pytest.approx(46)
+        assert row["vf"] == pytest.approx(36)
         assert row["status"] == "late"
+        assert row["estimate_point"] == str(point.id)
+        assert row["difficulty"] == "Hard-Low"
         assert body["aggregates"]["total"] == 1
         assert body["aggregates"]["counts"]["late"] == 1
+
+    def test_set_issue_priority_updates_importance(self, session_client, workspace, project, state, create_user):
+        # Importance = native priority. Setting priority via the KPI priority
+        # endpoint changes the Importance contribution (priority.points) to Vp.
+        issue = _make_issue(
+            project, workspace, state, create_user,
+            priority="none",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 15, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        prio_url = reverse(
+            "kpi-issue-priority",
+            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
+        )
+        put = session_client.put(prio_url, {"priority": "urgent"}, format="json")
+        assert put.status_code == status.HTTP_200_OK
+        assert put.json()["priority"] == "urgent"
+
+        list_url = reverse("kpi-issues", kwargs={"slug": workspace.slug, "project_id": project.id})
+        row = next(r for r in session_client.get(list_url).json()["results"] if r["id"] == str(issue.id))
+        # No difficulty/estimate -> Vp = priority urgent points (30).
+        assert row["vp"] == 30
+        assert row["priority"] == "urgent"
+
+        bad = session_client.put(prio_url, {"priority": "nope"}, format="json")
+        assert bad.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_set_issue_estimates_update_kpi_fields_without_native_estimate(
+        self, session_client, workspace, project, state, create_user
+    ):
+        # KPI Difficulty/Repetitive use their own configured estimate systems.
+        # Updating them must not overwrite Issue.estimate_point.
+        tables = default_kpi_tables()
+        tables["difficulty"] = {"8": 8}
+        tables["repetitive"] = {"High": 4}
+
+        difficulty_estimate = Estimate.objects.create(
+            name="Difficulty", project=project, type="points", created_by=create_user
+        )
+        difficulty_point = EstimatePoint.objects.create(
+            estimate=difficulty_estimate, project=project, key=0, value="8", created_by=create_user
+        )
+        repetitive_estimate = Estimate.objects.create(
+            name="Repetitive", project=project, type="categories", created_by=create_user
+        )
+        repetitive_point = EstimatePoint.objects.create(
+            estimate=repetitive_estimate, project=project, key=0, value="High", created_by=create_user
+        )
+        KpiConfig.objects.create(
+            workspace=workspace,
+            project=project,
+            tables=tables,
+            difficulty_estimate=difficulty_estimate,
+            repetitive_estimate=repetitive_estimate,
+        )
+
+        issue = _make_issue(
+            project, workspace, state, create_user,
+            priority="none",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 15, 12, 0, tzinfo=dt_timezone.utc),
+        )
+
+        est_url = reverse(
+            "kpi-issue-estimate",
+            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
+        )
+        put = session_client.put(est_url, {"estimate_point": str(difficulty_point.id)}, format="json")
+        assert put.status_code == status.HTTP_200_OK
+        assert put.json()["difficulty_estimate_point"] == str(difficulty_point.id)
+
+        repetitive_url = reverse(
+            "kpi-issue-repetitive-estimate",
+            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
+        )
+        rep_put = session_client.put(repetitive_url, {"estimate_point": str(repetitive_point.id)}, format="json")
+        assert rep_put.status_code == status.HTTP_200_OK
+        assert rep_put.json()["repetitive_estimate_point"] == str(repetitive_point.id)
+
+        issue.refresh_from_db()
+        assert issue.estimate_point_id is None
+
+        list_url = reverse("kpi-issues", kwargs={"slug": workspace.slug, "project_id": project.id})
+        row = next(r for r in session_client.get(list_url).json()["results"] if r["id"] == str(issue.id))
+        # priority none points (12) + difficulty 8 + repetitive 4 = 24.
+        assert row["vp"] == 24
+        assert row["estimate_point"] is None
+        assert row["difficulty_estimate_point"] == str(difficulty_point.id)
+        assert row["repetitive_estimate_point"] == str(repetitive_point.id)
+
+        # Clearing the KPI difficulty estimate drops only the KPI contribution.
+        clear = session_client.put(est_url, {"estimate_point": None}, format="json")
+        assert clear.status_code == status.HTTP_200_OK
+        row = next(r for r in session_client.get(list_url).json()["results"] if r["id"] == str(issue.id))
+        assert row["vp"] == 16
+        assert row["estimate_point"] is None
+        assert row["difficulty_estimate_point"] is None
+
+    def test_rejects_estimate_point_from_unconfigured_estimate(
+        self, session_client, workspace, project, state, create_user
+    ):
+        configured_estimate = Estimate.objects.create(
+            name="Configured", project=project, type="points", created_by=create_user
+        )
+        other_estimate = Estimate.objects.create(name="Other", project=project, type="points", created_by=create_user)
+        other_point = EstimatePoint.objects.create(
+            estimate=other_estimate, project=project, key=0, value="13", created_by=create_user
+        )
+        KpiConfig.objects.create(workspace=workspace, project=project, difficulty_estimate=configured_estimate)
+        issue = _make_issue(project, workspace, state, create_user)
+
+        est_url = reverse(
+            "kpi-issue-estimate",
+            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
+        )
+        response = session_client.put(est_url, {"estimate_point": str(other_point.id)}, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_legacy_fallbacks_use_native_estimate_and_repetitive_text(
+        self, session_client, workspace, project, state, create_user
+    ):
+        tables = default_kpi_tables()
+        tables["difficulty"] = {"5": 5}
+        tables["repetitive"] = {"High": 4}
+        KpiConfig.objects.create(workspace=workspace, project=project, tables=tables)
+
+        estimate = Estimate.objects.create(name="Legacy", project=project, type="points", created_by=create_user)
+        point = EstimatePoint.objects.create(estimate=estimate, project=project, key=0, value="5", created_by=create_user)
+        issue = _make_issue(project, workspace, state, create_user, priority="none")
+        Issue.objects.filter(id=issue.id).update(estimate_point=point)
+        KpiIssueAttribute.objects.create(workspace=workspace, project=project, issue=issue, repetitive="High")
+
+        list_url = reverse("kpi-issues", kwargs={"slug": workspace.slug, "project_id": project.id})
+        row = next(r for r in session_client.get(list_url).json()["results"] if r["id"] == str(issue.id))
+        # priority none points (12) + native estimate fallback 5 + legacy repetitive fallback 4.
+        assert row["vp"] == 21
+        assert row["difficulty"] == "5"
+        assert row["repetitive"] == "High"
 
     def test_open_task_is_pending(self, session_client, workspace, project, state, create_user):
         issue = _make_issue(project, workspace, state, create_user, priority="high", target_date=date(2026, 1, 15))
@@ -175,8 +328,6 @@ class TestKpiPreview:
         payload = {
             "task": {
                 "priority": "urgent",
-                "difficulty": "Hard-High",
-                "importance": "High",
                 "due_date": "2026-01-15",
                 "delivered_date": "2026-01-15",
             }
@@ -184,7 +335,9 @@ class TestKpiPreview:
         response = session_client.post(url, payload, format="json")
         assert response.status_code == status.HTTP_200_OK
         body = response.json()
-        assert body["result"]["Vp"] == 100
+        # Seed difficulty mapping is empty and Importance = priority points,
+        # so Vp = priority urgent points (30).
+        assert body["result"]["Vp"] == 30
         assert body["result"]["p"] == pytest.approx(1.0)
         assert len(body["curve"]) > 0
         assert body["b"] == pytest.approx(0.30)

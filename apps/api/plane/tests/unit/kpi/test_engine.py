@@ -16,6 +16,19 @@ from plane.kpi.engine import calcular, calcular_dias, sample_curve
 from plane.db.models.kpi import default_kpi_tables
 
 
+# Difficulty is now driven by the issue's estimate; the engine still treats it
+# as a categorical key -> points lookup, so the spec cases supply the original
+# spec difficulty table explicitly (the model default is empty by design).
+_SPEC_DIFFICULTY = {
+    "Hard-High": 50,
+    "Hard-Low": 45,
+    "Medium-High": 39,
+    "Medium-Low": 32,
+    "Easy-High": 24,
+    "Easy-Low": 13,
+}
+
+
 def _config(**param_overrides):
     params = {
         "penalty_mode": "continuous",
@@ -27,42 +40,46 @@ def _config(**param_overrides):
         "vf_decimals": 2,
     }
     params.update(param_overrides)
-    return {"tables": default_kpi_tables(), "params": params}
+    tables = default_kpi_tables()
+    tables["difficulty"] = dict(_SPEC_DIFFICULTY)
+    return {"tables": tables, "params": params}
 
 
 # (label, task, expected_Vp, expected_d, p_continuous, p_dead_zone, vf_cont, vf_dead)
 # Priority keys map to Plane native values: urgent=b0.30, high=b0.25,
 # medium=b0.20, low=b0.15, none=b0.10.
+# Importance (I) = native priority points (urgent 30, high 27, medium 23,
+# low 18, none 12); there is no separate importance term. Vp = D + R + priority.points + T.
 SPEC_CASES = [
     (
         "no_prazo",
-        {"priority": "urgent", "difficulty": "Hard-High", "repetitive": "Low", "importance": "High", "type": "Feature", "d": 0},
-        100, 0, 1.00, 1.00, 100, 100,
+        {"priority": "urgent", "difficulty": "Hard-High", "repetitive": "Low", "type": "Feature", "d": 0},
+        80, 0, 1.00, 1.00, 80, 80,
     ),
     (
         "atraso_leve",
-        {"priority": "high", "difficulty": "Hard-Low", "repetitive": "Low", "importance": "High", "type": "Feature", "d": 2},
-        92, 2, 0.50, 0.50, 46, 46,
+        {"priority": "high", "difficulty": "Hard-Low", "repetitive": "Low", "type": "Feature", "d": 2},
+        72, 2, 0.50, 0.50, 36, 36,
     ),
     (
         "antecipada",
-        {"priority": "medium", "difficulty": "Medium-High", "repetitive": "Medium", "importance": "Medium", "type": "Feature", "d": -1},
-        74, -1, 1.20, 1.20, 88.8, 88.8,
+        {"priority": "medium", "difficulty": "Medium-High", "repetitive": "Medium", "type": "Feature", "d": -1},
+        64, -1, 1.20, 1.20, 76.8, 76.8,
     ),
     (
         "no_limite_1_b",
-        {"priority": "medium", "difficulty": "Hard-High", "repetitive": "Low", "importance": "High", "type": "Feature", "d": 5},
-        93, 5, 0.00, 0.00, 0, 0,
+        {"priority": "medium", "difficulty": "Hard-High", "repetitive": "Low", "type": "Feature", "d": 5},
+        73, 5, 0.00, 0.00, 0, 0,
     ),
     (
         "muito_atrasada",
-        {"priority": "high", "difficulty": "Hard-Low", "repetitive": "Low", "importance": "High", "type": "Feature", "d": 10},
-        92, 10, -0.75, -0.25, -69, -23,
+        {"priority": "high", "difficulty": "Hard-Low", "repetitive": "Low", "type": "Feature", "d": 10},
+        72, 10, -0.75, -0.25, -54, -18,
     ),
     (
         "extremo_zona_morta",
-        {"priority": "none", "difficulty": "Easy-Low", "repetitive": "Low", "importance": "Low", "type": "Feature", "d": 12},
-        30, 12, -0.10, 0.00, -3, 0,
+        {"priority": "none", "difficulty": "Easy-Low", "repetitive": "Low", "type": "Feature", "d": 12},
+        25, 12, -0.10, 0.00, -2.5, 0,
     ),
 ]
 

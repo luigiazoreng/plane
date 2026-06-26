@@ -23,24 +23,61 @@ Todas as tabelas de pontos e fatores são **editáveis pelo usuário**, e o usu�
 
 O motor **não** cria uma entidade de tarefa própria. Ele pontua os `Issue` já existentes. Os campos da spec são mapeados aos campos nativos do Plane sempre que possível, e os que faltam ficam em uma tabela lateral de atributos KPI por issue.
 
-| Campo da spec (seção 3)    | Origem no Plane                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------- |
-| `id` / `nome`              | `Issue.id` / `Issue.name`                                                                         |
-| `priority` (P)             | `Issue.priority` (`urgent`/`high`/`medium`/`low`/`none`) — pontos e `b` vêm da config de Priority |
-| `due_date` (prazo)         | `Issue.target_date`                                                                               |
-| `delivered_date` (entrega) | `Issue.completed_at` (preenchido quando a issue entra em estado `completed`)                      |
-| `type` (T)                 | `Issue.type` → `IssueType` (mapeado por nome na config de Type; default 0)                        |
-| `difficulty` (D)           | **novo** — `KpiIssueAttribute.difficulty`                                                         |
-| `repetitive` (R)           | **novo** — `KpiIssueAttribute.repetitive`                                                         |
-| `importance` (I)           | **novo** — `KpiIssueAttribute.importance`                                                         |
+| Campo da spec (seção 3)    | Origem no Plane                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `id` / `nome`              | `Issue.id` / `Issue.name`                                                                                                             |
+| `priority` (P)             | `Issue.priority` (`urgent`/`high`/`medium`/`low`/`none`) — pontos e `b` vêm da config de Priority                                     |
+| `due_date` (prazo)         | `Issue.target_date`                                                                                                                   |
+| `delivered_date` (entrega) | `Issue.completed_at` (preenchido quando a issue entra em estado `completed`)                                                          |
+| `type` (T)                 | `Issue.type` → `IssueType` (mapeado por nome na config de Type; default 0)                                                            |
+| `difficulty` (D)           | **estimate KPI configurável** — `KpiIssueAttribute.difficulty_estimate_point.value` (fallback legado: `Issue.estimate_point.value`)   |
+| `repetitive` (R)           | **estimate KPI configurável** — `KpiIssueAttribute.repetitive_estimate_point.value` (fallback legado: `KpiIssueAttribute.repetitive`) |
+| `importance` (I)           | **priority nativo** — `Issue.priority`; pontos em `config.tables.priority[...].points` (ver D5)                                       |
 
-> Os valores categóricos de `difficulty`, `repetitive`, `importance` e `type` só aceitam níveis que existam na config vigente (validação na escrita).
+> `difficulty` e `repetitive` são validados contra os estimate systems selecionados na config do projeto. `type` continua validado contra a tabela Type. `importance` é o `Issue.priority` nativo.
 
 ### D2 — Escopo da configuração: **por projeto, com herança do workspace**
 
 - Um `KpiConfig` é resolvido na ordem: **config do projeto** → **config default do workspace** → **defaults da seção 4 (hard-coded apenas como bootstrap/seed)**.
 - O usuário pode criar/editar uma config no nível de projeto. Sem config de projeto, herda a do workspace.
 - A config inteira (tabelas + parâmetros) é versionada em um único campo `JSONField` seguindo o contrato da seção 7, mais colunas indexáveis para os parâmetros mais consultados.
+
+### D4 — Difficulty (D) e Repetitive (R) usam Estimate Systems configuráveis no KPI
+
+> Decisão tomada em 2026-06-26. Substitui o uso direto de `Issue.estimate_point` pela UI do KPI e permite dois estimate systems simultâneos por projeto.
+
+- Cada `KpiConfig` de projeto pode selecionar dois estimate systems do mesmo projeto:
+  - `difficulty_estimate` para Difficulty (D).
+  - `repetitive_estimate` para Repetitive (R).
+- Cada issue armazena seleções KPI próprias:
+  - `difficulty_estimate_point`.
+  - `repetitive_estimate_point`.
+- A UI do KPI **não sobrescreve** mais `Issue.estimate_point`. O estimate nativo continua sendo usado pelo restante do Plane e fica apenas como fallback legado para D quando `difficulty_estimate_point` ainda não existe.
+- `KpiIssueAttribute.repetitive` permanece como fallback legado para R, mas a UI nova usa `repetitive_estimate_point`.
+- A contribuição para `Vp` vem de `config.tables.difficulty[value]` e `config.tables.repetitive[value]`, onde `value` é o valor do estimate point escolhido. Um value sem mapeamento contribui **0**.
+- O motor puro não muda: continua recebendo strings `difficulty` e `repetitive` e consultando `tables.difficulty` / `tables.repetitive`.
+- Settings: Difficulty e Repetitive mostram um seletor de estimate system e uma tabela com os points do estimate escolhido.
+- Endpoints: `PUT .../kpi/issues/<id>/estimate/` fica como alias compatível para atualizar `difficulty_estimate_point`; `PUT .../kpi/issues/<id>/repetitive-estimate/` atualiza `repetitive_estimate_point`.
+
+### D5 — Importance (I) usa a Priority nativa; P e I são unificados
+
+> Decisão tomada em 2026-06-26. Substitui o `KpiIssueAttribute.importance` e funde os termos P e I.
+
+- O Plane não tem campo "importance"; o único campo nativo que significa importância é **`Issue.priority`**. A **Importance (I) passa a ser a priority nativa**.
+- Antes a priority alimentava o termo **P** (pontos + fator `b`) **e** havia um termo **I** separado (atributo). "Replace P with Importance": o termo P e o termo I são **fundidos em um só** — `tables.priority[level].points` agora É a contribuição de Importance (I) para `Vp`; `b` continua sendo o fator de penalidade. Não existe mais um termo "Priority points" separado nem a tabela `importance`.
+- `Vp` passa de `D + R + I + P + T` para **`Vp = D + R + Importance(priority.points) + T`**. O motor só **remove o termo `importance`** da soma; o termo `priority.points` sobrevive (agora = Importance).
+- `KpiIssueAttribute.importance` foi **removido** (migração `0142`). Na tela de KPI a coluna **Importance** sai; a coluna **Priority** vira editável (`PriorityDropdown`) e persiste em `Issue.priority` via `PUT .../kpi/issues/<id>/priority/`.
+- Settings: a tabela Importance some; a tabela Priority é renomeada para "Priority / Importance (I)" (points = Importance, b = penalidade).
+
+### D6 — Projeto pode ter múltiplos Estimate Systems ativos
+
+> Decisão tomada em 2026-06-26. Substitui a noção de que `Project.estimate` é o único estimate ativo.
+
+- Cada estimate system tem um switch próprio. Apenas estimates com `Estimate.last_used=true` ficam disponíveis no fluxo nativo de work item.
+- `Project.estimate` permanece como campo legado/default do Plane. Ele indica o estimate padrão para compatibilidade, toggle global de habilitação e fluxos antigos, mas **não é mais a fonte única** de estimates disponíveis.
+- `Issue.estimate_point` continua sendo um único FK para `EstimatePoint`. Como o point já conhece seu `Estimate`, um work item pode selecionar um point de qualquer estimate system ativo sem mudar o schema.
+- A aba Project Settings > Estimates mostra um switch por estimate, badge `Active`/`Inactive` por system e marca `Default` no estimate apontado por `Project.estimate`.
+- O dropdown de estimate do work item lista os points dos estimate systems ativos agrupados pelo nome do estimate system. O KPI continua podendo forçar um estimate específico via `estimateId`, mesmo que ele não esteja no dropdown nativo.
 
 ### D3 — Motor de cálculo puro e isolado
 
@@ -54,19 +91,18 @@ A camada de cálculo (`plane/kpi/engine.py`) é uma função pura `calcular(task
 
 ## Glossário de variáveis
 
-| Símbolo | Nome                    | Origem                                                           |
-| ------- | ----------------------- | ---------------------------------------------------------------- |
-| `D`     | Difficulty              | tabela de pontos, por nível                                      |
-| `R`     | Repetitive              | tabela de pontos, por nível                                      |
-| `I`     | Importance              | tabela de pontos, por nível                                      |
-| `P`     | Priority                | tabela de pontos, por nível                                      |
-| `T`     | Type                    | tabela de pontos, por nível (padrão 0)                           |
-| `b`     | fator de prioridade     | atrelado a cada nível de prioridade                              |
-| `k`     | fator de suavização     | global (0–1), inclinação após o valor zerar                      |
-| `d`     | dias de atraso          | `delivered_date − due_date`, conforme `day_count`/`day_rounding` |
-| `Vp`    | valor planejado         | `Vp = D + R + I + P + T`                                         |
-| `p`     | multiplicador de atraso | função de `b`, `k`, `d` e do modo                                |
-| `Vf`    | valor final             | `Vf = Vp · p`                                                    |
+| Símbolo | Nome                    | Origem                                                             |
+| ------- | ----------------------- | ------------------------------------------------------------------ |
+| `D`     | Difficulty              | tabela de pontos, por nível                                        |
+| `R`     | Repetitive              | tabela de pontos, por nível                                        |
+| `I`     | Importance              | `Issue.priority` nativo → `tables.priority[level].points` (ver D5) |
+| `T`     | Type                    | tabela de pontos, por nível (padrão 0)                             |
+| `b`     | fator de prioridade     | atrelado a cada nível de prioridade                                |
+| `k`     | fator de suavização     | global (0–1), inclinação após o valor zerar                        |
+| `d`     | dias de atraso          | `delivered_date − due_date`, conforme `day_count`/`day_rounding`   |
+| `Vp`    | valor planejado         | `Vp = D + R + I + T` (I = priority.points; ver D5)                 |
+| `p`     | multiplicador de atraso | função de `b`, `k`, `d` e do modo                                  |
+| `Vf`    | valor final             | `Vf = Vp · p`                                                      |
 
 - `d > 0` atrasada · `d = 0` no prazo · `d < 0` antecipada (bônus).
 - `T` entra na soma de `Vp`, mas seu valor padrão é 0 em todos os níveis.
@@ -92,6 +128,8 @@ Os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, project nu
   - `max_multiplier` (Float, **nullable**, default null).
   - `vf_decimals` (Int, default 2).
   - `is_active` (Bool, default true).
+  - `difficulty_estimate` (FK → `Estimate`, nullable) — estimate system usado para D no projeto.
+  - `repetitive_estimate` (FK → `Estimate`, nullable) — estimate system usado para R no projeto.
 - `db_table`: `kpi_configs`
 - `unique_together`: `["workspace", "project", "deleted_at"]` (1 config por projeto; project=null = default do workspace).
 
@@ -101,14 +139,14 @@ Os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, project nu
 
 - Campos:
   - `workspace` (FK), `project` (FK), `issue` (OneToOne FK → `Issue`).
-  - `difficulty` (Char, nullable) — nível da tabela Difficulty.
-  - `repetitive` (Char, nullable) — nível da tabela Repetitive.
-  - `importance` (Char, nullable) — nível da tabela Importance.
+  - `difficulty_estimate_point` (FK → `EstimatePoint`, nullable) — seleção KPI para D.
+  - `repetitive_estimate_point` (FK → `EstimatePoint`, nullable) — seleção KPI para R.
+  - `repetitive` (Char, nullable) — legado/fallback para R.
   - `type_override` (Char, nullable) — opcional; se null, usa `Issue.type.name` mapeado na tabela Type.
 - `db_table`: `kpi_issue_attributes`
 - `unique_together`: `["issue", "deleted_at"]`
 
-> `priority` **não** é duplicada aqui — vem de `Issue.priority`. `due_date`/`delivered_date` vêm de `Issue.target_date`/`Issue.completed_at`.
+> `priority` **não** é duplicada aqui — vem de `Issue.priority`. `due_date`/`delivered_date` vêm de `Issue.target_date`/`Issue.completed_at`. `Issue.estimate_point` também não é sobrescrito pelo KPI; ele é apenas fallback legado para D.
 
 ### 3. `KpiResult` (opcional — cache de resultado)
 
@@ -199,16 +237,8 @@ Defaults iniciais (seed). Priority é keyed pelos valores de `Issue.priority` do
 ```json
 {
   "tables": {
-    "difficulty": {
-      "Hard-High": 50,
-      "Hard-Low": 45,
-      "Medium-High": 39,
-      "Medium-Low": 32,
-      "Easy-High": 24,
-      "Easy-Low": 13
-    },
+    "difficulty": {},
     "repetitive": { "High": 4, "Medium": 2, "Low": 0 },
-    "importance": { "High": 20, "Medium": 10, "Low": 5 },
     "type": { "Feature": 0, "Enhancement": 0, "Support": 0, "Bug": 0 },
     "priority": {
       "urgent": { "points": 30, "b": 0.3, "label": "Today / Critical" },
@@ -229,13 +259,15 @@ Defaults iniciais (seed). Priority é keyed pelos valores de `Issue.priority` do
 
 Padrão idêntico ao Helpdesk: URLs em `apps/api/plane/app/urls/kpi.py`, registrado em `urls/__init__.py`; serializers em `app/serializers/kpi.py`.
 
-| Método  | Rota                                                                | Descrição                                                                        |
-| ------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| GET/PUT | `workspaces/<slug>/kpi/config/`                                     | Config default do workspace (project=null).                                      |
-| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/config/`                       | Config do projeto (cria/edita; herda do workspace se ausente).                   |
-| GET     | `workspaces/<slug>/projects/<id>/kpi/issues/`                       | Lista issues do projeto com `Vp`, `d`, `p`, `Vf` calculados + agregados.         |
-| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/attributes/` | Lê/define `difficulty`/`repetitive`/`importance`/`type_override` da issue.       |
-| POST    | `workspaces/<slug>/projects/<id>/kpi/preview/`                      | Recalcula `p(d)`/`Vf` para um payload arbitrário (curva/preview, sem persistir). |
+| Método  | Rota                                                                         | Descrição                                                                                |
+| ------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| GET/PUT | `workspaces/<slug>/kpi/config/`                                              | Config default do workspace (project=null).                                              |
+| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/config/`                                | Config do projeto (cria/edita; herda do workspace se ausente).                           |
+| GET     | `workspaces/<slug>/projects/<id>/kpi/issues/`                                | Lista issues do projeto com `Vp`, `d`, `p`, `Vf` calculados + agregados.                 |
+| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/attributes/`          | Lê/define atributos KPI laterais e `type_override` da issue.                             |
+| PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/estimate/`            | Compatibilidade: define `difficulty_estimate_point`, sem alterar `Issue.estimate_point`. |
+| PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/repetitive-estimate/` | Define `repetitive_estimate_point`.                                                      |
+| POST    | `workspaces/<slug>/projects/<id>/kpi/preview/`                               | Recalcula `p(d)`/`Vf` para um payload arbitrário (curva/preview, sem persistir).         |
 
 Agregados retornados na listagem: `sum(Vp)`, `sum(Vf)`, `eficiencia = Vf_total / Vp_total`, contagem por status (no prazo / antecipada / atrasada / pendente).
 
@@ -377,6 +409,37 @@ Config padrão, `k = 0.5`.
 - **Componentes:** `core/components/kpi/` — `curve-chart.tsx` (SVG p(d) com marcador), `issues-table.tsx` (scoring + edição inline de D/R/I), `config-editor.tsx` (editor completo de tabelas + params).
 - **Páginas:** dashboard (`kpi/page.tsx`) com agregados + tabela + curva; settings (`kpi/settings/page.tsx`).
 - **Gates:** `tsc --noEmit` (web) **0 erros**; `oxlint` dos arquivos novos **0/0**; `py_compile` backend OK. Rebuild de `@plane/types`/`@plane/services`/`@plane/i18n` aplicado.
+
+### 2026-06-26 — Redesign da tela + Difficulty via Estimate (D4)
+
+- **Redesign:** `kpi/page.tsx`, `issues-table.tsx` e `curve-chart.tsx` reescritos seguindo o design system da tela de work items (tokens `surface-1`/`layer-1`/`subtle`/`text-*`, `h-11`, flat sem glows/rings). Settings inalterado visualmente.
+- **Difficulty = Estimate (D4):** coluna Difficulty na tabela KPI agora é o `EstimateDropdown` real (edita `Issue.estimate_point`); `Vp` usa `tables.difficulty[estimate.value]` (default 0). Removido `KpiIssueAttribute.difficulty`.
+  - Backend: `models/kpi.py` (campo removido, default difficulty `{}`), migração `0141_kpi_difficulty_from_estimate.py`, `serializers/kpi.py`, `views/kpi/issue.py` (`_difficulty_value`, novo `KpiIssueEstimateEndpoint`), `urls/kpi.py`, `views/kpi/__init__.py`.
+  - Frontend: `packages/types/src/kpi.ts` (+`estimate_point`, `IKpiIssueEstimate`), `kpi.service.ts` (`updateIssueEstimate`), `kpi.store.ts` (`updateIssueEstimate`), `issues-table.tsx`, `config-editor.tsx` (DifficultyEstimateEditor), `kpi/page.tsx` e `kpi/settings/page.tsx` (preload de estimates).
+  - Testes atualizados: `test_engine.py` (injeta tabela difficulty da spec), `test_kpi.py` (estimate→difficulty, novo teste do endpoint de estimate, seeds vazios).
+- **Gates:** `tsc --noEmit` (web) **0 erros**; `oxlint` arquivos KPI **0/0**; backend validado por AST (Django ausente no host → `pytest` pendente de ambiente).
+
+### 2026-06-26 — Importance via Priority nativa (D5)
+
+- **Importance = Priority (D5):** Importance (I) passa a ser a `Issue.priority` nativa. P e I fundidos: `tables.priority[level].points` é a contribuição de Importance; `b` segue como fator de penalidade. `Vp = D + R + Importance(priority.points) + T` — o motor só **remove o termo `importance`** da soma.
+  - Backend: `kpi/engine.py` (remove termo importance), `models/kpi.py` (campo `importance` removido + seed sem tabela importance), migração `0142_kpi_importance_from_priority.py`, `serializers/kpi.py`, `views/kpi/issue.py` (remove importance, novo `KpiIssuePriorityEndpoint`), `urls/kpi.py`, `views/kpi/__init__.py`.
+  - Frontend: `packages/types/src/kpi.ts` (remove importance, +`IKpiIssuePriority`), `kpi.service.ts`/`kpi.store.ts` (`updateIssuePriority`), `helpers/kpi/engine.ts` (remove termo importance), `issues-table.tsx` (coluna Importance removida, Priority vira `PriorityDropdown` editável), `config-editor.tsx` (remove tabela Importance, renomeia Priority → "Priority / Importance (I)").
+  - Testes: `test_engine.py` (Vp recomputado sem o termo I), `test_kpi.py` (sem importance, novo teste do endpoint de priority).
+- **Gates:** `tsc --noEmit` (web) **0 erros**; `oxlint` arquivos KPI **0/0**; backend validado por AST (Django ausente no host → `pytest` pendente de ambiente).
+
+### 2026-06-26 — Multi Estimate ativo no work item (D6)
+
+- **Work item:** `EstimateDropdown` sem `estimateId` agora lista points de todos os estimate systems ativos (`Estimate.last_used=true`) do projeto habilitado. O label inclui o nome do estimate para desambiguar values repetidos.
+- **KPI preservado:** `EstimateDropdown` com `estimateId` continua restrito ao estimate configurado para Difficulty/Repetitive.
+- **Settings:** lista mostra switch individual por estimate, badge `Active`/`Inactive` via `Estimate.last_used` e `Default` para o estimate apontado por `Project.estimate`. A ação mudou de "Set active" para "Set default".
+- **Fluxos auxiliares:** Power-K, readonly estimate, sorting e distribuição local passam a resolver `estimate_point` procurando em todos os estimates carregados do projeto.
+- **Gates:** `pnpm --filter=web check:types` **0 erros**.
+
+### 2026-06-26 — Switch individual por Estimate
+
+- **Ativação individual:** cada estimate system pode ser ativado/desativado na aba Project Settings > Estimates. O estado é persistido em `Estimate.last_used`.
+- **Default seguro:** desligar o estimate default promove outro estimate ativo para `Project.estimate`; se não houver outro ativo, o default fica `null` e o switch global do projeto fica desligado.
+- **Work item:** dropdown nativo e Power-K mostram apenas points de estimates ativos. Histórico continua resolvendo points de estimates inativos para exibição quando o `Issue.estimate_point` já aponta para eles.
 
 ---
 

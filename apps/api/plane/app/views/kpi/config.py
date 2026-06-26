@@ -19,6 +19,8 @@ def _default_payload(inherited, project_id=None):
         "is_default_seed": True,
         "inherited": inherited,
         "project": project_id,
+        "difficulty_estimate": None,
+        "repetitive_estimate": None,
         **contract["params"],
     }
 
@@ -45,7 +47,12 @@ class KpiWorkspaceConfigEndpoint(BaseAPIView):
     def put(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
         cfg = KpiConfig.objects.filter(workspace=workspace, project__isnull=True).first()
-        serializer = KpiConfigSerializer(instance=cfg, data=request.data, partial=bool(cfg))
+        serializer = KpiConfigSerializer(
+            instance=cfg,
+            data=request.data,
+            partial=bool(cfg),
+            context={"project_estimates_allowed": False},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save(workspace=workspace, project=None)
         return Response(_config_payload(serializer.instance, inherited=False))
@@ -70,7 +77,12 @@ class KpiProjectConfigEndpoint(BaseAPIView):
     def put(self, request, slug, project_id):
         workspace = Workspace.objects.get(slug=slug)
         cfg = KpiConfig.objects.filter(workspace=workspace, project_id=project_id).first()
-        serializer = KpiConfigSerializer(instance=cfg, data=request.data, partial=bool(cfg))
+        serializer = KpiConfigSerializer(
+            instance=cfg,
+            data=request.data,
+            partial=bool(cfg),
+            context={"project_id": project_id},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save(workspace=workspace, project_id=project_id)
         return Response(_config_payload(serializer.instance, inherited=False))

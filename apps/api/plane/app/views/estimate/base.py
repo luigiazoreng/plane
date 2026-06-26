@@ -37,9 +37,9 @@ class ProjectEstimatePointEndpoint(BaseAPIView):
         project = Project.objects.get(workspace__slug=slug, pk=project_id)
         if project.estimate_id is not None:
             estimate_points = EstimatePoint.objects.filter(
-                estimate_id=project.estimate_id,
                 project_id=project_id,
                 workspace__slug=slug,
+                estimate__last_used=True,
             )
             serializer = EstimatePointSerializer(estimate_points, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -62,22 +62,23 @@ class BulkEstimatePointEndpoint(BaseViewSet):
 
     @invalidate_cache(path="/api/workspaces/:slug/estimates/", url_params=True, user=False)
     def create(self, request, slug, project_id):
-        estimate = request.data.get("estimate")
-        estimate_name = estimate.get("name", generate_random_name())
+        project = Project.objects.get(workspace__slug=slug, pk=project_id)
+        estimate = request.data.get("estimate") or {}
+        estimate_name = (estimate.get("name") or "").strip() or generate_random_name()
         estimate_type = estimate.get("type", "categories")
         last_used = estimate.get("last_used", False)
+        estimate_points = request.data.get("estimate_points", [])
+
+        serializer = EstimatePointSerializer(data=estimate_points, many=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         estimate = Estimate.objects.create(
             name=estimate_name,
             project_id=project_id,
             last_used=last_used,
             type=estimate_type,
         )
-
-        estimate_points = request.data.get("estimate_points", [])
-
-        serializer = EstimatePointSerializer(data=request.data.get("estimate_points"), many=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         estimate_points = EstimatePoint.objects.bulk_create(
             [
@@ -97,6 +98,13 @@ class BulkEstimatePointEndpoint(BaseViewSet):
             ignore_conflicts=True,
         )
 
+        if project.estimate_id is None:
+            project.estimate = estimate
+            project.save(update_fields=["estimate", "updated_at"])
+            if not estimate.last_used:
+                estimate.last_used = True
+                estimate.save(update_fields=["last_used", "updated_at"])
+
         serializer = EstimateReadSerializer(estimate)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -107,20 +115,46 @@ class BulkEstimatePointEndpoint(BaseViewSet):
 
     @invalidate_cache(path="/api/workspaces/:slug/estimates/", url_params=True, user=False)
     def partial_update(self, request, slug, project_id, estimate_id):
-        if not len(request.data.get("estimate_points", [])):
+        estimate_payload = request.data.get("estimate") or {}
+        estimate_points_data = request.data.get("estimate_points", [])
+
+        if not estimate_payload and not estimate_points_data:
             return Response(
-                {"error": "Estimate points are required"},
+                {"error": "Estimate or estimate points are required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        estimate = Estimate.objects.get(pk=estimate_id)
+        estimate = Estimate.objects.get(pk=estimate_id, workspace__slug=slug, project_id=project_id)
+        project = Project.objects.get(workspace__slug=slug, pk=project_id)
 
-        if request.data.get("estimate"):
-            estimate.name = request.data.get("estimate").get("name", estimate.name)
-            estimate.type = request.data.get("estimate").get("type", estimate.type)
-            estimate.save()
+        if estimate_payload:
+            estimate_name = estimate_payload.get("name")
+            estimate.name = (
+                estimate_name.strip()
+                if isinstance(estimate_name, str) and estimate_name.strip()
+                else estimate.name
+            )
+            estimate.type = estimate_payload.get("type", estimate.type)
+            if "last_used" in estimate_payload:
+                estimate.last_used = bool(estimate_payload.get("last_used"))
+            estimate.save(update_fields=["name", "type", "last_used", "updated_at"])
 
-        estimate_points_data = request.data.get("estimate_points", [])
+            if estimate.last_used and project.estimate_id is None:
+                project.estimate = estimate
+                project.save(update_fields=["estimate", "updated_at"])
+            elif not estimate.last_used and project.estimate_id == estimate.id:
+                replacement_estimate = (
+                    Estimate.objects.filter(workspace__slug=slug, project_id=project_id, last_used=True)
+                    .exclude(pk=estimate_id)
+                    .order_by("-created_at")
+                    .first()
+                )
+                project.estimate = replacement_estimate
+                project.save(update_fields=["estimate", "updated_at"])
+
+        if not estimate_points_data:
+            estimate_serializer = EstimateReadSerializer(estimate)
+            return Response(estimate_serializer.data, status=status.HTTP_200_OK)
 
         estimate_points = EstimatePoint.objects.filter(
             pk__in=[estimate_point.get("id") for estimate_point in estimate_points_data],
@@ -146,6 +180,13 @@ class BulkEstimatePointEndpoint(BaseViewSet):
     @invalidate_cache(path="/api/workspaces/:slug/estimates/", url_params=True, user=False)
     def destroy(self, request, slug, project_id, estimate_id):
         estimate = Estimate.objects.get(pk=estimate_id, workspace__slug=slug, project_id=project_id)
+        replacement_estimate = (
+            Estimate.objects.filter(workspace__slug=slug, project_id=project_id, last_used=True)
+            .exclude(pk=estimate_id)
+            .order_by("-created_at")
+            .first()
+        )
+        Project.objects.filter(pk=project_id, estimate_id=estimate_id).update(estimate=replacement_estimate)
         estimate.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

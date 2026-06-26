@@ -9,10 +9,10 @@ Config contract::
 
     {
         "tables": {
-            "difficulty": {"Hard-High": 50, ...},
+            "difficulty": {"<estimate value>": 8, ...},
             "repetitive": {"High": 4, ...},
-            "importance": {"High": 20, ...},
             "type":       {"Feature": 0, ...},
+            # Importance (I) = priority.points; b = penalty factor.
             "priority":   {"urgent": {"points": 30, "b": 0.30, "label": "..."}, ...}
         },
         "params": {
@@ -116,8 +116,12 @@ def calcular(task, config):
     """Compute ``{Vp, d, p, Vf}`` for a task given the configuration.
 
     ``task`` keys: ``priority`` (Plane priority value), ``difficulty``,
-    ``repetitive``, ``importance``, ``type``, ``due_date``, ``delivered_date``.
+    ``repetitive``, ``type``, ``due_date``, ``delivered_date``.
     Unknown / missing categorical levels contribute 0 points.
+
+    Importance (I) is the native priority: ``priority_row["points"]`` is the
+    Importance contribution to Vp, while ``priority_row["b"]`` is the penalty
+    factor. There is no separate importance table.
     """
     tables = config["tables"]
     params = config["params"]
@@ -130,8 +134,7 @@ def calcular(task, config):
     vp = (
         tables.get("difficulty", {}).get(task.get("difficulty"), 0)
         + tables.get("repetitive", {}).get(task.get("repetitive"), 0)
-        + tables.get("importance", {}).get(task.get("importance"), 0)
-        + priority_row.get("points", 0)
+        + priority_row.get("points", 0)  # Importance (I) = native priority points
         + tables.get("type", {}).get(task.get("type"), 0)
     )
 

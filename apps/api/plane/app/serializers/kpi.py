@@ -33,6 +33,28 @@ class KpiConfigSerializer(BaseSerializer):
                     )
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.context.get("project_estimates_allowed") is False:
+            errors = {
+                field: "Workspace default configs cannot reference project estimates."
+                for field in ("difficulty_estimate", "repetitive_estimate")
+                if attrs.get(field, getattr(self.instance, field, None)) is not None
+            }
+            if errors:
+                raise serializers.ValidationError(errors)
+            return attrs
+
+        project_id = self.context.get("project_id")
+        if not project_id:
+            return attrs
+
+        for field in ("difficulty_estimate", "repetitive_estimate"):
+            estimate = attrs.get(field, getattr(self.instance, field, None))
+            if estimate is not None and str(estimate.project_id) != str(project_id):
+                raise serializers.ValidationError({field: "Estimate must belong to this project."})
+        return attrs
+
 
 class KpiIssueAttributeSerializer(BaseSerializer):
     class Meta:
@@ -40,9 +62,9 @@ class KpiIssueAttributeSerializer(BaseSerializer):
         fields = [
             "id",
             "issue",
-            "difficulty",
             "repetitive",
-            "importance",
+            "difficulty_estimate_point",
+            "repetitive_estimate_point",
             "type_override",
             "created_at",
             "updated_at",
