@@ -126,7 +126,10 @@ export const KpiIssuesTable = observer((props: Props) => {
     <div className="overflow-x-auto">
       <table className="text-sm w-full border-collapse">
         <thead>
-          <tr className="border-custom-border-200 bg-custom-background-90/50 border-b">
+          <tr
+            className="border-custom-border-200 bg-custom-background-80 border-b"
+            style={{ boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.04)" }}
+          >
             <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Work item</th>
             <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Priority</th>
             <th className="text-xs text-custom-text-400 w-28 px-3 py-2.5 text-left font-semibold">Difficulty</th>

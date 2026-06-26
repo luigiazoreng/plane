@@ -21,25 +21,29 @@ import { PageHead } from "@/components/core/page-title";
 import { useKpi } from "@/hooks/store/use-kpi";
 import { useUserPermissions } from "@/hooks/store/user";
 
-// ── Depth style ────────────────────────────────────────────────────────────
-// Replicates the same raised-card look as the Work Items board cards.
-// - Outer shadow: lifts the card above the page background
-// - Inner top highlight: simulates light hitting the top edge of a raised surface
-const CARD_SHADOW: React.CSSProperties = {
-  boxShadow: "0 0 0 0.5px rgba(255,255,255,0.04), 0 2px 4px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.25)",
-};
+// ── Dark-mode depth techniques ──────────────────────────────────────────────
+//
+// Dark shadows (rgba(0,0,0,...)) are invisible on dark backgrounds — they blend
+// in. The correct technique used by Linear/Vercel/GitHub dark:
+//
+//  1. White ring:  box-shadow "0 0 0 1px rgba(255,255,255,0.12)" — acts as a
+//     glowing border that's clearly visible against any dark background.
+//
+//  2. Light gradient: backgroundImage with a very subtle white gradient from
+//     top-left to transparent — simulates a raised surface catching ambient
+//     light. Does NOT override bg-custom-background-100 (uses backgroundImage,
+//     not background, so Tailwind's background-color is preserved underneath).
+//
+//  3. Inner top highlight: "inset 0 1px 0 rgba(255,255,255,0.06)" added to the
+//     ring shadow — a bright 1px edge at the very top of the card.
 
-const TOP_HIGHLIGHT = (
-  <div
-    className="absolute inset-x-0 top-0 h-px"
-    style={{
-      background:
-        "linear-gradient(90deg, transparent, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.08) 70%, transparent)",
-    }}
-  />
-);
+// Stat card style: ring replaces the dark border completely.
+const CARD_RING = "0 0 0 1px rgba(255,255,255,0.12), inset 0 1px 0 rgba(255,255,255,0.07)";
+const CARD_GRADIENT =
+  "linear-gradient(145deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 50%, rgba(255,255,255,0) 75%)";
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Panel style (table, curve): keep Tailwind border, add inner highlight only.
+const PANEL_HIGHLIGHT = "inset 0 1px 0 rgba(255,255,255,0.06)";
 
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString());
 
@@ -54,15 +58,14 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
 
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      {/* Σ Vp */}
+      {/* Σ Vp — neutral */}
       <div
-        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
-        style={CARD_SHADOW}
+        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
+        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
       >
-        {TOP_HIGHLIGHT}
         <div
           className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
-          style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
+          style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
         />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div className="bg-custom-background-80 ring-custom-border-200 shrink-0 rounded-lg p-2.5 ring-1">
@@ -75,12 +78,11 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
         </div>
       </div>
 
-      {/* Σ Vf */}
+      {/* Σ Vf — primary blue */}
       <div
-        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
-        style={CARD_SHADOW}
+        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
+        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
       >
-        {TOP_HIGHLIGHT}
         <div className="bg-custom-primary-100 absolute inset-y-0 left-0 w-1 rounded-l-xl" />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div className="bg-custom-primary-100/10 ring-custom-primary-100/20 shrink-0 rounded-lg p-2.5 ring-1">
@@ -93,23 +95,19 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
         </div>
       </div>
 
-      {/* Efficiency */}
+      {/* Efficiency — green or yellow */}
       <div
-        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
-        style={CARD_SHADOW}
+        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
+        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
       >
-        {TOP_HIGHLIGHT}
         <div
           className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
           style={{ backgroundColor: effHigh ? "#22c55e" : "#eab308" }}
         />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div
-            className="shrink-0 rounded-lg p-2.5 ring-1"
-            style={{
-              backgroundColor: effHigh ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)",
-              ringColor: effHigh ? "rgba(34,197,94,0.2)" : "rgba(234,179,8,0.2)",
-            }}
+            className="shrink-0 rounded-lg p-2.5"
+            style={{ backgroundColor: effHigh ? "rgba(34,197,94,0.12)" : "rgba(234,179,8,0.12)" }}
           >
             <TrendingUp className="size-4" style={{ color: effHigh ? "#22c55e" : "#eab308" }} />
           </div>
@@ -125,15 +123,14 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
         </div>
       </div>
 
-      {/* On time */}
+      {/* On time / Early — green */}
       <div
-        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
-        style={CARD_SHADOW}
+        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
+        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
       >
-        {TOP_HIGHLIGHT}
         <div className="absolute inset-y-0 left-0 w-1 rounded-l-xl" style={{ backgroundColor: "#22c55e" }} />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="shrink-0 rounded-lg p-2.5" style={{ backgroundColor: "rgba(34,197,94,0.1)" }}>
+          <div className="shrink-0 rounded-lg p-2.5" style={{ backgroundColor: "rgba(34,197,94,0.12)" }}>
             <CheckCircle2 className="size-4" style={{ color: "#22c55e" }} />
           </div>
           <div className="min-w-0">
@@ -145,20 +142,19 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
         </div>
       </div>
 
-      {/* Late */}
+      {/* Late — red if any, neutral otherwise */}
       <div
-        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
-        style={CARD_SHADOW}
+        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
+        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
       >
-        {TOP_HIGHLIGHT}
         <div
           className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
-          style={{ backgroundColor: isLate ? "#ef4444" : "rgba(255,255,255,0.1)" }}
+          style={{ backgroundColor: isLate ? "#ef4444" : "rgba(255,255,255,0.12)" }}
         />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div
             className="shrink-0 rounded-lg p-2.5"
-            style={{ backgroundColor: isLate ? "rgba(239,68,68,0.1)" : undefined }}
+            style={{ backgroundColor: isLate ? "rgba(239,68,68,0.12)" : "transparent" }}
           >
             <AlertCircle
               className={`size-4 ${isLate ? "" : "text-custom-text-400"}`}
@@ -177,15 +173,14 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
         </div>
       </div>
 
-      {/* Pending */}
+      {/* Pending — neutral */}
       <div
-        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
-        style={CARD_SHADOW}
+        className="bg-custom-background-100 relative flex overflow-hidden rounded-xl"
+        style={{ boxShadow: CARD_RING, backgroundImage: CARD_GRADIENT }}
       >
-        {TOP_HIGHLIGHT}
         <div
           className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
-          style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
+          style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
         />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div className="bg-custom-background-80 ring-custom-border-200 shrink-0 rounded-lg p-2.5 ring-1">
@@ -273,14 +268,13 @@ function ProjectKpiPage() {
           </Link>
         </div>
 
-        {/* Table + Curve — same raised card treatment */}
+        {/* Table + Curve — same panel treatment */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
           {/* Issues table */}
           <div
-            className="border-custom-border-200 bg-custom-background-100 relative overflow-hidden rounded-xl border"
-            style={CARD_SHADOW}
+            className="border-custom-border-200 bg-custom-background-100 overflow-hidden rounded-xl border"
+            style={{ boxShadow: PANEL_HIGHLIGHT }}
           >
-            {TOP_HIGHLIGHT}
             <KpiIssuesTable
               workspaceSlug={workspaceSlug}
               projectId={projectId}
@@ -294,10 +288,9 @@ function ProjectKpiPage() {
 
           {/* Penalty curve */}
           <div
-            className="border-custom-border-200 bg-custom-background-100 relative flex flex-col overflow-hidden rounded-xl border"
-            style={CARD_SHADOW}
+            className="border-custom-border-200 bg-custom-background-100 flex flex-col overflow-hidden rounded-xl border"
+            style={{ boxShadow: PANEL_HIGHLIGHT }}
           >
-            {TOP_HIGHLIGHT}
             <div className="border-custom-border-200 bg-custom-background-90 border-b px-4 py-3">
               <h4 className="text-sm text-custom-text-100 font-semibold">Penalty curve p(d)</h4>
               <p className="text-xs text-custom-text-400 mt-0.5 truncate">
