@@ -12,7 +12,6 @@ import { EEstimateSystem } from "@plane/types";
 import { cn, convertMinutesToHoursMinutesString } from "@plane/utils";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
-import { useEstimate } from "@/hooks/store/estimates/use-estimate";
 
 export type TReadonlyEstimateProps = {
   className?: string;
@@ -27,16 +26,13 @@ export const ReadonlyEstimate = observer(function ReadonlyEstimate(props: TReado
   const { className, hideIcon = false, value, placeholder, projectId, workspaceSlug } = props;
 
   const { t } = useTranslation();
-  const { currentActiveEstimateIdByProjectId, getEstimateById, getProjectEstimates } = useProjectEstimates();
+  const { estimateByEstimatePointId, estimatePointById, getProjectEstimates } = useProjectEstimates();
 
-  const currentActiveEstimateId = projectId ? currentActiveEstimateIdByProjectId(projectId) : undefined;
-  const currentActiveEstimate = currentActiveEstimateId ? getEstimateById(currentActiveEstimateId) : undefined;
-  const { estimatePointById } = useEstimate(currentActiveEstimateId);
-
-  const estimatePoint = value ? estimatePointById(value) : null;
+  const estimatePoint = value ? estimatePointById(value, projectId) : null;
+  const estimate = value ? estimateByEstimatePointId(value, projectId) : null;
 
   const displayValue = estimatePoint
-    ? currentActiveEstimate?.type === EEstimateSystem.TIME
+    ? estimate?.type === EEstimateSystem.TIME
       ? convertMinutesToHoursMinutesString(Number(estimatePoint.value))
       : estimatePoint.value
     : null;

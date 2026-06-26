@@ -27,9 +27,9 @@ export const DeleteEstimateModal = observer(function DeleteEstimateModal(props: 
   // props
   const { workspaceSlug, projectId, estimateId, isOpen, handleClose } = props;
   // hooks
-  const { areEstimateEnabledByProjectId, deleteEstimate } = useProjectEstimates();
+  const { activeEstimateIdsByProjectId, deleteEstimate } = useProjectEstimates();
   const { asJson: estimate } = useEstimate(estimateId);
-  const { updateProject } = useProject();
+  const { currentProjectDetails, updateProject } = useProject();
   // states
   const [buttonLoader, setButtonLoader] = useState(false);
 
@@ -37,9 +37,10 @@ export const DeleteEstimateModal = observer(function DeleteEstimateModal(props: 
     try {
       if (!workspaceSlug || !projectId || !estimateId) return;
       setButtonLoader(true);
+      const replacementEstimateId = activeEstimateIdsByProjectId(projectId)?.find((id) => id !== estimateId) ?? null;
       await deleteEstimate(workspaceSlug, projectId, estimateId);
-      if (areEstimateEnabledByProjectId(projectId)) {
-        await updateProject(workspaceSlug, projectId, { estimate: null });
+      if (currentProjectDetails?.estimate === estimateId) {
+        await updateProject(workspaceSlug, projectId, { estimate: replacementEstimateId });
       }
       setButtonLoader(false);
       setToast({

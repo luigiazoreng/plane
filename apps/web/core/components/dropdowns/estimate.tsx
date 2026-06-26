@@ -32,6 +32,7 @@ type Props = TDropdownProps & {
   dropdownArrowClassName?: string;
   onChange: (val: string | undefined) => void;
   onClose?: () => void;
+  estimateId?: string;
   projectId: string | undefined;
   value: string | undefined | null;
   renderByDefault?: boolean;
@@ -55,6 +56,7 @@ export const EstimateDropdown = observer(function EstimateDropdown(props: Props)
     disabled = false,
     dropdownArrow = false,
     dropdownArrowClassName = "",
+    estimateId,
     hideIcon = false,
     onChange,
     onClose,
@@ -92,36 +94,77 @@ export const EstimateDropdown = observer(function EstimateDropdown(props: Props)
   // router
   const { workspaceSlug } = useParams();
   // store hooks
-  const { currentActiveEstimateIdByProjectId, getProjectEstimates, getEstimateById } = useProjectEstimates();
-  const { estimatePointIds, estimatePointById } = useEstimate(
-    projectId ? currentActiveEstimateIdByProjectId(projectId) : undefined
-  );
+  const {
+    areEstimateEnabledByProjectId,
+    activeEstimateIdsByProjectId,
+    currentActiveEstimateIdByProjectId,
+    estimateByEstimatePointId,
+    estimatePointById: projectEstimatePointById,
+    getProjectEstimates,
+    getEstimateById,
+  } = useProjectEstimates();
+  const isSpecificEstimateMode = !!estimateId;
+  const resolvedEstimateId = estimateId ?? (projectId ? currentActiveEstimateIdByProjectId(projectId) : undefined);
+  const projectEstimateIds = projectId ? (activeEstimateIdsByProjectId(projectId) ?? []) : [];
+  const isEstimateEnabled = isSpecificEstimateMode
+    ? !!resolvedEstimateId
+    : projectId
+      ? areEstimateEnabledByProjectId(projectId)
+      : false;
+  const { estimatePointIds, estimatePointById } = useEstimate(resolvedEstimateId);
 
-  const currentActiveEstimateId = projectId ? currentActiveEstimateIdByProjectId(projectId) : undefined;
+  const currentActiveEstimate = resolvedEstimateId ? getEstimateById(resolvedEstimateId) : undefined;
 
-  const currentActiveEstimate = currentActiveEstimateId ? getEstimateById(currentActiveEstimateId) : undefined;
+  const formatEstimateValue = (estimate: typeof currentActiveEstimate, valueToFormat: string | undefined) =>
+    estimate?.type === EEstimateSystem.TIME ? convertMinutesToHoursMinutesString(Number(valueToFormat)) : valueToFormat;
 
-  const options: DropdownOptions = (estimatePointIds ?? [])
-    ?.map((estimatePoint) => {
-      const currentEstimatePoint = estimatePointById(estimatePoint);
-      if (currentEstimatePoint)
-        return {
-          value: currentEstimatePoint.id,
-          query: `${currentEstimatePoint?.value}`,
-          content: (
-            <div className="flex items-center gap-2">
-              <EstimatePropertyIcon className="h-3 w-3 flex-shrink-0" />
-              <span className="flex-grow truncate">
-                {currentActiveEstimate?.type === EEstimateSystem.TIME
-                  ? convertMinutesToHoursMinutesString(Number(currentEstimatePoint.value))
-                  : currentEstimatePoint.value}
-              </span>
-            </div>
-          ),
-        };
-      else undefined;
-    })
-    .filter((estimatePointDropdownOption) => estimatePointDropdownOption != undefined) as DropdownOptions;
+  const options: DropdownOptions = (
+    isSpecificEstimateMode
+      ? (estimatePointIds ?? [])
+          ?.map((estimatePoint) => {
+            const currentEstimatePoint = estimatePointById(estimatePoint);
+            if (!currentEstimatePoint) return undefined;
+
+            return {
+              value: currentEstimatePoint.id,
+              query: `${currentEstimatePoint?.value}`,
+              content: (
+                <div className="flex items-center gap-2">
+                  <EstimatePropertyIcon className="h-3 w-3 flex-shrink-0" />
+                  <span className="flex-grow truncate">
+                    {formatEstimateValue(currentActiveEstimate, currentEstimatePoint.value)}
+                  </span>
+                </div>
+              ),
+            };
+          })
+          .filter((estimatePointDropdownOption) => estimatePointDropdownOption != undefined)
+      : projectEstimateIds.flatMap((projectEstimateId) => {
+          const estimate = getEstimateById(projectEstimateId);
+          if (!estimate) return [];
+
+          return (estimate.estimatePointIds ?? [])
+            .map((estimatePointId) => {
+              const estimatePoint = estimate.estimatePointById(estimatePointId);
+              if (!estimatePoint) return undefined;
+
+              const formattedValue = formatEstimateValue(estimate, estimatePoint.value);
+
+              return {
+                value: estimatePoint.id,
+                query: `${estimate.name ?? ""} ${estimatePoint.value ?? ""}`,
+                content: (
+                  <div className="flex min-w-0 items-center gap-2">
+                    <EstimatePropertyIcon className="h-3 w-3 flex-shrink-0" />
+                    <span className="min-w-0 flex-grow truncate">{formattedValue}</span>
+                    <span className="text-custom-text-400 max-w-20 flex-shrink-0 truncate">{estimate.name}</span>
+                  </div>
+                ),
+              };
+            })
+            .filter((estimatePointDropdownOption) => estimatePointDropdownOption != undefined);
+        })
+  ) as DropdownOptions;
   options?.unshift({
     value: null,
     query: t("project_settings.estimates.no_estimate"),
@@ -136,10 +179,24 @@ export const EstimateDropdown = observer(function EstimateDropdown(props: Props)
   const filteredOptions =
     query === "" ? options : options?.filter((o) => o.query.toLowerCase().includes(query.toLowerCase()));
 
-  const selectedEstimate = value && estimatePointById ? estimatePointById(value) : undefined;
+  const selectedEstimatePoint =
+    value && estimatePointById
+      ? isSpecificEstimateMode
+        ? estimatePointById(value)
+        : projectEstimatePointById(value, projectId)
+      : undefined;
+  const selectedEstimate = value
+    ? isSpecificEstimateMode
+      ? currentActiveEstimate
+      : estimateByEstimatePointId(value, projectId)
+    : undefined;
 
   const onOpen = async () => {
-    if (!currentActiveEstimateId && workspaceSlug && projectId)
+    if (
+      workspaceSlug &&
+      projectId &&
+      (projectEstimateIds.length === 0 || (resolvedEstimateId && !getEstimateById(resolvedEstimateId)))
+    )
       await getProjectEstimates(workspaceSlug.toString(), projectId);
   };
 
@@ -190,19 +247,26 @@ export const EstimateDropdown = observer(function EstimateDropdown(props: Props)
             className={buttonClassName}
             isActive={isOpen}
             tooltipHeading={t("project_settings.estimates.label")}
-            tooltipContent={selectedEstimate ? selectedEstimate?.value : placeholder}
+            tooltipContent={
+              selectedEstimatePoint
+                ? `${selectedEstimate?.name ? `${selectedEstimate.name}: ` : ""}${selectedEstimatePoint.value}`
+                : placeholder
+            }
             showTooltip={showTooltip}
             variant={buttonVariant}
             renderToolTipByDefault={renderByDefault}
           >
             {!hideIcon && <EstimatePropertyIcon className="h-3 w-3 flex-shrink-0" />}
-            {(selectedEstimate || placeholder) && BUTTON_VARIANTS_WITH_TEXT.includes(buttonVariant) && (
+            {(selectedEstimatePoint || placeholder) && BUTTON_VARIANTS_WITH_TEXT.includes(buttonVariant) && (
               <span className="truncate">
-                {selectedEstimate ? (
-                  currentActiveEstimate?.type === EEstimateSystem.TIME ? (
-                    convertMinutesToHoursMinutesString(Number(selectedEstimate.value))
+                {selectedEstimatePoint ? (
+                  isSpecificEstimateMode ? (
+                    formatEstimateValue(selectedEstimate, selectedEstimatePoint.value)
                   ) : (
-                    selectedEstimate.value
+                    `${selectedEstimate?.name ? `${selectedEstimate.name}: ` : ""}${formatEstimateValue(
+                      selectedEstimate,
+                      selectedEstimatePoint.value
+                    )}`
                   )
                 ) : (
                   <span className="text-placeholder">{placeholder}</span>
@@ -253,7 +317,7 @@ export const EstimateDropdown = observer(function EstimateDropdown(props: Props)
               />
             </div>
             <div className="mt-2 max-h-48 space-y-1 overflow-y-scroll">
-              {currentActiveEstimateId === undefined ? (
+              {!isEstimateEnabled ? (
                 <div
                   className={`flex w-full cursor-pointer items-center justify-between gap-2 truncate rounded-sm px-1 py-1.5 text-secondary select-none`}
                 >

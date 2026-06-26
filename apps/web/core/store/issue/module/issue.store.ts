@@ -111,7 +111,7 @@ export class ModuleIssues extends BaseIssuesStore implements IModuleIssues {
         prevIssueState,
         nextIssueState,
         this.rootIssueStore.rootStore.state.stateMap,
-        this.rootIssueStore.rootStore.projectEstimate?.currentActiveEstimate?.estimatePointById
+        this.rootIssueStore.rootStore.projectEstimate?.estimatePointById
       );
 
       const moduleId = id ?? this.moduleId;

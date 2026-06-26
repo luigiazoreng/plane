@@ -1727,17 +1727,11 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       case "estimate_point": {
         // return if project Id does not exist
         if (!projectId) break;
-        // get the estimate ID for the current Project
-        const currentProjectEstimateId =
-          this.rootIssueStore.rootStore.projectEstimate.currentActiveEstimateIdByProjectId(projectId);
-        // return if current Estimate Id for the project is not available
-        if (!currentProjectEstimateId) break;
-        // get Estimate based on Id
-        const estimate = this.rootIssueStore.rootStore.projectEstimate.estimateById(currentProjectEstimateId);
-        // If Estimate is not available, then return
-        if (!estimate) break;
         // Get Estimate Value
-        const estimateKey = estimate?.estimatePointById(dataIds as string)?.key;
+        const estimateKey = this.rootIssueStore.rootStore.projectEstimate.estimatePointById(
+          dataIds as string,
+          projectId
+        )?.key;
 
         // If Value string i not available or empty then return
         if (estimateKey === undefined) break;

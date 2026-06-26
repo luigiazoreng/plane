@@ -24,16 +24,27 @@ export const EstimateDisableSwitch = observer(function EstimateDisableSwitch(pro
   const { t } = useTranslation();
   // hooks
   const { updateProject, currentProjectDetails } = useProject();
-  const { currentActiveEstimateId } = useProjectEstimates();
+  const { activeEstimateIdsByProjectId, estimateIdsByProjectId, updateEstimate } = useProjectEstimates();
 
   const currentProjectActiveEstimate = currentProjectDetails?.estimate || undefined;
+  const firstActiveEstimateId = activeEstimateIdsByProjectId(projectId)?.[0];
+  const firstEstimateId = estimateIdsByProjectId(projectId)?.[0];
 
   const disableEstimate = async () => {
     if (!workspaceSlug || !projectId) return;
 
     try {
+      const nextEstimateId = firstActiveEstimateId || firstEstimateId || null;
+      if (!currentProjectActiveEstimate && nextEstimateId && !firstActiveEstimateId) {
+        await updateEstimate(workspaceSlug, projectId, nextEstimateId, {
+          estimate: {
+            last_used: true,
+          },
+        });
+      }
+
       await updateProject(workspaceSlug, projectId, {
-        estimate: currentProjectActiveEstimate ? null : currentActiveEstimateId,
+        estimate: currentProjectActiveEstimate ? null : nextEstimateId,
       });
       setToast({
         type: TOAST_TYPE.SUCCESS,

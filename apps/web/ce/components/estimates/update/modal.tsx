@@ -9,7 +9,7 @@ import { observer } from "mobx-react";
 import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { IEstimateFormData, TEstimatePointsObject, TEstimateTypeError } from "@plane/types";
-import { EModalPosition, EModalWidth, ModalCore } from "@plane/ui";
+import { EModalPosition, EModalWidth, Input, ModalCore } from "@plane/ui";
 import { EstimatePointCreateRoot } from "@/components/estimates/points";
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useEstimate } from "@/hooks/store/estimates/use-estimate";
@@ -26,6 +26,7 @@ export const UpdateEstimateModal = observer(function UpdateEstimateModal(props: 
   const { workspaceSlug, projectId, estimateId, isOpen, handleClose } = props;
   const { updateEstimate } = useProjectEstimates();
   const { asJson: estimate, estimatePointIds, estimatePointById } = useEstimate(estimateId);
+  const [estimateName, setEstimateName] = useState("");
   const [estimatePoints, setEstimatePoints] = useState<TEstimatePointsObject[] | undefined>(undefined);
   const [estimatePointError, setEstimatePointError] = useState<TEstimateTypeError>({});
   const [buttonLoader, setButtonLoader] = useState(false);
@@ -48,8 +49,9 @@ export const UpdateEstimateModal = observer(function UpdateEstimateModal(props: 
       }, []) ?? [];
 
     setEstimatePoints(currentEstimatePoints);
+    setEstimateName(estimate?.name ?? "");
     setEstimatePointError({});
-  }, [estimatePointById, estimatePointIds, isOpen]);
+  }, [estimate?.name, estimatePointById, estimatePointIds, isOpen]);
 
   const handleEstimatePointError = (
     key: number,
@@ -88,7 +90,16 @@ export const UpdateEstimateModal = observer(function UpdateEstimateModal(props: 
   };
 
   const handleUpdateEstimate = async () => {
-    if (!workspaceSlug || !projectId || !estimateId || !estimate?.type || !estimate?.name || !estimatePoints) return;
+    if (!workspaceSlug || !projectId || !estimateId || !estimate?.type || !estimatePoints) return;
+    const trimmedEstimateName = estimateName.trim();
+    if (!trimmedEstimateName) {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: "Error",
+        message: "Estimate name is required.",
+      });
+      return;
+    }
 
     if (validateEstimatePointError()) {
       setEstimatePointError((prev) => {
@@ -114,7 +125,7 @@ export const UpdateEstimateModal = observer(function UpdateEstimateModal(props: 
       setButtonLoader(true);
       const payload: IEstimateFormData = {
         estimate: {
-          name: estimate.name,
+          name: trimmedEstimateName,
           type: estimate.type,
         },
         estimate_points: estimatePoints.map((estimatePoint, index) => ({
@@ -148,7 +159,19 @@ export const UpdateEstimateModal = observer(function UpdateEstimateModal(props: 
           <div className="text-18 font-medium text-primary">Edit estimate system</div>
         </div>
 
-        <div className="px-5">
+        <div className="space-y-5 px-5">
+          <div className="space-y-1.5">
+            <label className="text-13 font-medium text-secondary" htmlFor="edit-estimate-name">
+              Estimate name
+            </label>
+            <Input
+              id="edit-estimate-name"
+              value={estimateName}
+              onChange={(e) => setEstimateName(e.target.value)}
+              placeholder="Estimate name"
+              maxLength={255}
+            />
+          </div>
           {estimate?.type && estimatePoints && (
             <EstimatePointCreateRoot
               workspaceSlug={workspaceSlug}

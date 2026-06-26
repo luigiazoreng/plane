@@ -10,15 +10,28 @@ import { EstimateListItem } from "./estimate-list-item";
 
 type TEstimateList = {
   estimateIds: string[] | undefined;
+  activeEstimateId?: string;
   isAdmin: boolean;
   isEstimateEnabled?: boolean;
   isEditable?: boolean;
   onEditClick?: (estimateId: string) => void;
   onDeleteClick?: (estimateId: string) => void;
+  onSetActiveClick?: (estimateId: string) => void;
+  onToggleActiveClick?: (estimateId: string, isActive: boolean) => void;
 };
 
 export const EstimateList = observer(function EstimateList(props: TEstimateList) {
-  const { estimateIds, isAdmin, isEstimateEnabled = false, isEditable = false, onEditClick, onDeleteClick } = props;
+  const {
+    estimateIds,
+    activeEstimateId,
+    isAdmin,
+    isEstimateEnabled = false,
+    isEditable = false,
+    onEditClick,
+    onDeleteClick,
+    onSetActiveClick,
+    onToggleActiveClick,
+  } = props;
 
   if (!estimateIds || estimateIds?.length <= 0) return <></>;
   return (
@@ -30,9 +43,12 @@ export const EstimateList = observer(function EstimateList(props: TEstimateList)
             estimateId={estimateId}
             isAdmin={isAdmin}
             isEstimateEnabled={isEstimateEnabled}
+            isActive={estimateId === activeEstimateId}
             isEditable={isEditable}
             onEditClick={onEditClick}
             onDeleteClick={onDeleteClick}
+            onSetActiveClick={onSetActiveClick}
+            onToggleActiveClick={onToggleActiveClick}
           />
         ))}
     </div>
