@@ -21,12 +21,29 @@ import { PageHead } from "@/components/core/page-title";
 import { useKpi } from "@/hooks/store/use-kpi";
 import { useUserPermissions } from "@/hooks/store/user";
 
-// ── Stat cards ─────────────────────────────────────────────────────────────
-// Each card is written explicitly (not via a shared dynamic-class component)
-// so that all Tailwind class strings are present in the source and included
-// by the JIT scanner. Accent color uses inline style to guarantee rendering.
+// ── Depth style ────────────────────────────────────────────────────────────
+// Replicates the same raised-card look as the Work Items board cards.
+// - Outer shadow: lifts the card above the page background
+// - Inner top highlight: simulates light hitting the top edge of a raised surface
+const CARD_SHADOW: React.CSSProperties = {
+  boxShadow: "0 0 0 0.5px rgba(255,255,255,0.04), 0 2px 4px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.25)",
+};
+
+const TOP_HIGHLIGHT = (
+  <div
+    className="absolute inset-x-0 top-0 h-px"
+    style={{
+      background:
+        "linear-gradient(90deg, transparent, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.08) 70%, transparent)",
+    }}
+  />
+);
+
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString());
+
+// ── Stat cards ─────────────────────────────────────────────────────────────
 
 function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
   const onTime = agg ? agg.counts.on_time + agg.counts.early : null;
@@ -38,13 +55,17 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {/* Σ Vp */}
-      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+      <div
+        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
+        style={CARD_SHADOW}
+      >
+        {TOP_HIGHLIGHT}
         <div
-          className="absolute inset-y-0 left-0 w-1"
-          style={{ backgroundColor: "var(--color-border-300, #374151)" }}
+          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
+          style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
         />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="bg-custom-background-80 shrink-0 rounded-lg p-2.5">
+          <div className="bg-custom-background-80 ring-custom-border-200 shrink-0 rounded-lg p-2.5 ring-1">
             <Layers className="text-custom-text-400 size-4" />
           </div>
           <div className="min-w-0">
@@ -55,10 +76,14 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
       </div>
 
       {/* Σ Vf */}
-      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
-        <div className="bg-custom-primary-100 absolute inset-y-0 left-0 w-1" />
+      <div
+        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
+        style={CARD_SHADOW}
+      >
+        {TOP_HIGHLIGHT}
+        <div className="bg-custom-primary-100 absolute inset-y-0 left-0 w-1 rounded-l-xl" />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="bg-custom-primary-100/10 shrink-0 rounded-lg p-2.5">
+          <div className="bg-custom-primary-100/10 ring-custom-primary-100/20 shrink-0 rounded-lg p-2.5 ring-1">
             <Award className="text-custom-primary-100 size-4" />
           </div>
           <div className="min-w-0">
@@ -69,12 +94,22 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
       </div>
 
       {/* Efficiency */}
-      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
-        <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: effHigh ? "#22c55e" : "#eab308" }} />
+      <div
+        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
+        style={CARD_SHADOW}
+      >
+        {TOP_HIGHLIGHT}
+        <div
+          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
+          style={{ backgroundColor: effHigh ? "#22c55e" : "#eab308" }}
+        />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div
-            className="shrink-0 rounded-lg p-2.5"
-            style={{ backgroundColor: effHigh ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)" }}
+            className="shrink-0 rounded-lg p-2.5 ring-1"
+            style={{
+              backgroundColor: effHigh ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)",
+              ringColor: effHigh ? "rgba(34,197,94,0.2)" : "rgba(234,179,8,0.2)",
+            }}
           >
             <TrendingUp className="size-4" style={{ color: effHigh ? "#22c55e" : "#eab308" }} />
           </div>
@@ -91,8 +126,12 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
       </div>
 
       {/* On time */}
-      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
-        <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: "#22c55e" }} />
+      <div
+        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
+        style={CARD_SHADOW}
+      >
+        {TOP_HIGHLIGHT}
+        <div className="absolute inset-y-0 left-0 w-1 rounded-l-xl" style={{ backgroundColor: "#22c55e" }} />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div className="shrink-0 rounded-lg p-2.5" style={{ backgroundColor: "rgba(34,197,94,0.1)" }}>
             <CheckCircle2 className="size-4" style={{ color: "#22c55e" }} />
@@ -107,10 +146,14 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
       </div>
 
       {/* Late */}
-      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+      <div
+        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
+        style={CARD_SHADOW}
+      >
+        {TOP_HIGHLIGHT}
         <div
-          className="absolute inset-y-0 left-0 w-1"
-          style={{ backgroundColor: isLate ? "#ef4444" : "var(--color-border-300, #374151)" }}
+          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
+          style={{ backgroundColor: isLate ? "#ef4444" : "rgba(255,255,255,0.1)" }}
         />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
           <div
@@ -135,13 +178,17 @@ function StatCards({ agg }: { agg: IKpiAggregates | undefined }) {
       </div>
 
       {/* Pending */}
-      <div className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border">
+      <div
+        className="border-custom-border-200 bg-custom-background-100 relative flex overflow-hidden rounded-xl border"
+        style={CARD_SHADOW}
+      >
+        {TOP_HIGHLIGHT}
         <div
-          className="absolute inset-y-0 left-0 w-1"
-          style={{ backgroundColor: "var(--color-border-300, #374151)" }}
+          className="absolute inset-y-0 left-0 w-1 rounded-l-xl"
+          style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
         />
         <div className="flex flex-1 items-center gap-3 py-4 pr-4 pl-5">
-          <div className="bg-custom-background-80 shrink-0 rounded-lg p-2.5">
+          <div className="bg-custom-background-80 ring-custom-border-200 shrink-0 rounded-lg p-2.5 ring-1">
             <Clock className="text-custom-text-400 size-4" />
           </div>
           <div className="min-w-0">
@@ -226,9 +273,14 @@ function ProjectKpiPage() {
           </Link>
         </div>
 
-        {/* Table + Curve */}
+        {/* Table + Curve — same raised card treatment */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
-          <div className="border-custom-border-200 bg-custom-background-100 overflow-hidden rounded-xl border">
+          {/* Issues table */}
+          <div
+            className="border-custom-border-200 bg-custom-background-100 relative overflow-hidden rounded-xl border"
+            style={CARD_SHADOW}
+          >
+            {TOP_HIGHLIGHT}
             <KpiIssuesTable
               workspaceSlug={workspaceSlug}
               projectId={projectId}
@@ -240,7 +292,12 @@ function ProjectKpiPage() {
             />
           </div>
 
-          <div className="border-custom-border-200 bg-custom-background-100 flex flex-col overflow-hidden rounded-xl border">
+          {/* Penalty curve */}
+          <div
+            className="border-custom-border-200 bg-custom-background-100 relative flex flex-col overflow-hidden rounded-xl border"
+            style={CARD_SHADOW}
+          >
+            {TOP_HIGHLIGHT}
             <div className="border-custom-border-200 bg-custom-background-90 border-b px-4 py-3">
               <h4 className="text-sm text-custom-text-100 font-semibold">Penalty curve p(d)</h4>
               <p className="text-xs text-custom-text-400 mt-0.5 truncate">
