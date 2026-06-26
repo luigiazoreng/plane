@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { observer } from "mobx-react";
+import { ClipboardList } from "lucide-react";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { IKpiConfig, IKpiIssueRow } from "@plane/types";
 import { useKpi } from "@/hooks/store/use-kpi";
@@ -20,22 +21,54 @@ type Props = {
   selectedRowId?: string | null;
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  on_time: "text-green-600 border-l-green-500",
-  early: "text-blue-600 border-l-blue-500",
-  late: "text-red-600 border-l-red-500",
-  pending: "text-custom-text-400 border-l-custom-border-300",
+const ROW_BORDER: Record<string, string> = {
+  on_time: "border-l-green-500",
+  early: "border-l-blue-500",
+  late: "border-l-red-500",
+  pending: "border-l-transparent",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  on_time: "On time",
-  early: "Early",
-  late: "Late",
-  pending: "Pending",
+const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+  on_time: {
+    bg: "bg-green-500/10 border border-green-500/25",
+    text: "text-green-600 dark:text-green-400",
+    label: "On time",
+  },
+  early: { bg: "bg-blue-500/10 border border-blue-500/25", text: "text-blue-600 dark:text-blue-400", label: "Early" },
+  late: { bg: "bg-red-500/10 border border-red-500/25", text: "text-red-600 dark:text-red-400", label: "Late" },
+  pending: {
+    bg: "bg-custom-background-80 border border-custom-border-200",
+    text: "text-custom-text-400",
+    label: "Pending",
+  },
+};
+
+const PRIORITY_DOT: Record<string, string> = {
+  urgent: "bg-red-500",
+  high: "bg-orange-500",
+  medium: "bg-yellow-400",
+  low: "bg-blue-500",
+  none: "bg-custom-border-300",
 };
 
 const fmt = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const s = STATUS_BADGE[status] ?? STATUS_BADGE.pending;
+  return (
+    <span className={`text-xs inline-flex items-center rounded-full px-2 py-0.5 font-medium ${s.bg} ${s.text}`}>
+      {s.label}
+    </span>
+  );
+};
+
+const PriorityCell = ({ priority }: { priority: string }) => (
+  <div className="flex items-center gap-1.5">
+    <span className={`size-1.5 shrink-0 rounded-full ${PRIORITY_DOT[priority] ?? PRIORITY_DOT.none}`} />
+    <span className="text-custom-text-300 capitalize">{priority}</span>
+  </div>
+);
 
 const LevelSelect = (props: {
   value: string | null;
@@ -44,7 +77,7 @@ const LevelSelect = (props: {
   onChange: (value: string | null) => void;
 }) => (
   <select
-    className="border-custom-border-200 bg-custom-background-100 text-xs text-custom-text-200 w-full rounded border px-1.5 py-1 disabled:opacity-60"
+    className="border-custom-border-200 bg-custom-background-90 text-xs text-custom-text-200 hover:border-custom-border-300 focus:border-custom-primary-100 w-full rounded-md border px-2 py-1 transition-colors focus:outline-none disabled:opacity-50"
     value={props.value ?? ""}
     disabled={props.disabled}
     onChange={(e) => props.onChange(e.target.value || null)}
@@ -79,35 +112,47 @@ export const KpiIssuesTable = observer((props: Props) => {
     }
   };
 
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+        <ClipboardList className="text-custom-text-400 size-8" strokeWidth={1.5} />
+        <p className="text-sm text-custom-text-300 font-medium">No work items to score yet</p>
+        <p className="text-xs text-custom-text-400">Add issues to this project to see them scored here.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="text-sm w-full border-collapse">
         <thead>
-          <tr className="border-custom-border-200 text-xs text-custom-text-300 border-b text-left">
-            <th className="px-3 py-2 font-medium">Work item</th>
-            <th className="px-3 py-2 font-medium">Priority</th>
-            <th className="px-3 py-2 font-medium">Difficulty</th>
-            <th className="px-3 py-2 font-medium">Repetitive</th>
-            <th className="px-3 py-2 font-medium">Importance</th>
-            <th className="px-3 py-2 text-right font-medium">Vp</th>
-            <th className="px-3 py-2 text-right font-medium">d</th>
-            <th className="px-3 py-2 text-right font-medium">p</th>
-            <th className="px-3 py-2 text-right font-medium">Vf</th>
-            <th className="px-3 py-2 font-medium">Status</th>
+          <tr className="border-custom-border-200 bg-custom-background-90/50 border-b">
+            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Work item</th>
+            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Priority</th>
+            <th className="text-xs text-custom-text-400 w-28 px-3 py-2.5 text-left font-semibold">Difficulty</th>
+            <th className="text-xs text-custom-text-400 w-28 px-3 py-2.5 text-left font-semibold">Repetitive</th>
+            <th className="text-xs text-custom-text-400 w-28 px-3 py-2.5 text-left font-semibold">Importance</th>
+            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">Vp</th>
+            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">d</th>
+            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">p</th>
+            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-right font-semibold">Vf</th>
+            <th className="text-xs text-custom-text-400 px-3 py-2.5 text-left font-semibold">Status</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-custom-border-100 divide-y">
           {rows.map((row) => (
             <tr
               key={row.id}
               onClick={() => onSelectRow?.(row)}
-              className={`border-custom-border-100 hover:bg-custom-background-90 cursor-pointer border-b border-l-2 transition-colors ${
-                STATUS_STYLES[row.status] ?? ""
-              } ${selectedRowId === row.id ? "bg-custom-background-80" : ""}`}
+              className={`hover:bg-custom-background-90 cursor-pointer border-l-2 transition-colors ${
+                ROW_BORDER[row.status] ?? "border-l-transparent"
+              } ${selectedRowId === row.id ? "bg-custom-primary-100/5" : ""}`}
             >
-              <td className="text-custom-text-200 max-w-[220px] truncate px-3 py-2">{row.name}</td>
-              <td className="text-custom-text-300 px-3 py-2 capitalize">{row.priority}</td>
-              <td className="px-3 py-2">
+              <td className="text-sm text-custom-text-200 max-w-[200px] truncate px-3 py-2.5">{row.name}</td>
+              <td className="text-xs px-3 py-2.5">
+                <PriorityCell priority={row.priority} />
+              </td>
+              <td className="px-3 py-2.5">
                 <LevelSelect
                   value={row.difficulty}
                   options={difficultyLevels}
@@ -115,7 +160,7 @@ export const KpiIssuesTable = observer((props: Props) => {
                   onChange={(v) => handleAttr(row.id, "difficulty", v)}
                 />
               </td>
-              <td className="px-3 py-2">
+              <td className="px-3 py-2.5">
                 <LevelSelect
                   value={row.repetitive}
                   options={repetitiveLevels}
@@ -123,7 +168,7 @@ export const KpiIssuesTable = observer((props: Props) => {
                   onChange={(v) => handleAttr(row.id, "repetitive", v)}
                 />
               </td>
-              <td className="px-3 py-2">
+              <td className="px-3 py-2.5">
                 <LevelSelect
                   value={row.importance}
                   options={importanceLevels}
@@ -131,24 +176,27 @@ export const KpiIssuesTable = observer((props: Props) => {
                   onChange={(v) => handleAttr(row.id, "importance", v)}
                 />
               </td>
-              <td className="text-custom-text-200 px-3 py-2 text-right tabular-nums">{fmt(row.vp)}</td>
-              <td className="text-custom-text-300 px-3 py-2 text-right tabular-nums">{fmt(row.d)}</td>
-              <td className="text-custom-text-300 px-3 py-2 text-right tabular-nums">{fmt(row.p)}</td>
-              <td className="text-custom-text-100 px-3 py-2 text-right font-medium tabular-nums">{fmt(row.vf)}</td>
-              <td className="px-3 py-2">
-                <span className={`text-xs font-medium ${STATUS_STYLES[row.status]?.split(" ")[0] ?? ""}`}>
-                  {STATUS_LABEL[row.status] ?? row.status}
-                </span>
+              <td className="text-custom-text-200 px-3 py-2.5 text-right tabular-nums">{fmt(row.vp)}</td>
+              <td
+                className={`text-xs px-3 py-2.5 text-right tabular-nums ${
+                  row.d !== null && row.d !== undefined
+                    ? row.d > 0
+                      ? "text-red-500"
+                      : row.d < 0
+                        ? "text-blue-500"
+                        : "text-green-500"
+                    : "text-custom-text-400"
+                }`}
+              >
+                {fmt(row.d)}
+              </td>
+              <td className="text-xs text-custom-text-300 px-3 py-2.5 text-right tabular-nums">{fmt(row.p)}</td>
+              <td className="text-custom-text-100 px-3 py-2.5 text-right font-semibold tabular-nums">{fmt(row.vf)}</td>
+              <td className="px-3 py-2.5">
+                <StatusBadge status={row.status} />
               </td>
             </tr>
           ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={10} className="text-sm text-custom-text-400 px-3 py-8 text-center">
-                No work items to score yet.
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>

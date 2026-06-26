@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Settings } from "lucide-react";
+import { AlertCircle, Award, CheckCircle2, Clock, Layers, Settings, TrendingUp } from "lucide-react";
 import { EUserPermissionsLevel } from "@plane/constants";
 import { EUserProjectRoles } from "@plane/types";
 import type { IKpiIssueRow } from "@plane/types";
@@ -21,10 +21,25 @@ import { PageHead } from "@/components/core/page-title";
 import { useKpi } from "@/hooks/store/use-kpi";
 import { useUserPermissions } from "@/hooks/store/user";
 
-const StatCard = (props: { label: string; value: string; tone?: string }) => (
-  <div className="border-custom-border-200 bg-custom-background-100 rounded-lg border px-4 py-3">
-    <p className="text-xs text-custom-text-400">{props.label}</p>
-    <p className={`text-xl mt-1 font-semibold ${props.tone ?? "text-custom-text-100"}`}>{props.value}</p>
+type StatCardProps = {
+  label: string;
+  value: string;
+  icon: React.ElementType;
+  iconClass?: string;
+  valueClass?: string;
+  sublabel?: string;
+};
+
+const StatCard = ({ label, value, icon: Icon, iconClass, valueClass, sublabel }: StatCardProps) => (
+  <div className="border-custom-border-200 bg-custom-background-100 flex items-center gap-3 rounded-xl border px-4 py-3.5">
+    <div className="bg-custom-background-90 shrink-0 rounded-lg p-2.5">
+      <Icon className={`size-4 ${iconClass ?? "text-custom-text-400"}`} />
+    </div>
+    <div className="min-w-0">
+      <p className="text-xs text-custom-text-400 truncate">{label}</p>
+      <p className={`text-xl mt-0.5 font-bold tabular-nums ${valueClass ?? "text-custom-text-100"}`}>{value}</p>
+      {sublabel && <p className="text-custom-text-400 text-10">{sublabel}</p>}
+    </div>
   </div>
 );
 
@@ -71,47 +86,70 @@ function ProjectKpiPage() {
     );
   }
 
+  const onTimeCount = agg ? agg.counts.on_time + agg.counts.early : 0;
+  const efficiencyPct = agg?.efficiency != null ? `${(agg.efficiency * 100).toFixed(1)}%` : "—";
+
   return (
     <>
       <PageHead title="KPI" />
       <div className="h-full w-full overflow-y-auto p-6">
-        {/* Aggregates */}
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-          <StatCard label="Σ Vp" value={agg ? String(agg.sum_vp) : "—"} />
-          <StatCard label="Σ Vf" value={agg ? String(agg.sum_vf) : "—"} />
+        {/* Aggregate stat cards */}
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <StatCard label="Σ Vp" value={agg ? String(agg.sum_vp) : "—"} icon={Layers} sublabel="raw points" />
+          <StatCard
+            label="Σ Vf"
+            value={agg ? String(agg.sum_vf) : "—"}
+            icon={Award}
+            iconClass="text-custom-primary-100"
+            valueClass="text-custom-primary-100"
+            sublabel="final score"
+          />
           <StatCard
             label="Efficiency"
-            value={agg?.efficiency != null ? `${(agg.efficiency * 100).toFixed(1)}%` : "—"}
-            tone="text-custom-primary-100"
+            value={efficiencyPct}
+            icon={TrendingUp}
+            iconClass="text-green-500"
+            valueClass={agg?.efficiency != null && agg.efficiency >= 1 ? "text-green-600" : "text-yellow-500"}
           />
           <StatCard
             label="On time"
-            value={agg ? String(agg.counts.on_time + agg.counts.early) : "—"}
-            tone="text-green-600"
+            value={agg ? String(onTimeCount) : "—"}
+            icon={CheckCircle2}
+            iconClass="text-green-500"
+            valueClass="text-green-600"
           />
-          <StatCard label="Late" value={agg ? String(agg.counts.late) : "—"} tone="text-red-600" />
-          <StatCard label="Pending" value={agg ? String(agg.counts.pending) : "—"} tone="text-custom-text-300" />
+          <StatCard
+            label="Late"
+            value={agg ? String(agg.counts.late) : "—"}
+            icon={AlertCircle}
+            iconClass="text-red-500"
+            valueClass={agg && agg.counts.late > 0 ? "text-red-600" : "text-custom-text-100"}
+          />
+          <StatCard label="Pending" value={agg ? String(agg.counts.pending) : "—"} icon={Clock} />
         </div>
 
+        {/* Section header */}
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-base text-custom-text-100 font-semibold">Work item scoring</h3>
             <p className="text-xs text-custom-text-400">
-              Mode: <span className="capitalize">{config.penalty_mode.replace("_", " ")}</span> · k = {config.k}
-              {config.inherited ? " · inherited config" : ""}
+              Mode: <span className="capitalize">{config.penalty_mode.replace("_", " ")}</span>
+              {" · "}k = {config.k}
+              {config.inherited && <span className="text-custom-text-400 ml-1">· inherited config</span>}
             </p>
           </div>
           <Link
             href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
-            className="border-custom-border-200 text-sm text-custom-text-200 hover:bg-custom-background-90 flex items-center gap-1.5 rounded-md border px-3 py-1.5"
+            className="border-custom-border-200 bg-custom-background-100 text-sm text-custom-text-200 hover:bg-custom-background-90 hover:text-custom-text-100 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-colors"
           >
-            <Settings className="size-4" />
+            <Settings className="size-3.5" />
             Settings
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
-          <div className="border-custom-border-200 bg-custom-background-100 rounded-lg border">
+        {/* Table + Curve */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+          <div className="border-custom-border-200 bg-custom-background-100 overflow-hidden rounded-xl border">
             <KpiIssuesTable
               workspaceSlug={workspaceSlug}
               projectId={projectId}
@@ -123,14 +161,21 @@ function ProjectKpiPage() {
             />
           </div>
 
-          <div className="border-custom-border-200 bg-custom-background-100 rounded-lg border p-4">
-            <h4 className="text-sm text-custom-text-100 mb-1 font-semibold">Penalty curve p(d)</h4>
-            <p className="text-xs text-custom-text-400 mb-3">
+          <div className="border-custom-border-200 bg-custom-background-100 flex flex-col rounded-xl border p-4">
+            <h4 className="text-sm text-custom-text-100 mb-0.5 font-semibold">Penalty curve p(d)</h4>
+            <p className="text-xs text-custom-text-400 mb-4">
               {selectedRow
-                ? `Selected: ${selectedRow.name} (priority ${selectedRow.priority}, b=${selectedB})`
-                : "Select a work item to mark its delay on the curve."}
+                ? `${selectedRow.name} · priority ${selectedRow.priority} · b=${selectedB}`
+                : "Click a row to pin it on the curve."}
             </p>
-            <KpiCurveChart config={config} b={selectedB || 0.25} markerD={selectedRow?.d ?? null} />
+            <div className="flex-1">
+              <KpiCurveChart config={config} b={selectedB || 0.25} markerD={selectedRow?.d ?? null} />
+            </div>
+            {!selectedRow && (
+              <p className="text-custom-text-400 mt-3 text-center text-10">
+                Left of d=0 is early (bonus). Right is late (penalty).
+              </p>
+            )}
           </div>
         </div>
       </div>
