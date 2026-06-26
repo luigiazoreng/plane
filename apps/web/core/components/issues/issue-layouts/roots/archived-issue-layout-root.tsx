@@ -42,7 +42,8 @@ export const ArchivedIssueLayoutRoot = observer(function ArchivedIssueLayoutRoot
     { revalidateIfStale: false, revalidateOnFocus: false }
   );
 
-  if (!workspaceSlug || !projectId || !workItemFilters) return (
+  if (!workspaceSlug || !projectId || !workItemFilters)
+    return (
       <div className="flex h-full w-full items-center justify-center">
         <Spinner />
       </div>

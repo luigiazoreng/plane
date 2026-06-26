@@ -67,11 +67,7 @@ export const previewTicketIdPattern = (pattern: string, counter = 1): string => 
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
 
-  let result = pattern
-    .replace(/YYYY/g, yyyy)
-    .replace(/YY/g, yy)
-    .replace(/MM/g, mm)
-    .replace(/DD/g, dd);
+  let result = pattern.replace(/YYYY/g, yyyy).replace(/YY/g, yy).replace(/MM/g, mm).replace(/DD/g, dd);
 
   result = result.replace(/#+/g, (match) => String(counter).padStart(match.length, "0"));
 

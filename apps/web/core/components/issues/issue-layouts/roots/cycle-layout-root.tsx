@@ -84,7 +84,8 @@ export const CycleLayoutRoot = observer(function CycleLayoutRoot() {
     : 0;
   const canTransferIssues = isProgressSnapshotEmpty && transferableIssuesCount > 0;
 
-  if (!workspaceSlug || !projectId || !cycleId || !workItemFilters) return (
+  if (!workspaceSlug || !projectId || !cycleId || !workItemFilters)
+    return (
       <div className="flex h-full w-full items-center justify-center">
         <Spinner />
       </div>
