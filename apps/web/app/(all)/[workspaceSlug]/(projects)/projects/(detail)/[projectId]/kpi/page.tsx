@@ -25,20 +25,25 @@ type StatCardProps = {
   label: string;
   value: string;
   icon: React.ElementType;
-  iconClass?: string;
-  valueClass?: string;
+  iconClass: string;
+  valueClass: string;
+  accentClass: string;
   sublabel?: string;
 };
 
-const StatCard = ({ label, value, icon: Icon, iconClass, valueClass, sublabel }: StatCardProps) => (
-  <div className="border-custom-border-200 bg-custom-background-100 flex items-center gap-3 rounded-xl border px-4 py-3.5">
-    <div className="bg-custom-background-90 shrink-0 rounded-lg p-2.5">
-      <Icon className={`size-4 ${iconClass ?? "text-custom-text-400"}`} />
-    </div>
-    <div className="min-w-0">
-      <p className="text-xs text-custom-text-400 truncate">{label}</p>
-      <p className={`text-xl mt-0.5 font-bold tabular-nums ${valueClass ?? "text-custom-text-100"}`}>{value}</p>
-      {sublabel && <p className="text-custom-text-400 text-10">{sublabel}</p>}
+const StatCard = ({ label, value, icon: Icon, iconClass, valueClass, accentClass, sublabel }: StatCardProps) => (
+  <div className="border-custom-border-200 bg-custom-background-100 relative overflow-hidden rounded-xl border">
+    {/* colored top accent bar */}
+    <div className={`absolute inset-x-0 top-0 h-[3px] ${accentClass}`} />
+    <div className="px-4 pt-5 pb-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className={`bg-custom-background-90 ring-custom-border-200 rounded-lg p-2 ring-1`}>
+          <Icon className={`size-3.5 ${iconClass}`} />
+        </div>
+        {sublabel && <span className="text-custom-text-400 text-10 font-medium">{sublabel}</span>}
+      </div>
+      <p className={`text-2xl mt-3 leading-none font-bold tabular-nums ${valueClass}`}>{value}</p>
+      <p className="text-xs text-custom-text-400 mt-1 font-medium">{label}</p>
     </div>
   </div>
 );
@@ -88,61 +93,82 @@ function ProjectKpiPage() {
 
   const onTimeCount = agg ? agg.counts.on_time + agg.counts.early : 0;
   const efficiencyPct = agg?.efficiency != null ? `${(agg.efficiency * 100).toFixed(1)}%` : "—";
+  const isLate = agg && agg.counts.late > 0;
+  const efficiencyHigh = agg?.efficiency != null && agg.efficiency >= 1;
 
   return (
     <>
       <PageHead title="KPI" />
       <div className="h-full w-full overflow-y-auto p-6">
-        {/* Aggregate stat cards */}
+        {/* Stat cards */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <StatCard label="Σ Vp" value={agg ? String(agg.sum_vp) : "—"} icon={Layers} sublabel="raw points" />
           <StatCard
-            label="Σ Vf"
+            label="Raw points"
+            value={agg ? String(agg.sum_vp) : "—"}
+            icon={Layers}
+            iconClass="text-custom-text-300"
+            valueClass="text-custom-text-100"
+            accentClass="bg-custom-border-300"
+            sublabel="Σ Vp"
+          />
+          <StatCard
+            label="Final score"
             value={agg ? String(agg.sum_vf) : "—"}
             icon={Award}
             iconClass="text-custom-primary-100"
             valueClass="text-custom-primary-100"
-            sublabel="final score"
+            accentClass="bg-custom-primary-100"
+            sublabel="Σ Vf"
           />
           <StatCard
             label="Efficiency"
             value={efficiencyPct}
             icon={TrendingUp}
-            iconClass="text-green-500"
-            valueClass={agg?.efficiency != null && agg.efficiency >= 1 ? "text-green-600" : "text-yellow-500"}
+            iconClass={efficiencyHigh ? "text-green-500" : "text-yellow-500"}
+            valueClass={efficiencyHigh ? "text-green-500" : "text-yellow-500"}
+            accentClass={efficiencyHigh ? "bg-green-500" : "bg-yellow-400"}
           />
           <StatCard
-            label="On time"
+            label="On time / Early"
             value={agg ? String(onTimeCount) : "—"}
             icon={CheckCircle2}
             iconClass="text-green-500"
-            valueClass="text-green-600"
+            valueClass="text-green-500"
+            accentClass="bg-green-500"
           />
           <StatCard
             label="Late"
             value={agg ? String(agg.counts.late) : "—"}
             icon={AlertCircle}
-            iconClass="text-red-500"
-            valueClass={agg && agg.counts.late > 0 ? "text-red-600" : "text-custom-text-100"}
+            iconClass={isLate ? "text-red-500" : "text-custom-text-400"}
+            valueClass={isLate ? "text-red-500" : "text-custom-text-300"}
+            accentClass={isLate ? "bg-red-500" : "bg-custom-border-300"}
           />
-          <StatCard label="Pending" value={agg ? String(agg.counts.pending) : "—"} icon={Clock} />
+          <StatCard
+            label="Pending"
+            value={agg ? String(agg.counts.pending) : "—"}
+            icon={Clock}
+            iconClass="text-custom-text-400"
+            valueClass="text-custom-text-300"
+            accentClass="bg-custom-border-300"
+          />
         </div>
 
         {/* Section header */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="text-base text-custom-text-100 font-semibold">Work item scoring</h3>
+            <h3 className="text-sm text-custom-text-100 font-semibold">Work item scoring</h3>
             <p className="text-xs text-custom-text-400">
-              Mode: <span className="capitalize">{config.penalty_mode.replace("_", " ")}</span>
+              <span className="capitalize">{config.penalty_mode.replace("_", " ")}</span>
               {" · "}k = {config.k}
-              {config.inherited && <span className="text-custom-text-400 ml-1">· inherited config</span>}
+              {config.inherited && " · inherited config"}
             </p>
           </div>
           <Link
             href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
-            className="border-custom-border-200 bg-custom-background-100 text-sm text-custom-text-200 hover:bg-custom-background-90 hover:text-custom-text-100 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-colors"
+            className="border-custom-border-200 bg-custom-background-100 text-xs text-custom-text-300 hover:bg-custom-background-90 hover:text-custom-text-100 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium transition-colors"
           >
-            <Settings className="size-3.5" />
+            <Settings className="size-3" />
             Settings
           </Link>
         </div>
@@ -161,21 +187,16 @@ function ProjectKpiPage() {
             />
           </div>
 
-          <div className="border-custom-border-200 bg-custom-background-100 flex flex-col rounded-xl border p-4">
-            <h4 className="text-sm text-custom-text-100 mb-0.5 font-semibold">Penalty curve p(d)</h4>
-            <p className="text-xs text-custom-text-400 mb-4">
-              {selectedRow
-                ? `${selectedRow.name} · priority ${selectedRow.priority} · b=${selectedB}`
-                : "Click a row to pin it on the curve."}
-            </p>
-            <div className="flex-1">
+          <div className="border-custom-border-200 bg-custom-background-100 flex flex-col rounded-xl border">
+            <div className="border-custom-border-200 border-b px-4 py-3">
+              <h4 className="text-sm text-custom-text-100 font-semibold">Penalty curve p(d)</h4>
+              <p className="text-xs text-custom-text-400 mt-0.5 truncate">
+                {selectedRow ? `${selectedRow.name} · b=${selectedB}` : "Click a row to mark its position on the curve"}
+              </p>
+            </div>
+            <div className="flex-1 p-3">
               <KpiCurveChart config={config} b={selectedB || 0.25} markerD={selectedRow?.d ?? null} />
             </div>
-            {!selectedRow && (
-              <p className="text-custom-text-400 mt-3 text-center text-10">
-                Left of d=0 is early (bonus). Right is late (penalty).
-              </p>
-            )}
           </div>
         </div>
       </div>
