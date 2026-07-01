@@ -9,6 +9,8 @@ import { observer } from "mobx-react";
 import useSWR from "swr";
 // plane imports
 import { useTranslation } from "@plane/i18n";
+import { Button } from "@plane/propel/button";
+import { PlusIcon } from "@plane/propel/icons";
 // components
 import { SettingsBoxedControlItem } from "@/components/settings/boxed-control-item";
 import { SettingsHeading } from "@/components/settings/heading";
@@ -34,14 +36,24 @@ type TEstimateRoot = {
 export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot) {
   const { workspaceSlug, projectId, isAdmin } = props;
   // hooks
-  const { currentProjectDetails } = useProject();
-  const { loader, currentActiveEstimateId, archivedEstimateIds, getProjectEstimates } = useProjectEstimates();
+  const { currentProjectDetails, updateProject } = useProject();
+  const {
+    loader,
+    activeEstimateIdsByProjectId,
+    currentActiveEstimateId,
+    estimateById,
+    estimateIdsByProjectId,
+    getProjectEstimates,
+    updateEstimate,
+  } = useProjectEstimates();
   // states
   const [isEstimateCreateModalOpen, setIsEstimateCreateModalOpen] = useState(false);
   const [estimateToUpdate, setEstimateToUpdate] = useState<string | undefined>();
   const [estimateToDelete, setEstimateToDelete] = useState<string | undefined>();
 
   const { t } = useTranslation();
+  const estimateIds = estimateIdsByProjectId(projectId);
+  const activeEstimateIds = activeEstimateIdsByProjectId(projectId) ?? [];
 
   const { isLoading: isSWRLoading } = useSWR(
     workspaceSlug && projectId ? `PROJECT_ESTIMATES_${workspaceSlug}_${projectId}` : null,
@@ -52,6 +64,36 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
     return <EstimateLoaderScreen />;
   }
 
+  const handleSetDefaultEstimate = async (estimateId: string) => {
+    const estimate = estimateById(estimateId);
+    if (!estimate?.last_used) {
+      await updateEstimate(workspaceSlug, projectId, estimateId, {
+        estimate: {
+          last_used: true,
+        },
+      });
+    }
+    await updateProject(workspaceSlug, projectId, { estimate: estimateId });
+  };
+
+  const handleToggleEstimateActive = async (estimateId: string, isActive: boolean) => {
+    await updateEstimate(workspaceSlug, projectId, estimateId, {
+      estimate: {
+        last_used: isActive,
+      },
+    });
+
+    if (isActive && !currentProjectDetails?.estimate) {
+      await updateProject(workspaceSlug, projectId, { estimate: estimateId });
+      return;
+    }
+
+    if (!isActive && currentProjectDetails?.estimate === estimateId) {
+      const replacementEstimateId = activeEstimateIds.find((id) => id !== estimateId) ?? null;
+      await updateProject(workspaceSlug, projectId, { estimate: replacementEstimateId });
+    }
+  };
+
   return (
     <>
       <div>
@@ -61,10 +103,8 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
           description={t("project_settings.estimates.description")}
         />
         <div className="mt-6">
-          {/* current active estimate section */}
-          {currentActiveEstimateId ? (
+          {estimateIds && estimateIds.length > 0 ? (
             <>
-              {/* estimates activated deactivated section */}
               <SettingsBoxedControlItem
                 title={t("project_settings.estimates.title")}
                 description={t("project_settings.estimates.enable_description")}
@@ -74,14 +114,28 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
               />
               {/* active estimates section */}
               <div className="mt-12 flex flex-col gap-y-4">
-                <SettingsHeading title="Estimates list" variant="h6" />
+                <SettingsHeading
+                  title="Estimates list"
+                  variant="h6"
+                  control={
+                    isAdmin ? (
+                      <Button variant="secondary" onClick={() => setIsEstimateCreateModalOpen(true)}>
+                        <PlusIcon className="h-3.5 w-3.5" />
+                        {t("project_settings.estimates.new")}
+                      </Button>
+                    ) : undefined
+                  }
+                />
                 <EstimateList
-                  estimateIds={[currentActiveEstimateId]}
+                  estimateIds={estimateIds}
+                  activeEstimateId={currentActiveEstimateId}
                   isAdmin={isAdmin}
                   isEstimateEnabled={Boolean(currentProjectDetails?.estimate)}
                   isEditable
                   onEditClick={(estimateId: string) => setEstimateToUpdate(estimateId)}
                   onDeleteClick={(estimateId: string) => setEstimateToDelete(estimateId)}
+                  onSetActiveClick={handleSetDefaultEstimate}
+                  onToggleActiveClick={handleToggleEstimateActive}
                 />
               </div>
             </>
@@ -100,30 +154,6 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
               align="start"
               rootClassName="py-20"
             />
-          )}
-          {/* archived estimates section */}
-          {archivedEstimateIds && archivedEstimateIds.length > 0 && (
-            <div className="mt-12 flex flex-col gap-y-4">
-              <SettingsHeading
-                title="Archived estimates"
-                description={
-                  <>
-                    Estimates have gone through a change, these are the estimates you had in your older versions which
-                    were not in use. Read more about them&nbsp;
-                    <a
-                      href={"https://docs.plane.so/core-concepts/projects/run-project#estimate"}
-                      target="_blank"
-                      className="text-accent-primary/80 hover:text-accent-primary"
-                      rel="noreferrer"
-                    >
-                      here.
-                    </a>
-                  </>
-                }
-                variant="h6"
-              />
-              <EstimateList estimateIds={archivedEstimateIds} isAdmin={isAdmin} />
-            </div>
           )}
         </div>
       </div>

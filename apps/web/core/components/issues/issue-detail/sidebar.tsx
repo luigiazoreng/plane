@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import { useEffect } from "react";
 import { observer } from "mobx-react";
 // i18n
 import { useTranslation } from "@plane/i18n";
@@ -32,6 +33,7 @@ import { StateDropdown } from "@/components/dropdowns/state/dropdown";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useKpi } from "@/hooks/store/use-kpi";
 import { useMember } from "@/hooks/store/use-member";
 import { useProject } from "@/hooks/store/use-project";
 import { useProjectState } from "@/hooks/store/use-project-state";
@@ -67,7 +69,22 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
   } = useIssueDetail();
   const { getUserDetails } = useMember();
   const { getStateById } = useProjectState();
+  const {
+    projectConfig: kpiProjectConfig,
+    issueAttributes: kpiIssueAttributes,
+    fetchProjectConfig: fetchKpiProjectConfig,
+    fetchIssueAttributes: fetchKpiIssueAttributes,
+    updateIssueDifficultyEstimate,
+    updateIssueRepetitiveEstimate,
+  } = useKpi();
   const issue = getIssueById(issueId);
+
+  useEffect(() => {
+    fetchKpiProjectConfig(workspaceSlug, projectId).catch(() => {});
+    fetchKpiIssueAttributes(workspaceSlug, projectId, issueId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceSlug, projectId, issueId]);
+
   if (!issue) return <></>;
 
   const createdByDetails = getUserDetails(issue.created_by);
@@ -75,6 +92,8 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
   // derived values
   const projectDetails = getProjectById(issue.project_id);
   const stateDetails = getStateById(issue.state_id);
+  const kpiConfig = kpiProjectConfig[projectId];
+  const kpiAttribute = kpiIssueAttributes[issueId];
 
   const minDate = issue.start_date ? getDate(issue.start_date) : null;
   minDate?.setDate(minDate.getDate());
@@ -201,6 +220,50 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
                   className="group w-full grow"
                   buttonContainerClassName="w-full text-left h-7.5"
                   buttonClassName={`text-body-xs-regular ${issue?.estimate_point !== null ? "" : "text-placeholder"}`}
+                  placeholder={t("common.none")}
+                  hideIcon
+                  dropdownArrow
+                  dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
+                />
+              </SidebarPropertyListItem>
+            )}
+
+            {kpiConfig?.difficulty_estimate && (
+              <SidebarPropertyListItem icon={EstimatePropertyIcon} label="Difficulty">
+                <EstimateDropdown
+                  value={kpiAttribute?.difficulty_estimate_point ?? undefined}
+                  estimateId={kpiConfig.difficulty_estimate}
+                  onChange={(val: string | undefined) =>
+                    updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, val ?? null)
+                  }
+                  projectId={projectId}
+                  disabled={!isEditable}
+                  buttonVariant="transparent-with-text"
+                  className="group w-full grow"
+                  buttonContainerClassName="w-full text-left h-7.5"
+                  buttonClassName={`text-body-xs-regular ${kpiAttribute?.difficulty_estimate_point ? "" : "text-placeholder"}`}
+                  placeholder={t("common.none")}
+                  hideIcon
+                  dropdownArrow
+                  dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
+                />
+              </SidebarPropertyListItem>
+            )}
+
+            {kpiConfig?.repetitive_estimate && (
+              <SidebarPropertyListItem icon={EstimatePropertyIcon} label="Repetitive">
+                <EstimateDropdown
+                  value={kpiAttribute?.repetitive_estimate_point ?? undefined}
+                  estimateId={kpiConfig.repetitive_estimate}
+                  onChange={(val: string | undefined) =>
+                    updateIssueRepetitiveEstimate(workspaceSlug, projectId, issueId, val ?? null)
+                  }
+                  projectId={projectId}
+                  disabled={!isEditable}
+                  buttonVariant="transparent-with-text"
+                  className="group w-full grow"
+                  buttonContainerClassName="w-full text-left h-7.5"
+                  buttonClassName={`text-body-xs-regular ${kpiAttribute?.repetitive_estimate_point ? "" : "text-placeholder"}`}
                   placeholder={t("common.none")}
                   hideIcon
                   dropdownArrow

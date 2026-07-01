@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { observer } from "mobx-react";
 import type { Control } from "react-hook-form";
 import { Controller } from "react-hook-form";
@@ -28,7 +28,9 @@ import { ParentIssuesListModal } from "@/components/issues/parent-issues-list-mo
 import { IssueLabelSelect } from "@/components/issues/select";
 // helpers
 // hooks
+import { useIssueModal } from "@/hooks/context/use-issue-modal";
 import { useProjectEstimates } from "@/hooks/store/estimates";
+import { useKpi } from "@/hooks/store/use-kpi";
 import { useProject } from "@/hooks/store/use-project";
 import { useUserPermissions } from "@/hooks/store/user";
 import { usePlatformOS } from "@/hooks/use-platform-os";
@@ -71,8 +73,46 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
   const { getProjectById } = useProject();
   const { isMobile } = usePlatformOS();
   const { allowPermissions } = useUserPermissions();
+  const { projectConfig: kpiProjectConfig, fetchProjectConfig: fetchKpiProjectConfig, fetchIssueAttributes } = useKpi();
+  const {
+    kpiDifficultyEstimatePoint,
+    setKpiDifficultyEstimatePoint,
+    kpiRepetitiveEstimatePoint,
+    setKpiRepetitiveEstimatePoint,
+  } = useIssueModal();
   // derived values
   const projectDetails = getProjectById(projectId);
+  const kpiConfig = projectId ? kpiProjectConfig[projectId] : undefined;
+
+  // Load the project's KPI config so we know which estimate systems (if any)
+  // drive Difficulty/Repetitive for this project.
+  useEffect(() => {
+    if (!projectId || !workspaceSlug) return;
+    fetchKpiProjectConfig(workspaceSlug, projectId).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, workspaceSlug]);
+
+  // Editing an existing work item: preload its current KPI attributes so a
+  // submit that never touches these fields doesn't wipe existing values.
+  useEffect(() => {
+    if (!id || !projectId || !workspaceSlug) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const attribute = await fetchIssueAttributes(workspaceSlug, projectId, id);
+        if (cancelled) return;
+        setKpiDifficultyEstimatePoint(attribute.difficulty_estimate_point);
+        setKpiRepetitiveEstimatePoint(attribute.repetitive_estimate_point);
+      } catch {
+        // ignore: fields simply stay untouched (undefined)
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, projectId, workspaceSlug]);
 
   const { getIndex } = getTabIndex(ETabIndices.ISSUE_FORM, isMobile);
 
@@ -264,6 +304,36 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
             </div>
           )}
         />
+      )}
+      {projectId && kpiConfig?.difficulty_estimate && (
+        <div className="h-7">
+          <EstimateDropdown
+            value={kpiDifficultyEstimatePoint ?? undefined}
+            estimateId={kpiConfig.difficulty_estimate}
+            onChange={(estimatePoint) => {
+              setKpiDifficultyEstimatePoint(estimatePoint ?? null);
+              handleFormChange();
+            }}
+            projectId={projectId}
+            buttonVariant="border-with-text"
+            placeholder="Difficulty"
+          />
+        </div>
+      )}
+      {projectId && kpiConfig?.repetitive_estimate && (
+        <div className="h-7">
+          <EstimateDropdown
+            value={kpiRepetitiveEstimatePoint ?? undefined}
+            estimateId={kpiConfig.repetitive_estimate}
+            onChange={(estimatePoint) => {
+              setKpiRepetitiveEstimatePoint(estimatePoint ?? null);
+              handleFormChange();
+            }}
+            projectId={projectId}
+            buttonVariant="border-with-text"
+            placeholder="Repetitive"
+          />
+        </div>
       )}
       <div className="h-7">
         {parentId ? (

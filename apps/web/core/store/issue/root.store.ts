@@ -221,15 +221,15 @@ export class IssueRootStore implements IIssueRootStore {
       const viewId = rootStore.router.viewId;
       const globalViewId = rootStore.router.globalViewId;
       const userId = rootStore.router.userId;
-      
+
       const stateMap = rootStore?.state?.stateMap;
       const projectStates = rootStore?.state?.projectStates;
       const workspaceStates = rootStore?.state?.workspaceStates;
-      
+
       const labelMap = rootStore?.label?.labelMap;
       const workspaceMemberMap = rootStore?.memberRoot?.workspace?.memberMap;
       const memberMap = rootStore?.memberRoot?.memberMap;
-      
+
       const projectMap = rootStore?.projectRoot?.project?.projectMap;
       const moduleMap = rootStore?.module?.moduleMap;
       const cycleMap = rootStore?.cycle?.cycleMap;
@@ -244,7 +244,7 @@ export class IssueRootStore implements IIssueRootStore {
         if (this.viewId !== viewId) this.viewId = viewId;
         if (this.globalViewId !== globalViewId) this.globalViewId = globalViewId;
         if (this.userId !== userId) this.userId = userId;
-        
+
         if (!isEmpty(stateMap)) this.stateMap = stateMap;
         if (!isEmpty(projectStates)) this.stateDetails = projectStates;
         if (!isEmpty(workspaceStates)) this.workspaceStateDetails = workspaceStates;

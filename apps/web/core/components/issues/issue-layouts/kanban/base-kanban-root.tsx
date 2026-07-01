@@ -111,17 +111,17 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
 
     const workspace = workspaceSlug.toString();
     const project = projectId.toString();
-    const groupings = [group_by, sub_group_by];
+    const groupings = new Set([group_by, sub_group_by]);
 
-    if (groupings.includes("state") && !state.fetchedMap[project]) {
+    if (groupings.has("state") && !state.fetchedMap[project]) {
       void state.fetchProjectStates(workspace, project).catch(console.error);
     }
 
-    if (groupings.includes("cycle") && !cycle.fetchedMap[project]) {
+    if (groupings.has("cycle") && !cycle.fetchedMap[project]) {
       void cycle.fetchAllCycles(workspace, project).catch(console.error);
     }
 
-    if (groupings.includes("module") && !module.fetchedMap[project]) {
+    if (groupings.has("module") && !module.fetchedMap[project]) {
       void module.fetchModules(workspace, project).catch(console.error);
     }
   }, [workspaceSlug, projectId, group_by, sub_group_by, state, cycle, module]);

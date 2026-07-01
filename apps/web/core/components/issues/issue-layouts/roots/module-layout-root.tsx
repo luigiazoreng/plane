@@ -67,7 +67,8 @@ export const ModuleLayoutRoot = observer(function ModuleLayoutRoot() {
     { revalidateIfStale: false, revalidateOnFocus: false }
   );
 
-  if (!workspaceSlug || !projectId || !moduleId || !workItemFilters) return (
+  if (!workspaceSlug || !projectId || !moduleId || !workItemFilters)
+    return (
       <div className="flex h-full w-full items-center justify-center">
         <Spinner />
       </div>

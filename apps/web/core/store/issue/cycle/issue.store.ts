@@ -162,7 +162,7 @@ export class CycleIssues extends BaseIssuesStore implements ICycleIssues {
         prevIssueState,
         nextIssueState,
         this.rootIssueStore.rootStore.state.stateMap,
-        this.rootIssueStore.rootStore.projectEstimate?.currentActiveEstimate?.estimatePointById
+        this.rootIssueStore.rootStore.projectEstimate?.estimatePointById
       );
 
       const cycleId = id ?? this.cycleId;

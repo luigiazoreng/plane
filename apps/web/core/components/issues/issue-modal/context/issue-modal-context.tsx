@@ -40,6 +40,12 @@ export type TCreateSubWorkItemProps = {
   parentId: string;
 };
 
+export type TCreateUpdateKpiAttributesProps = {
+  issueId: string;
+  projectId: string;
+  workspaceSlug: string;
+};
+
 export type THandleTemplateChangeProps = {
   workspaceSlug: string;
   reset: UseFormReset<TIssue>;
@@ -71,6 +77,14 @@ export type TIssueModalContext = {
   setIssuePropertyValues: React.Dispatch<React.SetStateAction<TIssuePropertyValues>>;
   issuePropertyValueErrors: TIssuePropertyValueErrors;
   setIssuePropertyValueErrors: React.Dispatch<React.SetStateAction<TIssuePropertyValueErrors>>;
+  // KPI Difficulty/Repetitive: not part of TIssue, stored separately on
+  // KpiIssueAttribute. `undefined` = untouched (skip on submit), `null` =
+  // explicitly cleared, string = selected estimate point id.
+  kpiDifficultyEstimatePoint: string | null | undefined;
+  setKpiDifficultyEstimatePoint: React.Dispatch<React.SetStateAction<string | null | undefined>>;
+  kpiRepetitiveEstimatePoint: string | null | undefined;
+  setKpiRepetitiveEstimatePoint: React.Dispatch<React.SetStateAction<string | null | undefined>>;
+  handleCreateUpdateKpiAttributes: (props: TCreateUpdateKpiAttributesProps) => Promise<void>;
   getIssueTypeIdOnProjectChange: (projectId: string) => string | null;
   getActiveAdditionalPropertiesLength: (props: TActiveAdditionalPropertiesProps) => number;
   handlePropertyValuesValidation: (props: TPropertyValuesValidationProps) => boolean;

@@ -8,7 +8,12 @@ import { unset, orderBy, set } from "lodash-es";
 import { action, computed, makeObservable, observable, runInAction } from "mobx";
 import { computedFn } from "mobx-utils";
 // types
-import type { IEstimate as IEstimateType, IEstimateFormData, TEstimateSystemKeys } from "@plane/types";
+import type {
+  IEstimate as IEstimateType,
+  IEstimateFormData,
+  IEstimatePoint as IEstimatePointType,
+  TEstimateSystemKeys,
+} from "@plane/types";
 // plane web services
 import estimateService from "@/services/estimate.service";
 // plane web store
@@ -35,8 +40,11 @@ export interface IProjectEstimateStore {
   currentProjectEstimateType: TEstimateSystemKeys | undefined;
   areEstimateEnabledByProjectId: (projectId: string) => boolean;
   estimateIdsByProjectId: (projectId: string) => string[] | undefined;
+  activeEstimateIdsByProjectId: (projectId: string) => string[] | undefined;
   currentActiveEstimateIdByProjectId: (projectId: string) => string | undefined;
   estimateById: (estimateId: string) => IEstimate | undefined;
+  estimatePointById: (estimatePointId: string, projectId?: string) => IEstimatePointType | undefined;
+  estimateByEstimatePointId: (estimatePointId: string, projectId?: string) => IEstimate | undefined;
   // actions
   getWorkspaceEstimates: (workspaceSlug: string, loader?: TEstimateLoader) => Promise<IEstimateType[] | undefined>;
   getProjectEstimates: (
@@ -99,10 +107,8 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
   get currentActiveEstimateId(): string | undefined {
     const { projectId } = this.store.router;
     if (!projectId) return undefined;
-    const currentActiveEstimateId = Object.values(this.estimates || {}).find(
-      (p) => p.project === projectId && p.last_used
-    );
-    return currentActiveEstimateId?.id ?? undefined;
+    const projectDetails = this.store.projectRoot.project.getProjectById(projectId);
+    return projectDetails?.estimate ?? undefined;
   }
 
   // computed
@@ -111,12 +117,7 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
    * @returns { string | undefined }
    */
   get currentActiveEstimate(): IEstimate | undefined {
-    const { projectId } = this.store.router;
-    if (!projectId) return undefined;
-    const currentActiveEstimate = Object.values(this.estimates || {}).find(
-      (p) => p.project === projectId && p.last_used
-    );
-    return currentActiveEstimate ?? undefined;
+    return this.currentActiveEstimateId ? this.estimates[this.currentActiveEstimateId] : undefined;
   }
 
   /**
@@ -126,8 +127,9 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
   get archivedEstimateIds(): string[] | undefined {
     const { projectId } = this.store.router;
     if (!projectId) return undefined;
+    const activeEstimateId = this.currentActiveEstimateId;
     const archivedEstimates = orderBy(
-      Object.values(this.estimates || {}).filter((p) => p.project === projectId && !p.last_used),
+      Object.values(this.estimates || {}).filter((p) => p.project === projectId && p.id !== activeEstimateId),
       ["created_at"],
       "desc"
     );
@@ -152,10 +154,26 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
    */
   estimateIdsByProjectId = computedFn((projectId: string) => {
     if (!projectId) return undefined;
-    const projectEstimatesIds = Object.values(this.estimates || {})
-      .filter((p) => p.project === projectId)
-      .map((p) => p.id) as string[];
+    const projectEstimatesIds = orderBy(
+      Object.values(this.estimates || {}).filter((p) => p.project === projectId),
+      ["created_at"],
+      "desc"
+    ).map((p) => p.id) as string[];
     return projectEstimatesIds ?? undefined;
+  });
+
+  /**
+   * @description get active estimate ids for a project
+   * @returns { string[] | undefined }
+   */
+  activeEstimateIdsByProjectId = computedFn((projectId: string) => {
+    if (!projectId) return undefined;
+    const activeEstimateIds = orderBy(
+      Object.values(this.estimates || {}).filter((p) => p.project === projectId && p.last_used),
+      ["created_at"],
+      "desc"
+    ).map((p) => p.id) as string[];
+    return activeEstimateIds ?? undefined;
   });
 
   /**
@@ -164,10 +182,8 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
    */
   currentActiveEstimateIdByProjectId = computedFn((projectId: string): string | undefined => {
     if (!projectId) return undefined;
-    const currentActiveEstimateId = Object.values(this.estimates || {}).find(
-      (p) => p.project === projectId && p.last_used
-    );
-    return currentActiveEstimateId?.id ?? undefined;
+    const projectDetails = this.store.projectRoot.project.getProjectById(projectId);
+    return projectDetails?.estimate ?? undefined;
   });
 
   /**
@@ -177,6 +193,26 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
   estimateById = computedFn((estimateId: string) => {
     if (!estimateId) return undefined;
     return this.estimates[estimateId] ?? undefined;
+  });
+
+  estimatePointById = computedFn((estimatePointId: string, projectId?: string) => {
+    if (!estimatePointId) return undefined;
+    const estimates = Object.values(this.estimates || {}).filter(
+      (estimate) => !projectId || estimate.project === projectId
+    );
+    for (const estimate of estimates) {
+      const estimatePoint = estimate.estimatePointById(estimatePointId);
+      if (estimatePoint) return estimatePoint;
+    }
+    return undefined;
+  });
+
+  estimateByEstimatePointId = computedFn((estimatePointId: string, projectId?: string) => {
+    if (!estimatePointId) return undefined;
+    const estimates = Object.values(this.estimates || {}).filter(
+      (estimate) => !projectId || estimate.project === projectId
+    );
+    return estimates.find((estimate) => !!estimate.estimatePointById(estimatePointId));
   });
 
   // actions
@@ -281,10 +317,6 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
 
       const estimate = await estimateService.createEstimate(workspaceSlug, projectId, payload);
       if (estimate) {
-        // update estimate_id in current project
-        // await this.store.projectRoot.project.updateProject(workspaceSlug, projectId, {
-        //   estimate: estimate.id,
-        // });
         runInAction(() => {
           if (estimate.id)
             set(
@@ -293,6 +325,12 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
               new Estimate(this.store, { ...estimate, type: estimate.type?.toLowerCase() as TEstimateSystemKeys })
             );
         });
+        const projectDetails = this.store.projectRoot.project.getProjectById(projectId);
+        if (estimate.id && !projectDetails?.estimate) {
+          await this.store.projectRoot.project.updateProject(workspaceSlug, projectId, {
+            estimate: estimate.id,
+          });
+        }
       }
 
       return estimate;

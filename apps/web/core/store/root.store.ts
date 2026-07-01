@@ -65,6 +65,8 @@ import type { IHelpdeskStore } from "./helpdesk.store";
 import { HelpdeskStore } from "./helpdesk.store";
 import type { IHelpdeskAnalyticsStore } from "./helpdesk-analytics.store";
 import { HelpdeskAnalyticsStore } from "./helpdesk-analytics.store";
+import type { IKpiStore } from "./kpi.store";
+import { KpiStore } from "./kpi.store";
 import type { IStickyStore } from "./sticky/sticky.store";
 import { StickyStore } from "./sticky/sticky.store";
 import type { IThemeStore } from "./theme.store";
@@ -107,6 +109,7 @@ export class CoreRootStore {
   powerK: IPowerKStore;
   helpdesk: IHelpdeskStore;
   helpdeskAnalytics: IHelpdeskAnalyticsStore;
+  kpi: IKpiStore;
 
   constructor() {
     this.router = new RouterStore();
@@ -140,6 +143,7 @@ export class CoreRootStore {
     this.powerK = new PowerKStore();
     this.helpdesk = new HelpdeskStore(this);
     this.helpdeskAnalytics = new HelpdeskAnalyticsStore(this);
+    this.kpi = new KpiStore(this);
   }
 
   resetOnSignOut() {
@@ -175,5 +179,6 @@ export class CoreRootStore {
     this.powerK = new PowerKStore();
     this.helpdesk = new HelpdeskStore(this);
     this.helpdeskAnalytics = new HelpdeskAnalyticsStore(this);
+    this.kpi = new KpiStore(this);
   }
 }

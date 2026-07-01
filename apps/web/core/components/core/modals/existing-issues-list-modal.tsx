@@ -199,11 +199,7 @@ export function ExistingIssuesListModal(props: Props) {
                 }`}
               >
                 <ToggleSwitch value={isWorkspaceLevel} onChange={() => setIsWorkspaceLevel((prevData) => !prevData)} />
-                <button
-                  type="button"
-                  onClick={() => setIsWorkspaceLevel((prevData) => !prevData)}
-                  className="shrink-0"
-                >
+                <button type="button" onClick={() => setIsWorkspaceLevel((prevData) => !prevData)} className="shrink-0">
                   {t("common.workspace_level")}
                 </button>
               </div>

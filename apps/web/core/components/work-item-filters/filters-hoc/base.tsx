@@ -111,11 +111,7 @@ const WorkItemFilterRoot = observer(function WorkItemFilterRoot(props: TWorkItem
     if (!workItemLayoutFilter) return;
     workItemLayoutFilter.configManager.setAreConfigsReady(workItemFiltersConfig.areAllConfigsInitialized);
     workItemLayoutFilter.configManager.registerAll(workItemFiltersConfig.configs);
-  }, [
-    workItemFiltersConfig.areAllConfigsInitialized,
-    workItemFiltersConfig.configs,
-    workItemLayoutFilter,
-  ]);
+  }, [workItemFiltersConfig.areAllConfigsInitialized, workItemFiltersConfig.configs, workItemLayoutFilter]);
 
   return <>{typeof children === "function" ? children({ filter: workItemLayoutFilter }) : children}</>;
 });

@@ -20,13 +20,16 @@ type TEstimateListItem = {
   estimateId: string;
   isAdmin: boolean;
   isEstimateEnabled: boolean;
+  isActive?: boolean;
   isEditable: boolean;
   onEditClick?: (estimateId: string) => void;
   onDeleteClick?: (estimateId: string) => void;
+  onSetActiveClick?: (estimateId: string) => void;
+  onToggleActiveClick?: (estimateId: string, isActive: boolean) => void;
 };
 
 export const EstimateListItem = observer(function EstimateListItem(props: TEstimateListItem) {
-  const { estimateId } = props;
+  const { estimateId, isActive } = props;
   // store hooks
   const { estimateById } = useProjectEstimates();
   const { estimatePointIds, estimatePointById } = useEstimate(estimateId);
@@ -39,9 +42,27 @@ export const EstimateListItem = observer(function EstimateListItem(props: TEstim
 
   if (!currentEstimate) return null;
 
+  const isEstimateActive = Boolean(currentEstimate.last_used);
+
   return (
     <SettingsBoxedControlItem
-      title={currentEstimate.name}
+      title={
+        <span className="flex items-center gap-2">
+          <span>{currentEstimate.name}</span>
+          {isEstimateActive ? (
+            <span className="bg-green-500/10 text-green-500 rounded px-1.5 py-0.5 text-11 font-medium">Active</span>
+          ) : (
+            <span className="bg-custom-background-80 text-custom-text-400 rounded px-1.5 py-0.5 text-11 font-medium">
+              Inactive
+            </span>
+          )}
+          {isActive && (
+            <span className="bg-custom-primary-100/10 text-custom-primary-100 rounded px-1.5 py-0.5 text-11 font-medium">
+              Default
+            </span>
+          )}
+        </span>
+      }
       description={estimatePointValues
         ?.map((estimatePointValue) => {
           if (currentEstimate.type === EEstimateSystem.TIME) {
@@ -50,7 +71,7 @@ export const EstimateListItem = observer(function EstimateListItem(props: TEstim
           return estimatePointValue;
         })
         .join(", ")}
-      control={<EstimateListItemButtons {...props} />}
+      control={<EstimateListItemButtons {...props} isEstimateActive={isEstimateActive} />}
     />
   );
 });

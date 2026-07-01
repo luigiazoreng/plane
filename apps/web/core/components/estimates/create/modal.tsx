@@ -13,7 +13,7 @@ import { Button } from "@plane/propel/button";
 import { ChevronLeftIcon } from "@plane/propel/icons";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { IEstimateFormData, TEstimateSystemKeys, TEstimatePointsObject, TEstimateTypeError } from "@plane/types";
-import { EModalPosition, EModalWidth, ModalCore } from "@plane/ui";
+import { EModalPosition, EModalWidth, Input, ModalCore } from "@plane/ui";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 // local imports
@@ -35,6 +35,7 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
   const { t } = useTranslation();
   // states
   const [estimateSystem, setEstimateSystem] = useState<TEstimateSystemKeys>(EEstimateSystem.POINTS);
+  const [estimateName, setEstimateName] = useState(ESTIMATE_SYSTEMS[EEstimateSystem.POINTS].name);
   const [estimatePoints, setEstimatePoints] = useState<TEstimatePointsObject[] | undefined>(undefined);
   const [estimatePointError, setEstimatePointError] = useState<TEstimateTypeError>(undefined);
   const [buttonLoader, setButtonLoader] = useState(false);
@@ -62,10 +63,16 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
   useEffect(() => {
     if (isOpen) {
       setEstimateSystem(EEstimateSystem.POINTS);
+      setEstimateName(ESTIMATE_SYSTEMS[EEstimateSystem.POINTS].name);
       setEstimatePoints(undefined);
       setEstimatePointError({});
     }
   }, [isOpen]);
+
+  const handleEstimateSystem = (system: TEstimateSystemKeys) => {
+    setEstimateSystem(system);
+    setEstimateName(ESTIMATE_SYSTEMS[system]?.name ?? "");
+  };
 
   const validateEstimatePointError = () => {
     let estimateError = false;
@@ -89,10 +96,19 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
     if (!validateEstimatePointError()) {
       try {
         if (!workspaceSlug || !projectId || !estimatePoints) return;
+        const trimmedEstimateName = estimateName.trim();
+        if (!trimmedEstimateName) {
+          setToast({
+            type: TOAST_TYPE.ERROR,
+            title: "Error",
+            message: "Estimate name is required.",
+          });
+          return;
+        }
         setButtonLoader(true);
         const payload: IEstimateFormData = {
           estimate: {
-            name: ESTIMATE_SYSTEMS[estimateSystem]?.name,
+            name: trimmedEstimateName,
             type: estimateSystem,
             last_used: true,
           },
@@ -169,11 +185,23 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
         </div>
 
         {/* estimate steps */}
-        <div className="px-5">
+        <div className="space-y-5 px-5">
+          <div className="space-y-1.5">
+            <label className="text-13 font-medium text-secondary" htmlFor="estimate-name">
+              Estimate name
+            </label>
+            <Input
+              id="estimate-name"
+              value={estimateName}
+              onChange={(e) => setEstimateName(e.target.value)}
+              placeholder="Estimate name"
+              maxLength={255}
+            />
+          </div>
           {!estimatePoints && (
             <EstimateCreateStageOne
               estimateSystem={estimateSystem}
-              handleEstimateSystem={setEstimateSystem}
+              handleEstimateSystem={handleEstimateSystem}
               handleEstimatePoints={(templateType: string) =>
                 handleUpdatePoints(ESTIMATE_SYSTEMS[estimateSystem].templates[templateType].values)
               }

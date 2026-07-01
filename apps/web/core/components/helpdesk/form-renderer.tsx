@@ -86,9 +86,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled }: Fiel
 
       // Find parent label for placeholder
       const parentField = parentKey ? fieldMap[parentKey] : null;
-      const placeholder = isBlocked
-        ? `Select ${parentField?.label ?? "parent"} first`
-        : "Select an option";
+      const placeholder = isBlocked ? `Select ${parentField?.label ?? "parent"} first` : "Select an option";
 
       return (
         <select
@@ -147,7 +145,7 @@ export function HelpdeskFormRenderer({
   onValueChange,
   isPreview = false,
 }: HelpdeskFormRendererProps) {
-  const ordered = fields.slice().sort((a, b) => a.sequence - b.sequence);
+  const ordered = fields.slice().toSorted((a, b) => a.sequence - b.sequence);
   const fieldMap: Record<string, IHelpdeskFormField> = {};
   for (const f of ordered) fieldMap[f.key] = f;
 
@@ -156,8 +154,7 @@ export function HelpdeskFormRenderer({
       {ordered.map((field) => (
         <div key={field.id}>
           <label className="text-sm text-text-200 mb-1.5 block font-medium">
-            {field.label}{" "}
-            {field.required ? <span className="text-red-500">*</span> : null}
+            {field.label} {field.required ? <span className="text-red-500">*</span> : null}
           </label>
           <FieldInput
             field={field}
