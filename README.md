@@ -1,165 +1,114 @@
-<br /><br />
+<br />
+
+<p align="center"><b>Community fork of Plane, focused on Helpdesk + integrated project management</b></p>
 
 <p align="center">
-<a href="https://plane.so">
-  <img src="https://media.docs.plane.so/logo/plane_github_readme.png" alt="Plane Logo" width="400">
-</a>
-</p>
-<p align="center"><b>Modern project management for all teams</b></p>
-
-<p align="center">
-    <a href="https://plane.so/"><b>Website</b></a> •
-    <a href="https://forum.plane.so"><b>Forum</b></a> •
-    <a href="https://x.com/planepowers"><b>X</b></a> •
-    <a href="https://docs.plane.so/"><b>Documentation</b></a>
+    <img alt="License: AGPL v3" src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg">
+    <img alt="Based on Plane" src="https://img.shields.io/badge/based%20on-Plane-6366f1.svg">
+    <a href="https://github.com/makeplane/plane"><img alt="Upstream" src="https://img.shields.io/badge/upstream-makeplane%2Fplane-lightgrey.svg"></a>
 </p>
 
-<p>
-    <a href="https://app.plane.so/#gh-light-mode-only" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-top.webp"
-        alt="Plane Screens"
-        width="100%"
-      />
-    </a>
-</p>
+<br />
 
-Meet [Plane](https://plane.so/), an open-source project management tool to track issues, run ~sprints~ cycles, and manage product roadmaps without the chaos of managing the tool itself. 🧘‍♀️
+> ⚠️ **This is an independent, unofficial fork**, community-maintained on top of the open-source code of
+> [Plane](https://plane.so) (© Plane Software, Inc.), licensed under **AGPL-3.0**. This repository is **not
+> affiliated with, endorsed by, or maintained by Plane Software, Inc.** "Plane" and its brand belong to their
+> respective owners — this fork exists to extend the original open-source product, not to pass itself off as it.
 
-> Plane is evolving every day. Your suggestions, ideas, and reported bugs help us immensely. Do not hesitate to join in the conversation on [Forum](https://forum.plane.so) or raise a GitHub issue. We read everything and respond to most.
+---
+
+## 🧭 Why this fork exists
+
+[Plane](https://plane.so) is an excellent, genuinely open-source (AGPL-3.0) project management tool. But some
+features I consider essential for real teams — like a **Helpdesk** integrated into the development workflow and a
+per-member **KPI/scoring engine** — either don't exist in the open-source edition, or sit behind a paid plan.
+
+It's not a commercial product, it doesn't sell anything, and it has no intention of competing with the official
+Plane — it's an open continuation, for anyone who wants to use it or contribute.
+
+## 🌟 What this fork adds
+
+On top of everything Plane already offers natively (issues, cycles, modules, views, pages, analytics — see below),
+this fork adds:
+
+- ### 🎫 Helpdesk
+
+  A workspace-level support module: support portals (public or authenticated) where anyone can open a ticket,
+  which agents respond to and can forward to any project's Intake — linking the customer's request directly to the
+  engineering work, without duplicating information.
+  📄 Technical details and history: [`HELPDESK_FEATURE.md`](./HELPDESK_FEATURE.md)
+
+- ### 📊 KPI — team scoring engine
+
+  A fully configurable scoring engine (no magic numbers in the code) that scores work items by difficulty,
+  repetitiveness, priority, and due date, with an adjustable penalty/bonus curve for delays or early delivery. The
+  main screen is a **read-only** dashboard showing each project member's score plus overall project charts; a work
+  item's Difficulty/Repetitive parameters are set at task creation time, and the scoring engine itself is
+  configurable by the team lead on a dedicated Settings screen with a live curve preview.
+  📄 Technical details and history: [`KPI_FEATURE.md`](./KPI_FEATURE.md)
+
+- ### 🤖 Native AI agent (planned)
+  A native AI assistant for interacting with the workspace in natural language, with permission controls and
+  auditing — not implemented yet, see [`AI_NATIVE_AGENT_FEATURE.md`](./AI_NATIVE_AGENT_FEATURE.md).
+
+These features are developed and documented openly in the `*_FEATURE.md` files at the repo root — each one serves
+as the technical spec, architecture decisions, and changelog for that feature.
+
+## 🧱 About the original project (Plane)
+
+This fork is based on [Plane](https://plane.so/), an open-source project management tool maintained by
+[Plane Software, Inc.](https://github.com/makeplane). All credit for the foundation — architecture, editor, issue
+engine, cycles, modules, views, pages, analytics, and the huge amount of engineering behind it — goes to Plane's
+maintainers and community. I strongly recommend checking out the original project, and if it fits your use case,
+considering their official [Plane Cloud](https://app.plane.so).
+
+- Original repository: [github.com/makeplane/plane](https://github.com/makeplane/plane)
+- Official website: [plane.so](https://plane.so)
+- Official documentation: [docs.plane.so](https://docs.plane.so)
 
 ## 🚀 Installation
 
-Getting started with Plane is simple. Choose the setup that works best for you:
+The deployment process is the same as upstream Plane (same stack, same manifests) — this fork's features run on
+top of the same infrastructure.
 
-- **Plane Cloud**
-  Sign up for a free account on [Plane Cloud](https://app.plane.so)—it's the fastest way to get up and running without worrying about infrastructure.
+| Method     | Docs                                                                                                                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docker     | [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://developers.plane.so/self-hosting/methods/docker-compose)         |
+| Kubernetes | [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://developers.plane.so/self-hosting/methods/kubernetes) |
 
-- **Self-host Plane**
-  Prefer full control over your data and infrastructure? Install and run Plane on your own servers. Follow our detailed [deployment guides](https://developers.plane.so/self-hosting/overview) to get started.
+For local development, see [CONTRIBUTING](./CONTRIBUTING.md).
 
-| Installation methods | Docs link                                                                                                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Docker               | [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://developers.plane.so/self-hosting/methods/docker-compose)         |
-| Kubernetes           | [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://developers.plane.so/self-hosting/methods/kubernetes) |
+## 🌟 Features (inherited from Plane)
 
-`Instance admins` can configure instance settings with [God mode](https://developers.plane.so/self-hosting/govern/instance-admin).
+- **Work Items** — create and manage tasks with a rich text editor, sub-properties, and cross-issue references.
+- **Cycles** — track sprints with burn-down charts.
+- **Modules** — break complex projects into manageable modules.
+- **Views** — custom filters, saved and shareable.
+- **Pages** — AI-assisted notes with a rich text editor, convertible into actionable items.
+- **Analytics** — real-time insights across your workspace data.
 
-## 🌟 Features
-
-- **Work Items**
-  Efficiently create and manage tasks with a robust rich text editor that supports file uploads. Enhance organization and tracking by adding sub-properties and referencing related issues.
-
-- **Cycles**
-  Maintain your team’s momentum with Cycles. Track progress effortlessly using burn-down charts and other insightful tools.
-
-- **Modules**
-  Simplify complex projects by dividing them into smaller, manageable modules.
-
-- **Views**
-  Customize your workflow by creating filters to display only the most relevant issues. Save and share these views with ease.
-
-- **Pages**
-  Capture and organize ideas using Plane Pages, complete with AI capabilities and a rich text editor. Format text, insert images, add hyperlinks, or convert your notes into actionable items.
-
-- **Analytics**
-  Access real-time insights across all your Plane data. Visualize trends, remove blockers, and keep your projects moving forward.
-
-## 🛠️ Local development
-
-See [CONTRIBUTING](./CONTRIBUTING.md)
-
-## ⚙️ Built with
+## ⚙️ Stack
 
 [![React Router](https://img.shields.io/badge/-React%20Router-CA4245?logo=react-router&style=for-the-badge&logoColor=white)](https://reactrouter.com/)
 [![Django](https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=green)](https://www.djangoproject.com/)
 [![Node JS](https://img.shields.io/badge/node.js-339933?style=for-the-badge&logo=Node.js&logoColor=white)](https://nodejs.org/en)
 
-## 📸 Screenshots
+## 🤝 Contributing
 
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-work-items.webp"
-        alt="Plane Views"
-        width="100%"
-      />
-    </a>
-  </p>
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-cycles.webp"
-        width="100%"
-      />
-    </a>
-  </p>
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-modules.webp"
-        alt="Plane Cycles and Modules"
-        width="100%"
-      />
-    </a>
-  </p>
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-views.webp"
-        alt="Plane Analytics"
-        width="100%"
-      />
-    </a>
-  </p>
-   <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-analytics.webp"
-        alt="Plane Pages"
-        width="100%"
-      />
-    </a>
-  </p>
-</p>
-
-## 📝 Documentation
-
-Explore Plane's [product documentation](https://docs.plane.so/) and [developer documentation](https://developers.plane.so/) to learn about features, setup, and usage.
-
-## ❤️ Community
-
-Join the Plane community on [GitHub Discussions](https://github.com/orgs/makeplane/discussions) and our [Forum](https://forum.plane.so). We follow a [Code of conduct](https://github.com/makeplane/plane/blob/master/CODE_OF_CONDUCT.md) in all our community channels.
-
-Feel free to ask questions, report bugs, participate in discussions, share ideas, request features, or showcase your projects. We’d love to hear from you!
+Contributions are welcome — for this fork's features (Helpdesk, KPI, etc.) open an issue or PR directly here. For
+bugs or requests related to Plane's core itself, consider also reporting to the
+[original repository](https://github.com/makeplane/plane/issues), since this fork doesn't automatically cherry-pick
+upstream fixes.
 
 ## 🛡️ Security
 
-If you discover a security vulnerability in Plane, please report it responsibly instead of opening a public issue. We take all legitimate reports seriously and will investigate them promptly. See [Security policy](https://github.com/makeplane/plane/blob/master/SECURITY.md) for more info.
+If you find a vulnerability, please report it responsibly instead of opening a public issue — see
+[SECURITY.md](./SECURITY.md).
 
-To disclose any security issues, please email us at security@plane.so.
+## 📄 License
 
-## 🤝 Contributing
+This project is distributed under the **GNU Affero General Public License v3.0** — see [`LICENSE.txt`](./LICENSE.txt).
 
-There are many ways you can contribute to Plane:
-
-- Report [bugs](https://github.com/makeplane/plane/issues/new?assignees=srinivaspendem%2Cpushya22&labels=%F0%9F%90%9Bbug&projects=&template=--bug-report.yaml&title=%5Bbug%5D%3A+) or submit [feature requests](https://github.com/makeplane/plane/issues/new?assignees=srinivaspendem%2Cpushya22&labels=%E2%9C%A8feature&projects=&template=--feature-request.yaml&title=%5Bfeature%5D%3A+).
-- Review the [documentation](https://docs.plane.so/) and submit [pull requests](https://github.com/makeplane/docs) to improve it—whether it's fixing typos or adding new content.
-- Talk or write about Plane or any other ecosystem integration and [let us know](https://forum.plane.so)!
-- Show your support by upvoting [popular feature requests](https://github.com/makeplane/plane/issues).
-
-Please read [CONTRIBUTING.md](https://github.com/makeplane/plane/blob/master/CONTRIBUTING.md) for details on the process for submitting pull requests to us.
-
-### Repo activity
-
-![Plane Repo Activity](https://repobeats.axiom.co/api/embed/2523c6ed2f77c082b7908c33e2ab208981d76c39.svg "Repobeats analytics image")
-
-### We couldn't have done this without you.
-
-<a href="https://github.com/makeplane/plane/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=makeplane/plane" />
-</a>
-
-## License
-
-This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/makeplane/plane/blob/master/LICENSE.txt).
+As an AGPL-3.0 fork, any distributed modification (including running it as a network-accessible service) must
+remain under the same license, with source code made available. The original copyright notices from Plane
+Software, Inc. present in the files are kept intact, as required by the license.
