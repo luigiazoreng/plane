@@ -14,11 +14,13 @@ from plane.db.models import (
     Estimate,
     EstimatePoint,
     Issue,
+    IssueAssignee,
     KpiConfig,
     KpiIssueAttribute,
     Project,
     ProjectMember,
     State,
+    User,
 )
 from plane.db.models.kpi import default_kpi_tables
 
@@ -318,6 +320,65 @@ class TestKpiIssueList:
         row = next(r for r in response.json()["results"] if r["id"] == str(issue.id))
         assert row["status"] == "pending"
         assert row["vf"] is None
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+class TestKpiMemberAggregates:
+    def test_split_equally_between_two_assignees(self, session_client, workspace, project, state, create_user):
+        # priority=high, no difficulty/repetitive configured -> Vp = 27 (Importance
+        # only). d=2 late -> p=0.5 -> Vf=13.5. Two assignees -> 13.5/6.75 each.
+        second_user = User.objects.create(email="second@plane.so", first_name="Second", last_name="User")
+        issue = _make_issue(
+            project, workspace, state, create_user,
+            priority="high",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 17, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        IssueAssignee.objects.create(issue=issue, assignee=create_user, project=project, workspace=workspace)
+        IssueAssignee.objects.create(issue=issue, assignee=second_user, project=project, workspace=workspace)
+
+        url = reverse("kpi-member-aggregates", kwargs={"slug": workspace.slug, "project_id": project.id})
+        response = session_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["unassigned_count"] == 0
+        assert len(body["results"]) == 2
+        for row in body["results"]:
+            assert row["sum_vp"] == pytest.approx(13.5)
+            assert row["sum_vf"] == pytest.approx(6.75)
+            assert row["counts"]["late"] == 1
+
+        total_vf = sum(r["sum_vf"] for r in body["results"])
+        assert total_vf == pytest.approx(13.5)
+
+    def test_issue_without_assignee_is_omitted_but_counted(
+        self, session_client, workspace, project, state, create_user
+    ):
+        _make_issue(
+            project, workspace, state, create_user,
+            priority="none",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 15, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        url = reverse("kpi-member-aggregates", kwargs={"slug": workspace.slug, "project_id": project.id})
+        response = session_client.get(url)
+        body = response.json()
+        assert body["results"] == []
+        assert body["unassigned_count"] == 1
+
+    def test_pending_issue_counts_vp_not_vf(self, session_client, workspace, project, state, create_user):
+        issue = _make_issue(project, workspace, state, create_user, priority="high", target_date=date(2026, 1, 15))
+        IssueAssignee.objects.create(issue=issue, assignee=create_user, project=project, workspace=workspace)
+
+        url = reverse("kpi-member-aggregates", kwargs={"slug": workspace.slug, "project_id": project.id})
+        response = session_client.get(url)
+        body = response.json()
+        assert len(body["results"]) == 1
+        row = body["results"][0]
+        assert row["sum_vp"] == pytest.approx(27)
+        assert row["sum_vf"] == 0
+        assert row["counts"]["pending"] == 1
 
 
 @pytest.mark.contract

@@ -84,6 +84,21 @@ export interface IKpiIssueListResponse {
   aggregates: IKpiAggregates;
 }
 
+export interface IKpiMemberAggregate {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  sum_vp: number;
+  sum_vf: number;
+  efficiency: number | null;
+  counts: Record<TKpiIssueStatus, number>;
+}
+
+export interface IKpiMemberAggregateResponse {
+  results: IKpiMemberAggregate[];
+  unassigned_count: number;
+}
+
 export interface IKpiIssueAttribute {
   id?: string;
   issue?: string;

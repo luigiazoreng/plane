@@ -149,6 +149,78 @@ class KpiIssueListEndpoint(BaseAPIView):
         )
 
 
+class KpiMemberAggregateEndpoint(BaseAPIView):
+    """Per-member breakdown of Vp/Vf for a project's work items.
+
+    Each issue's Vp/Vf is split equally across its assignees so the sum of
+    all members' scores matches the project-wide totals from
+    ``KpiIssueListEndpoint``. Issues without an assignee are omitted from
+    ``results`` (a mixed "Unassigned" row would distort a ranking of real
+    people) but are counted in ``unassigned_count``.
+    """
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    def get(self, request, slug, project_id):
+        workspace = Workspace.objects.get(slug=slug)
+        contract, _ = resolve_contract(workspace, project_id)
+
+        issues = Issue.issue_objects.filter(workspace=workspace, project_id=project_id).select_related(
+            "type",
+            "state",
+            "kpi_attribute",
+            "kpi_attribute__difficulty_estimate_point",
+            "kpi_attribute__repetitive_estimate_point",
+            "estimate_point",
+        ).prefetch_related("assignees")
+
+        buckets = {}
+        unassigned_count = 0
+
+        for issue in issues:
+            attribute = getattr(issue, "kpi_attribute", None)
+            task = _build_task(issue, attribute)
+            calc = calcular(task, contract)
+            row_status = _status_of(issue.completed_at, calc["d"])
+
+            assignees = list(issue.assignees.all())
+            if not assignees:
+                unassigned_count += 1
+                continue
+
+            n = len(assignees)
+            vp_share = calc["Vp"] / n
+            vf_share = (calc["Vf"] / n) if calc["Vf"] is not None else None
+
+            for user in assignees:
+                bucket = buckets.setdefault(
+                    str(user.id),
+                    {
+                        "user_id": str(user.id),
+                        "display_name": user.display_name,
+                        "avatar_url": user.avatar_url,
+                        "sum_vp": 0.0,
+                        "sum_vf": 0.0,
+                        "counts": {"on_time": 0, "early": 0, "late": 0, "pending": 0},
+                    },
+                )
+                bucket["sum_vp"] += vp_share
+                if vf_share is not None:
+                    bucket["sum_vf"] += vf_share
+                bucket["counts"][row_status] += 1
+
+        decimals = contract["params"].get("vf_decimals", 2)
+        results = []
+        for bucket in buckets.values():
+            bucket["sum_vp"] = round(bucket["sum_vp"], decimals)
+            bucket["sum_vf"] = round(bucket["sum_vf"], decimals)
+            bucket["efficiency"] = round(bucket["sum_vf"] / bucket["sum_vp"], 4) if bucket["sum_vp"] else None
+            results.append(bucket)
+
+        results.sort(key=lambda r: r["sum_vf"], reverse=True)
+
+        return Response({"results": results, "unassigned_count": unassigned_count})
+
+
 class KpiIssueAttributeEndpoint(BaseAPIView):
     """Read/update the KPI categorical attributes of a single issue."""
 

@@ -12,6 +12,8 @@ import type {
   IKpiConfig,
   IKpiIssueAttribute,
   IKpiIssueRow,
+  IKpiMemberAggregate,
+  IKpiMemberAggregateResponse,
   IKpiPreviewResponse,
   IKpiTaskInput,
 } from "@plane/types";
@@ -26,6 +28,8 @@ export interface IKpiStore {
   projectConfig: Record<string, IKpiConfig>; // projectId -> resolved config
   issues: Record<string, IKpiIssueRow[]>; // projectId -> rows
   aggregates: Record<string, IKpiAggregates>; // projectId -> aggregates
+  memberAggregates: Record<string, IKpiMemberAggregateResponse>; // projectId -> per-member breakdown
+  issueAttributes: Record<string, IKpiIssueAttribute>; // issueId -> KPI attributes
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
   // config actions
@@ -36,6 +40,8 @@ export interface IKpiStore {
   resetProjectConfig: (workspaceSlug: string, projectId: string) => Promise<void>;
   // issue actions
   fetchProjectIssues: (workspaceSlug: string, projectId: string) => Promise<IKpiIssueRow[]>;
+  fetchProjectMemberAggregates: (workspaceSlug: string, projectId: string) => Promise<IKpiMemberAggregate[]>;
+  fetchIssueAttributes: (workspaceSlug: string, projectId: string, issueId: string) => Promise<IKpiIssueAttribute>;
   updateIssueAttributes: (
     workspaceSlug: string,
     projectId: string,
@@ -73,6 +79,8 @@ export class KpiStore implements IKpiStore {
   projectConfig: Record<string, IKpiConfig> = {};
   issues: Record<string, IKpiIssueRow[]> = {};
   aggregates: Record<string, IKpiAggregates> = {};
+  memberAggregates: Record<string, IKpiMemberAggregateResponse> = {};
+  issueAttributes: Record<string, IKpiIssueAttribute> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
 
@@ -84,6 +92,8 @@ export class KpiStore implements IKpiStore {
       projectConfig: observable,
       issues: observable,
       aggregates: observable,
+      memberAggregates: observable,
+      issueAttributes: observable,
       loadingState: observable,
       errorState: observable,
       fetchWorkspaceConfig: action,
@@ -92,6 +102,8 @@ export class KpiStore implements IKpiStore {
       updateProjectConfig: action,
       resetProjectConfig: action,
       fetchProjectIssues: action,
+      fetchProjectMemberAggregates: action,
+      fetchIssueAttributes: action,
       updateIssueAttributes: action,
       updateIssueEstimate: action,
       updateIssueDifficultyEstimate: action,
@@ -164,6 +176,27 @@ export class KpiStore implements IKpiStore {
     }
   };
 
+  fetchProjectMemberAggregates = async (workspaceSlug: string, projectId: string): Promise<IKpiMemberAggregate[]> => {
+    this._setLoading(`member-aggregates-${projectId}`, true);
+    try {
+      const response = await this.kpiService.getProjectMemberAggregates(workspaceSlug, projectId);
+      runInAction(() => set(this.memberAggregates, [projectId], response));
+      return response.results;
+    } finally {
+      this._setLoading(`member-aggregates-${projectId}`, false);
+    }
+  };
+
+  fetchIssueAttributes = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string
+  ): Promise<IKpiIssueAttribute> => {
+    const attribute = await this.kpiService.getIssueAttributes(workspaceSlug, projectId, issueId);
+    runInAction(() => set(this.issueAttributes, [issueId], attribute));
+    return attribute;
+  };
+
   updateIssueAttributes = async (
     workspaceSlug: string,
     projectId: string,
@@ -192,7 +225,10 @@ export class KpiStore implements IKpiStore {
     estimatePointId: string | null
   ): Promise<void> => {
     await this.kpiService.updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
-    await this.fetchProjectIssues(workspaceSlug, projectId);
+    await Promise.all([
+      this.fetchProjectIssues(workspaceSlug, projectId),
+      this.fetchIssueAttributes(workspaceSlug, projectId, issueId),
+    ]);
   };
 
   updateIssueRepetitiveEstimate = async (
@@ -202,7 +238,10 @@ export class KpiStore implements IKpiStore {
     estimatePointId: string | null
   ): Promise<void> => {
     await this.kpiService.updateIssueRepetitiveEstimate(workspaceSlug, projectId, issueId, estimatePointId);
-    await this.fetchProjectIssues(workspaceSlug, projectId);
+    await Promise.all([
+      this.fetchProjectIssues(workspaceSlug, projectId),
+      this.fetchIssueAttributes(workspaceSlug, projectId, issueId),
+    ]);
   };
 
   updateIssuePriority = async (

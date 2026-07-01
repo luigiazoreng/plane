@@ -4,6 +4,7 @@ from .config import (
 )
 from .issue import (
     KpiIssueListEndpoint,
+    KpiMemberAggregateEndpoint,
     KpiIssueAttributeEndpoint,
     KpiIssueEstimateEndpoint,
     KpiIssueRepetitiveEstimateEndpoint,
@@ -15,6 +16,7 @@ __all__ = [
     "KpiWorkspaceConfigEndpoint",
     "KpiProjectConfigEndpoint",
     "KpiIssueListEndpoint",
+    "KpiMemberAggregateEndpoint",
     "KpiIssueAttributeEndpoint",
     "KpiIssueEstimateEndpoint",
     "KpiIssueRepetitiveEstimateEndpoint",

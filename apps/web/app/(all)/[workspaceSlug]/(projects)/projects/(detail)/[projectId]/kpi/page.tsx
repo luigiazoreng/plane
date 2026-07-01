@@ -9,19 +9,17 @@ import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AlertCircle, Award, CheckCircle2, Clock, Layers, Settings, TrendingUp } from "lucide-react";
-import { EUserPermissionsLevel } from "@plane/constants";
-import { EUserProjectRoles } from "@plane/types";
-import type { IKpiAggregates, IKpiIssueRow } from "@plane/types";
+import type { IKpiAggregates } from "@plane/types";
 import { Spinner } from "@plane/ui";
 import { cn } from "@plane/utils";
 // components
 import { KpiCurveChart } from "@/components/kpi/curve-chart";
-import { KpiIssuesTable } from "@/components/kpi/issues-table";
+import { KpiMemberBarChart } from "@/components/kpi/member-bar-chart";
+import { KpiMemberList } from "@/components/kpi/member-list";
 import { PageHead } from "@/components/core/page-title";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useKpi } from "@/hooks/store/use-kpi";
-import { useUserPermissions } from "@/hooks/store/user";
 
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString());
 
@@ -84,23 +82,22 @@ function StatBar({ agg }: { agg: IKpiAggregates | undefined }) {
 
 function ProjectKpiPage() {
   const { workspaceSlug, projectId } = useParams() as { workspaceSlug: string; projectId: string };
-  const { projectConfig, issues, aggregates, fetchProjectConfig, fetchProjectIssues } = useKpi();
+  const {
+    projectConfig,
+    aggregates,
+    memberAggregates,
+    fetchProjectConfig,
+    fetchProjectIssues,
+    fetchProjectMemberAggregates,
+  } = useKpi();
   const { getProjectEstimates } = useProjectEstimates();
-  const { allowPermissions } = useUserPermissions();
 
   const [loading, setLoading] = useState(true);
-  const [selectedRow, setSelectedRow] = useState<IKpiIssueRow | null>(null);
+  const [selectedPriorityLevel, setSelectedPriorityLevel] = useState<string | null>(null);
 
   const config = projectConfig[projectId];
-  const rows = issues[projectId] ?? [];
   const agg = aggregates[projectId];
-
-  const canEdit = allowPermissions(
-    [EUserProjectRoles.ADMIN, EUserProjectRoles.MEMBER],
-    EUserPermissionsLevel.PROJECT,
-    workspaceSlug,
-    projectId
-  );
+  const memberAgg = memberAggregates[projectId];
 
   useEffect(() => {
     let mounted = true;
@@ -108,18 +105,33 @@ function ProjectKpiPage() {
     // Difficulty is the issue's native estimate -> preload so the dropdown can
     // resolve and display the currently selected estimate value.
     getProjectEstimates(workspaceSlug, projectId).catch(() => {});
-    Promise.all([fetchProjectConfig(workspaceSlug, projectId), fetchProjectIssues(workspaceSlug, projectId)]).finally(
-      () => mounted && setLoading(false)
-    );
+    Promise.all([
+      fetchProjectConfig(workspaceSlug, projectId),
+      // Still fetched for the project-wide StatBar aggregates; the per-issue
+      // rows themselves are no longer rendered on this (now read-only) page.
+      fetchProjectIssues(workspaceSlug, projectId),
+      fetchProjectMemberAggregates(workspaceSlug, projectId),
+    ]).finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, projectId, fetchProjectConfig, fetchProjectIssues, getProjectEstimates]);
+  }, [
+    workspaceSlug,
+    projectId,
+    fetchProjectConfig,
+    fetchProjectIssues,
+    fetchProjectMemberAggregates,
+    getProjectEstimates,
+  ]);
 
-  const selectedB = useMemo(() => {
-    if (!config || !selectedRow) return 0;
-    return config.tables.priority?.[selectedRow.priority]?.b ?? 0;
-  }, [config, selectedRow]);
+  const priorityLevels = useMemo(() => Object.keys(config?.tables.priority ?? {}), [config]);
+
+  const activePriorityLevel = selectedPriorityLevel ?? priorityLevels[0] ?? null;
+
+  const activeB = useMemo(() => {
+    if (!config || !activePriorityLevel) return 0;
+    return config.tables.priority?.[activePriorityLevel]?.b ?? 0;
+  }, [config, activePriorityLevel]);
 
   if (loading || !config) {
     return (
@@ -138,7 +150,7 @@ function ProjectKpiPage() {
         {/* Section header */}
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-subtle px-page-x">
           <div className="flex items-baseline gap-2 truncate">
-            <h3 className="text-13 font-medium text-primary">Work item scoring</h3>
+            <h3 className="text-13 font-medium text-primary">Team scoring</h3>
             <span className="truncate text-12 text-tertiary">
               <span className="capitalize">{config.penalty_mode.replace("_", " ")}</span>
               {" · "}k = {config.k}
@@ -154,30 +166,46 @@ function ProjectKpiPage() {
           </Link>
         </div>
 
-        {/* Table + curve */}
+        {/* Member scoring + charts */}
         <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
           <div className="vertical-scrollbar horizontal-scrollbar scrollbar-lg min-h-0 flex-1 overflow-auto">
-            <KpiIssuesTable
-              workspaceSlug={workspaceSlug}
-              projectId={projectId}
-              rows={rows}
-              config={config}
-              canEdit={canEdit}
-              onSelectRow={setSelectedRow}
-              selectedRowId={selectedRow?.id ?? null}
-            />
+            <KpiMemberList results={memberAgg?.results ?? []} unassignedCount={memberAgg?.unassigned_count ?? 0} />
           </div>
 
-          {/* Penalty curve */}
-          <div className="flex shrink-0 flex-col border-t border-subtle bg-surface-1 lg:w-[360px] lg:border-t-0 lg:border-l">
-            <div className="flex h-11 shrink-0 flex-col justify-center border-b border-subtle px-page-x">
-              <h4 className="text-13 font-medium text-primary">Penalty curve p(d)</h4>
-              <p className="truncate text-12 text-tertiary">
-                {selectedRow ? `${selectedRow.name} · b = ${selectedB}` : "Click a row to mark its position"}
-              </p>
+          <div className="flex shrink-0 flex-col gap-6 overflow-y-auto border-t border-subtle bg-surface-1 py-4 lg:w-[420px] lg:border-t-0 lg:border-l">
+            <div>
+              <h4 className="px-page-x text-13 font-medium text-primary">Final score by member</h4>
+              <KpiMemberBarChart results={memberAgg?.results ?? []} />
             </div>
-            <div className="p-page-x">
-              <KpiCurveChart config={config} b={selectedB || 0.25} markerD={selectedRow?.d ?? null} />
+
+            <div>
+              <div className="flex items-center justify-between px-page-x">
+                <h4 className="text-13 font-medium text-primary">Penalty curve p(d)</h4>
+              </div>
+              <div className="flex flex-wrap gap-1.5 px-page-x pt-2">
+                {priorityLevels.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setSelectedPriorityLevel(level)}
+                    className={cn(
+                      "rounded px-2 py-1 text-11 font-medium transition-colors",
+                      level === activePriorityLevel
+                        ? "bg-accent-primary/10 text-accent-primary"
+                        : "text-tertiary hover:bg-layer-1 hover:text-secondary"
+                    )}
+                  >
+                    {config.tables.priority[level]?.label ?? level}
+                  </button>
+                ))}
+              </div>
+              <p className="px-page-x pt-2 text-12 text-tertiary">
+                {config.tables.priority[activePriorityLevel ?? ""]?.label ?? activePriorityLevel} priority · b ={" "}
+                {activeB}
+              </p>
+              <div className="px-page-x pt-2">
+                <KpiCurveChart config={config} b={activeB || 0.25} markerD={null} />
+              </div>
             </div>
           </div>
         </div>

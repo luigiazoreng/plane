@@ -13,6 +13,7 @@ import { cn } from "@plane/utils";
 import { EstimateDropdown } from "@/components/dropdowns/estimate";
 import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { useKpi } from "@/hooks/store/use-kpi";
+import { StatusBadge } from "./status-badge";
 
 type Props = {
   workspaceSlug: string;
@@ -24,24 +25,8 @@ type Props = {
   selectedRowId?: string | null;
 };
 
-const STATUS_BADGE: Record<string, { className: string; label: string }> = {
-  on_time: { className: "bg-success-subtle text-success-primary", label: "On time" },
-  early: { className: "bg-accent-subtle text-accent-primary", label: "Early" },
-  late: { className: "bg-danger-subtle text-danger-primary", label: "Late" },
-  pending: { className: "bg-layer-1 text-tertiary", label: "Pending" },
-};
-
 const fmt = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
-
-const StatusBadge = ({ status }: { status: string }) => {
-  const s = STATUS_BADGE[status] ?? STATUS_BADGE.pending;
-  return (
-    <span className={cn("inline-flex items-center rounded px-2 py-0.5 text-11 font-medium", s.className)}>
-      {s.label}
-    </span>
-  );
-};
 
 const HEAD = "h-11 bg-layer-1 px-page-x text-11 font-medium text-tertiary";
 

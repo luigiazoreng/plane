@@ -4,6 +4,7 @@ from plane.app.views.kpi import (
     KpiWorkspaceConfigEndpoint,
     KpiProjectConfigEndpoint,
     KpiIssueListEndpoint,
+    KpiMemberAggregateEndpoint,
     KpiIssueAttributeEndpoint,
     KpiIssueEstimateEndpoint,
     KpiIssueRepetitiveEstimateEndpoint,
@@ -29,6 +30,12 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/issues/",
         KpiIssueListEndpoint.as_view(),
         name="kpi-issues",
+    ),
+    # Per-member Vp/Vf breakdown (equal split across assignees)
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/members/",
+        KpiMemberAggregateEndpoint.as_view(),
+        name="kpi-member-aggregates",
     ),
     # Per-issue KPI attributes
     path(

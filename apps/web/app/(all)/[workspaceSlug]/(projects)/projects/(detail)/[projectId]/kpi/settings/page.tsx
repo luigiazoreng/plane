@@ -15,8 +15,9 @@ import type { IKpiConfig } from "@plane/types";
 import { Spinner } from "@plane/ui";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 // components
-import { KpiConfigEditor } from "@/components/kpi/config-editor";
 import { PageHead } from "@/components/core/page-title";
+import { KpiConfigEditor } from "@/components/kpi/config-editor";
+import { SettingsHeading } from "@/components/settings/heading";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useKpi } from "@/hooks/store/use-kpi";
@@ -33,7 +34,7 @@ function ProjectKpiSettingsPage() {
 
   const config = projectConfig[projectId];
 
-  const estimateIds = estimateIdsByProjectId(projectId) ?? [];
+  const estimateIds = useMemo(() => estimateIdsByProjectId(projectId) ?? [], [estimateIdsByProjectId, projectId]);
   const estimateOptions = useMemo(
     () =>
       estimateIds
@@ -111,29 +112,31 @@ function ProjectKpiSettingsPage() {
   return (
     <>
       <PageHead title="KPI Settings" />
-      <div className="mx-auto h-full w-full max-w-4xl overflow-y-auto p-6">
-        <div className="mb-6 flex items-center gap-2">
+      <div className="flex h-full w-full flex-col overflow-hidden bg-surface-1">
+        <div className="shrink-0 border-b border-subtle px-page-x py-4">
           <Link
             href={`/${workspaceSlug}/projects/${projectId}/kpi`}
-            className="text-sm text-custom-text-300 hover:text-custom-text-100 flex items-center gap-1"
+            className="mb-3 inline-flex items-center gap-1 text-13 text-secondary transition-colors hover:text-primary"
           >
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-3.5" />
             Back to KPI
           </Link>
+          <SettingsHeading
+            title="KPI configuration"
+            description="Edit the point tables, priority factors and global parameters. Changes apply immediately to scoring."
+          />
         </div>
-        <h2 className="text-lg text-custom-text-100 mb-1 font-semibold">KPI configuration</h2>
-        <p className="text-sm text-custom-text-400 mb-6">
-          Edit the point tables, priority factors and global parameters. Changes apply immediately to scoring.
-        </p>
-        <KpiConfigEditor
-          config={config}
-          canEdit={canEdit}
-          saving={saving}
-          onSave={handleSave}
-          onReset={handleReset}
-          estimateOptions={estimateOptions}
-          estimateValuesById={estimateValuesById}
-        />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <KpiConfigEditor
+            config={config}
+            canEdit={canEdit}
+            saving={saving}
+            onSave={handleSave}
+            onReset={handleReset}
+            estimateOptions={estimateOptions}
+            estimateValuesById={estimateValuesById}
+          />
+        </div>
       </div>
     </>
   );

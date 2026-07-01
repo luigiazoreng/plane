@@ -79,6 +79,19 @@ O motor **não** cria uma entidade de tarefa própria. Ele pontua os `Issue` já
 - A aba Project Settings > Estimates mostra um switch por estimate, badge `Active`/`Inactive` por system e marca `Default` no estimate apontado por `Project.estimate`.
 - O dropdown de estimate do work item lista os points dos estimate systems ativos agrupados pelo nome do estimate system. O KPI continua podendo forçar um estimate específico via `estimateId`, mesmo que ele não esteja no dropdown nativo.
 
+### D7 — Tela inicial do KPI é um dashboard por membro (view-only); D/R saem para o work item
+
+> Decisão tomada em 2026-07-01. Redefine a função da tela `kpi/` (nível projeto): ela não é mais uma tabela de work items editável, e sim um dashboard de visualização.
+
+- A tela inicial (`kpi/page.tsx`) deixa de renderizar a tabela de work items (`KpiIssuesTable`). Em vez disso mostra: (1) o resumo agregado do projeto (`StatBar`, inalterado), (2) uma lista por **membro** do projeto com Σ Vp, Σ Vf, eficiência e contagem por status, e (3) gráficos — barra de Vf por membro e a curva `p(d)` (agora selecionável por nível de prioridade, já que não há mais uma linha de work item selecionada). A tela é **100% somente leitura**.
+- `KpiIssuesTable` (`core/components/kpi/issues-table.tsx`) **não foi removida** — só deixou de ser importada pela tela inicial. Fica disponível para reaproveitamento futuro.
+- Divisão de score por membro: quando um work item tem `N` assignees, cada um recebe `Vp/N` e `Vf/N` (quando `Vf` existe). A soma dos membros bate com os agregados de projeto existentes. Work items sem assignee não entram em nenhum bucket de membro (ficam de fora do ranking, mas continuam nos agregados de projeto); o endpoint expõe `unassigned_count` à parte.
+- Novo endpoint `GET .../kpi/members/` (`KpiMemberAggregateEndpoint`) faz essa agregação — não altera `KpiIssueListEndpoint`, que continua existindo e retornando os agregados de projeto usados pelo `StatBar`.
+- **Difficulty e Repetitive saem da tela de KPI** e passam a ser definidos **no próprio work item**: no modal de criação/edição (`issue-modal/`) e na sidebar de detalhe do work item (`issue-detail/sidebar.tsx`), ao lado do Estimate nativo, reaproveitando o mesmo `EstimateDropdown` com `estimateId` restrito ao `difficulty_estimate`/`repetitive_estimate` da `KpiConfig` do projeto. Os campos só aparecem se o projeto tiver esses estimates configurados (sem novo toggle "KPI habilitado" — não existe hoje e não foi criado).
+- Como `difficulty_estimate_point`/`repetitive_estimate_point` não são campos de `TIssue` (são `KpiIssueAttribute`, entidade separada), o modal os administra fora do form do `react-hook-form`, via uma extensão do `IssueModalContext` (`kpiDifficultyEstimatePoint`/`kpiRepetitiveEstimatePoint` + `handleCreateUpdateKpiAttributes`), persistidos com uma chamada extra depois que o issue é criado/atualizado — mesmo padrão já usado para as custom properties de issue type (`handleCreateUpdatePropertyValues`).
+- **Settings do KPI (`kpi/settings/page.tsx`, `KpiConfigEditor`) não mudou** — continua sendo a única tela do lead para ajustar o motor de cálculo.
+- Sem migração de banco — nenhuma mudança de modelo, só um endpoint de agregação novo e realocação de UI.
+
 ### D3 — Motor de cálculo puro e isolado
 
 A camada de cálculo (`plane/kpi/engine.py`) é uma função pura `calcular(task_fields, config) -> {Vp, d, p, Vf}` sem acesso a banco. Isso permite:
@@ -263,7 +276,8 @@ Padrão idêntico ao Helpdesk: URLs em `apps/api/plane/app/urls/kpi.py`, registr
 | ------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | GET/PUT | `workspaces/<slug>/kpi/config/`                                              | Config default do workspace (project=null).                                              |
 | GET/PUT | `workspaces/<slug>/projects/<id>/kpi/config/`                                | Config do projeto (cria/edita; herda do workspace se ausente).                           |
-| GET     | `workspaces/<slug>/projects/<id>/kpi/issues/`                                | Lista issues do projeto com `Vp`, `d`, `p`, `Vf` calculados + agregados.                 |
+| GET     | `workspaces/<slug>/projects/<id>/kpi/issues/`                                | Lista issues do projeto com `Vp`, `d`, `p`, `Vf` calculados + agregados de projeto.      |
+| GET     | `workspaces/<slug>/projects/<id>/kpi/members/`                               | Agregação por membro (Vp/Vf divididos igualmente entre assignees) + `unassigned_count`.  |
 | GET/PUT | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/attributes/`          | Lê/define atributos KPI laterais e `type_override` da issue.                             |
 | PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/estimate/`            | Compatibilidade: define `difficulty_estimate_point`, sem alterar `Issue.estimate_point`. |
 | PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/repetitive-estimate/` | Define `repetitive_estimate_point`.                                                      |
@@ -282,9 +296,10 @@ Reaproveitar os padrões do Helpdesk (sidebar, rotas, store, service, types).
 - **Engine espelhado:** `apps/web/core/helpers/kpi/engine.ts` — reimplementação 1:1 do motor para preview/curva sem round-trip (validado contra os mesmos 6 casos de teste).
 - **Store:** `apps/web/core/store/kpi.store.ts`.
 - **Páginas (nível projeto):**
-  - `:workspaceSlug/projects/:projectId/kpi` — tabela de issues com `Vp/d/p/Vf`, chips de filtro por status, agregados no header.
-  - `:workspaceSlug/projects/:projectId/kpi/settings` — editor de config: tabelas D/R/I/P/T (add/remove/editar níveis; Priority edita pontos **e** `b`), `k` (slider 0–1), toggle de `penalty_mode`, `day_count`, `day_rounding`, `allow_negative`, `max_multiplier`, `vf_decimals`.
-  - **Visualização da curva** `p(d)` do modo selecionado, com marcador no `d` da issue selecionada; recalcula ao mudar `b`, `k` ou modo.
+  - `:workspaceSlug/projects/:projectId/kpi` — dashboard **somente leitura**: `StatBar` (agregados de projeto), lista por membro (Σ Vp/Vf, eficiência, contagem por status), gráfico de barras de Vf por membro, e a curva `p(d)` com seletor de nível de prioridade (D7). Não tem mais tabela de work items nem edição inline.
+  - `:workspaceSlug/projects/:projectId/kpi/settings` — editor de config: tabelas D/R/I/P/T (add/remove/editar níveis; Priority edita pontos **e** `b`), `k` (slider 0–1), toggle de `penalty_mode`, `day_count`, `day_rounding`, `allow_negative`, `max_multiplier`, `vf_decimals`. Inalterado por D7.
+  - **Visualização da curva** `p(d)` do modo selecionado; no dashboard o marcador de `d` foi substituído por um seletor de nível de prioridade (D7), já que não há mais uma issue selecionada numa tabela.
+- **Difficulty/Repetitive no work item (D7):** editáveis no modal de criação/edição (`issue-modal/components/default-properties.tsx`) e na sidebar de detalhe (`issue-detail/sidebar.tsx`), reaproveitando `EstimateDropdown`. `KpiIssuesTable` (`core/components/kpi/issues-table.tsx`) continua existindo mas não é mais renderizada por nenhuma página.
 - **Sidebar:** adicionar item "KPI" ao project navigation (`project-navigation.tsx`) com ícone apropriado (ex.: `Gauge`/`TrendingUp`).
 
 ---
@@ -442,6 +457,14 @@ Config padrão, `k = 0.5`.
 - **Work item:** dropdown nativo e Power-K mostram apenas points de estimates ativos. Histórico continua resolvendo points de estimates inativos para exibição quando o `Issue.estimate_point` já aponta para eles.
 
 ---
+
+### 2026-07-01 — Dashboard por membro (view-only) + Difficulty/Repetitive no work item (D7)
+
+- **Backend:** `KpiMemberAggregateEndpoint` (`app/views/kpi/issue.py`) — `GET .../kpi/members/`, agrega `Vp`/`Vf` por assignee (`prefetch_related("assignees")`, sem N+1), dividindo igualmente entre os assignees de cada issue. Issues sem assignee ficam fora de `results` (contadas em `unassigned_count`). Rota registrada em `app/urls/kpi.py`. Testes de contrato novos em `tests/contract/app/test_kpi.py::TestKpiMemberAggregates` (split 50/50 entre 2 assignees, issue sem assignee, issue pendente). Sem migração.
+- **Frontend — dados:** `IKpiMemberAggregate`/`IKpiMemberAggregateResponse` (`packages/types/src/kpi.ts`), `KpiService.getProjectMemberAggregates` (`packages/services`), `KpiStore.memberAggregates`/`fetchProjectMemberAggregates` + `KpiStore.issueAttributes`/`fetchIssueAttributes` (novo, usado pela sidebar do work item).
+- **Frontend — dashboard:** `kpi/page.tsx` reescrito — `StatBar` mantido, `KpiIssuesTable` removida da tela e substituída por `KpiMemberList` (novo, `core/components/kpi/member-list.tsx`) + `KpiMemberBarChart` (novo, usa `BarChart` de `@plane/propel/charts/bar-chart`) + `KpiCurveChart` com seletor de prioridade em vez de linha selecionada. `StatusBadge`/`STATUS_BADGE` extraído de `issues-table.tsx` para `core/components/kpi/status-badge.tsx` (reaproveitado pelos dois componentes, sem duplicar).
+- **Frontend — work item:** Difficulty/Repetitive viram campos do work item, não da tela de KPI. `IssueModalContext` ganhou `kpiDifficultyEstimatePoint`/`kpiRepetitiveEstimatePoint` + `handleCreateUpdateKpiAttributes` (implementado em `ce/components/issues/issue-modal/provider.tsx`); `default-properties.tsx` renderiza os dois `EstimateDropdown` (gated por `KpiConfig.difficulty_estimate`/`repetitive_estimate`) e pré-carrega o valor atual ao editar um issue existente; `base.tsx` persiste depois de criar/atualizar o issue. `issue-detail/sidebar.tsx` ganhou os mesmos dois campos ao lado do Estimate nativo, lendo/escrevendo via `KpiStore` (`issueAttributes`, `updateIssueDifficultyEstimate`/`updateIssueRepetitiveEstimate`, já existentes).
+- **Gates:** `pnpm --filter=web check:types` — mesmos 40 erros pré-existentes (não relacionados, `toSorted`/ES2023) antes e depois da mudança, zero erros novos. `oxlint` nos arquivos tocados — 0 erros, únicos warnings são padrões pré-existentes (`jsx-no-constructed-context-values` no provider, `no-shadow` em `base.tsx`, confirmados via `git stash` que já existiam antes desta mudança). Backend validado via `py_compile` (Django não instalado no host — suíte pytest pendente de ambiente, mesma limitação já documentada nas fases anteriores).
 
 ## Critérios de Aceitação
 

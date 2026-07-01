@@ -11,6 +11,7 @@ import type {
   IKpiIssueEstimate,
   IKpiIssuePriority,
   IKpiIssueListResponse,
+  IKpiMemberAggregateResponse,
   IKpiPreviewResponse,
   IKpiTaskInput,
 } from "@plane/types";
@@ -47,6 +48,10 @@ export class KpiService extends APIService {
 
   async getProjectIssues(workspaceSlug: string, projectId: string): Promise<IKpiIssueListResponse> {
     return this.get(`${workspaceSlug}/projects/${projectId}/kpi/issues/`).then((res) => res?.data);
+  }
+
+  async getProjectMemberAggregates(workspaceSlug: string, projectId: string): Promise<IKpiMemberAggregateResponse> {
+    return this.get(`${workspaceSlug}/projects/${projectId}/kpi/members/`).then((res) => res?.data);
   }
 
   async getIssueAttributes(workspaceSlug: string, projectId: string, issueId: string): Promise<IKpiIssueAttribute> {
