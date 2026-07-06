@@ -280,6 +280,14 @@ Todos os modelos herdam de `WorkspaceBaseModel` (workspace FK obrigatório, proj
   - [x] **Store:** observable `members: Record<string, IHelpdeskMember[]>` + actions `fetchMembers`, `addMembers`, `updateMember`, `removeMember` + computed `getWorkspaceMembers` adicionados ao `helpdesk.store.ts`. `fetchMembers` chamado no mount da settings page.
   - [x] **Settings page — aba "Members":** nova aba em `/{wSlug}/helpdesk/settings`; "Add members" abre painel inline com `MemberDropdown` (multi-select de workspace members) + seletor de role (Admin/Member/Guest); lista de membros com avatar, nome, role dropdown editável inline e botão de remoção; `ConfirmModal` antes de remover; sub-component `HelpdeskMemberRow`.
 
+- [x] **Fase 16: Forgot Password para clientes do portal**
+  - [x] **Backend:** token de reset assinado via JWT (mesmo padrão de `get_customer_token`), com `purpose=helpdesk_password_reset`, `exp` de 1h e `pwd_sig` (hash do password hash atual) para invalidar o token automaticamente após o uso ou troca de senha — evita depender de `PasswordResetTokenGenerator` do Django (feito para o `auth.User`, não para `HelpdeskCustomer`).
+  - [x] `PublicHelpdeskCustomerForgotPasswordEndpoint` (`POST /helpdesk/public/portals/<slug>/auth/forgot-password/`): resposta genérica sempre 200 (não revela se o e-mail existe); dispara `helpdesk_forgot_password.delay(...)` via Celery quando o customer existe.
+  - [x] `PublicHelpdeskCustomerResetPasswordEndpoint` (`POST /helpdesk/public/portals/<slug>/auth/reset-password/`): decodifica o JWT, valida `purpose`/`workspace_id`/`pwd_sig`, valida força da senha com `zxcvbn` (mesmo threshold do fluxo principal do Plane, score < 3 rejeitado).
+  - [x] Task `apps/api/plane/bgtasks/helpdesk_forgot_password_task.py` + template `apps/api/templates/emails/helpdesk/forgot_password.html` (cópia do template de auth principal, com copy ajustado para "support portal"). Link do e-mail aponta para `/helpdesk/p/<slug>/reset-password?token=...`.
+  - [x] Frontend: link "Forgot password?" na página de login do portal; novas páginas `/helpdesk/p/[publicSlug]/forgot-password` (pede e-mail, mostra mensagem genérica de sucesso) e `/helpdesk/p/[publicSlug]/reset-password` (lê `token` da query string, define nova senha, redireciona para login). Rotas registradas em `core.ts` antes do catch-all `:requestId`.
+  - [x] `PublicHelpdeskService` ganhou `forgotPasswordCustomer` / `resetPasswordCustomer`; `public-helpdesk.store.ts` expõe as mesmas actions como passthrough (sem estado observável novo). **Lembrete:** `@plane/services` é publicado via `dist/` (`tsdown`) — qualquer novo método no service exige `pnpm build` no pacote antes do `tsc --noEmit` reconhecer os tipos.
+
 ---
 
 ## Pendências Técnicas

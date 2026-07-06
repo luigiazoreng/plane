@@ -6,6 +6,8 @@ from plane.app.views.helpdesk import (
     HelpdeskCustomerRegisterEndpoint,
     PublicHelpdeskCustomerLoginEndpoint,
     PublicHelpdeskCustomerRegisterEndpoint,
+    PublicHelpdeskCustomerForgotPasswordEndpoint,
+    PublicHelpdeskCustomerResetPasswordEndpoint,
     HelpdeskPortalViewSet,
     PublicHelpdeskPortalEndpoint,
     HelpdeskFormViewSet,
@@ -147,6 +149,16 @@ urlpatterns = [
         "helpdesk/public/portals/<str:public_slug>/auth/register/",
         PublicHelpdeskCustomerRegisterEndpoint.as_view(),
         name="public-helpdesk-customer-register",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/auth/forgot-password/",
+        PublicHelpdeskCustomerForgotPasswordEndpoint.as_view(),
+        name="public-helpdesk-customer-forgot-password",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/auth/reset-password/",
+        PublicHelpdeskCustomerResetPasswordEndpoint.as_view(),
+        name="public-helpdesk-customer-reset-password",
     ),
     path(
         "helpdesk/public/portals/<str:public_slug>/requests/",

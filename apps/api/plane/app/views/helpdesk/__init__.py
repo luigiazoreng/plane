@@ -3,6 +3,8 @@ from .auth import (
     HelpdeskCustomerRegisterEndpoint,
     PublicHelpdeskCustomerLoginEndpoint,
     PublicHelpdeskCustomerRegisterEndpoint,
+    PublicHelpdeskCustomerForgotPasswordEndpoint,
+    PublicHelpdeskCustomerResetPasswordEndpoint,
 )
 from .portal import HelpdeskPortalViewSet, PublicHelpdeskPortalEndpoint
 from .form import (

@@ -303,6 +303,14 @@ export class PublicHelpdeskService extends APIService {
     return this.post(`portals/${publicSlug}/auth/register/`, data).then((res) => res?.data);
   }
 
+  async forgotPasswordCustomer(publicSlug: string, email: string): Promise<{ message: string }> {
+    return this.post(`portals/${publicSlug}/auth/forgot-password/`, { email }).then((res) => res?.data);
+  }
+
+  async resetPasswordCustomer(publicSlug: string, token: string, password: string): Promise<{ message: string }> {
+    return this.post(`portals/${publicSlug}/auth/reset-password/`, { token, password }).then((res) => res?.data);
+  }
+
   // --- Customer Portal ---
 
   async getPublicRequests(publicSlug: string, token?: string): Promise<IHelpdeskRequest[]> {

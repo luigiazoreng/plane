@@ -73,9 +73,17 @@ const HelpdeskLoginPage = observer(() => {
         </div>
 
         <div>
-          <label htmlFor="password" className="text-sm text-text-200 mb-1.5 block font-medium">
-            Password
-          </label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="password" className="text-sm text-text-200 font-medium">
+              Password
+            </label>
+            <Link
+              to={`/helpdesk/p/${pSlug}/forgot-password`}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <Input
             id="password"
             type="password"

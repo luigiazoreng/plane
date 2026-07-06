@@ -53,6 +53,8 @@ export const coreRoutes: RouteConfigEntry[] = [
       route("helpdesk/p/:publicSlug/forms/:formSlug", "./helpdesk/p/[publicSlug]/forms/[formSlug]/page.tsx"),
       route("helpdesk/p/:publicSlug/login", "./helpdesk/p/[publicSlug]/login/page.tsx"),
       route("helpdesk/p/:publicSlug/register", "./helpdesk/p/[publicSlug]/register/page.tsx"),
+      route("helpdesk/p/:publicSlug/forgot-password", "./helpdesk/p/[publicSlug]/forgot-password/page.tsx"),
+      route("helpdesk/p/:publicSlug/reset-password", "./helpdesk/p/[publicSlug]/reset-password/page.tsx"),
       route("helpdesk/p/:publicSlug/:requestId", "./helpdesk/p/[publicSlug]/[requestId]/page.tsx"),
     ]),
   ]),

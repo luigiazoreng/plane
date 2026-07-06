@@ -40,6 +40,8 @@ export class PublicHelpdeskStore {
       fetchPortalForm: action,
       loginCustomer: action,
       registerCustomer: action,
+      forgotPasswordCustomer: action,
+      resetPasswordCustomer: action,
       fetchMyRequests: action,
       createPublicRequest: action,
       submitPublicForm: action,
@@ -151,6 +153,14 @@ export class PublicHelpdeskStore {
       this.setCustomerData(res.customer);
     });
     return res;
+  }
+
+  async forgotPasswordCustomer(publicSlug: string, email: string) {
+    return this.publicHelpdeskService.forgotPasswordCustomer(publicSlug, email);
+  }
+
+  async resetPasswordCustomer(publicSlug: string, token: string, password: string) {
+    return this.publicHelpdeskService.resetPasswordCustomer(publicSlug, token, password);
   }
 
   async fetchMyRequests(publicSlug: string) {
