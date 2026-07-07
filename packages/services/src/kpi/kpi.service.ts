@@ -54,6 +54,10 @@ export class KpiService extends APIService {
     return this.get(`${workspaceSlug}/projects/${projectId}/kpi/members/`).then((res) => res?.data);
   }
 
+  async getWorkspaceMemberAggregates(workspaceSlug: string): Promise<IKpiMemberAggregateResponse> {
+    return this.get(`${workspaceSlug}/kpi/members/`).then((res) => res?.data);
+  }
+
   async getIssueAttributes(workspaceSlug: string, projectId: string, issueId: string): Promise<IKpiIssueAttribute> {
     return this.get(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/attributes/`).then(
       (res) => res?.data

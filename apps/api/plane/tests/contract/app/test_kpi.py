@@ -402,3 +402,70 @@ class TestKpiPreview:
         assert body["result"]["p"] == pytest.approx(1.0)
         assert len(body["curve"]) > 0
         assert body["b"] == pytest.approx(0.30)
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+class TestWorkspaceKpiMemberAggregates:
+    def test_aggregates_across_all_projects_in_workspace(self, session_client, workspace, create_user):
+        # Create two projects
+        project1 = Project.objects.create(
+            name="Project 1", identifier="P1", workspace=workspace, created_by=create_user
+        )
+        ProjectMember.objects.create(project=project1, member=create_user, role=20, is_active=True)
+        
+        project2 = Project.objects.create(
+            name="Project 2", identifier="P2", workspace=workspace, created_by=create_user
+        )
+        ProjectMember.objects.create(project=project2, member=create_user, role=20, is_active=True)
+
+        state1 = State.objects.create(
+            name="Todo", color="#000", group="unstarted", project=project1, workspace=workspace, created_by=create_user
+        )
+        state2 = State.objects.create(
+            name="Todo", color="#000", group="unstarted", project=project2, workspace=workspace, created_by=create_user
+        )
+
+        # Create user
+        second_user = User.objects.create(email="second2@plane.so", first_name="Second", last_name="User")
+
+        # Project 1 issue (priority=high -> Vp=27. late by 2 days -> p=0.5 -> Vf=13.5)
+        issue1 = _make_issue(
+            project1, workspace, state1, create_user,
+            priority="high",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 17, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        IssueAssignee.objects.create(issue=issue1, assignee=create_user, project=project1, workspace=workspace)
+
+        # Project 2 issue (priority=urgent -> Vp=30. on time -> p=1.0 -> Vf=30)
+        issue2 = _make_issue(
+            project2, workspace, state2, create_user,
+            priority="urgent",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 15, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        IssueAssignee.objects.create(issue=issue2, assignee=create_user, project=project2, workspace=workspace)
+        IssueAssignee.objects.create(issue=issue2, assignee=second_user, project=project2, workspace=workspace)
+
+        url = reverse("workspace-kpi-member-aggregates", kwargs={"slug": workspace.slug})
+        response = session_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        
+        body = response.json()
+        assert body["unassigned_count"] == 0
+        assert len(body["results"]) == 2
+        
+        # create_user should have 13.5 (from issue1) + 15 (from issue2) = 28.5 Vf
+        create_user_row = next(r for r in body["results"] if r["user_id"] == str(create_user.id))
+        assert create_user_row["sum_vp"] == pytest.approx(27 + 15)  # 42
+        assert create_user_row["sum_vf"] == pytest.approx(13.5 + 15) # 28.5
+        assert create_user_row["counts"]["late"] == 1
+        assert create_user_row["counts"]["on_time"] == 1
+        
+        # second_user should have 15 Vf (from issue2)
+        second_user_row = next(r for r in body["results"] if r["user_id"] == str(second_user.id))
+        assert second_user_row["sum_vp"] == pytest.approx(15)
+        assert second_user_row["sum_vf"] == pytest.approx(15)
+        assert second_user_row["counts"]["late"] == 0
+        assert second_user_row["counts"]["on_time"] == 1

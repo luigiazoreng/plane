@@ -8,6 +8,7 @@ import React from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 import { Disclosure, Transition } from "@headlessui/react";
+import { Gauge } from "lucide-react";
 // plane imports
 import { AnalyticsIcon, CycleIcon, ProjectIcon, ViewsIcon } from "@plane/propel/icons";
 import { EUserWorkspaceRoles } from "@plane/types";
@@ -53,6 +54,13 @@ export const SidebarWorkspaceMenu = observer(function SidebarWorkspaceMenu() {
       href: `/${workspaceSlug}/analytics/`,
       access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER],
       Icon: AnalyticsIcon,
+    },
+    {
+      key: "kpi",
+      labelTranslationKey: "sidebar.kpi",
+      href: `/${workspaceSlug}/kpi/`,
+      access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER],
+      Icon: Gauge,
     },
   ];
 

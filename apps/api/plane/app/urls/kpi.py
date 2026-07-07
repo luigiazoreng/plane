@@ -5,6 +5,7 @@ from plane.app.views.kpi import (
     KpiProjectConfigEndpoint,
     KpiIssueListEndpoint,
     KpiMemberAggregateEndpoint,
+    WorkspaceKpiMemberAggregateEndpoint,
     KpiIssueAttributeEndpoint,
     KpiIssueEstimateEndpoint,
     KpiIssueRepetitiveEstimateEndpoint,
@@ -24,6 +25,12 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/config/",
         KpiProjectConfigEndpoint.as_view(),
         name="kpi-project-config",
+    ),
+    # Workspace members aggregates (across all projects)
+    path(
+        "workspaces/<str:slug>/kpi/members/",
+        WorkspaceKpiMemberAggregateEndpoint.as_view(),
+        name="workspace-kpi-member-aggregates",
     ),
     # Project issues with computed KPI values + aggregates
     path(

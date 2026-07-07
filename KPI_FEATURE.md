@@ -363,7 +363,15 @@ Reaproveitar os padrões do Helpdesk (sidebar, rotas, store, service, types).
 - [ ] (Opcional) Introduzir `KpiResult` como cache se a listagem ficar lenta. _(adiado — cálculo on-the-fly por enquanto)_
 - [ ] ⚠️ **Validação E2E pendente de ambiente:** aplicar migração `0140` + rodar `pytest` + subir app e clicar o fluxo. Não executável no host atual (sem Django/containers Plane).
 
-### Fase 7 — Integração futura com Helpdesk
+### Fase 7 — Workspace Level KPI Panel ✅
+
+- [x] Backend: `WorkspaceKpiMemberAggregateEndpoint` para agregar Vp/Vf entre todos os projetos de um workspace.
+- [x] Backend: Rota `/api/workspaces/<slug>/kpi/members/` registrada.
+- [x] Frontend: `KpiService.getWorkspaceMemberAggregates` e `KpiStore.workspaceMemberAggregates`.
+- [x] Frontend: Rota `/:workspaceSlug/kpi` configurada em `core.ts` e `WorkspaceKpiPage` adaptada a partir da página de nível de projeto, usando layout de workspace.
+- [x] Frontend: Link na barra lateral (sidebar) do workspace sob a seção Analytics, com ícone `Gauge`.
+
+### Fase 8 — Integração futura com Helpdesk
 
 - [ ] Generalizar o motor para aceitar `HelpdeskRequest` (start_date/target_date já existem em helpdesk — ver migração `0138`).
 - [ ] Config KPI no nível do portal/workspace do Helpdesk.

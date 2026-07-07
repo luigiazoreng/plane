@@ -29,6 +29,7 @@ export interface IKpiStore {
   issues: Record<string, IKpiIssueRow[]>; // projectId -> rows
   aggregates: Record<string, IKpiAggregates>; // projectId -> aggregates
   memberAggregates: Record<string, IKpiMemberAggregateResponse>; // projectId -> per-member breakdown
+  workspaceMemberAggregates: Record<string, IKpiMemberAggregateResponse>; // workspaceSlug -> per-member breakdown
   issueAttributes: Record<string, IKpiIssueAttribute>; // issueId -> KPI attributes
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
@@ -41,6 +42,7 @@ export interface IKpiStore {
   // issue actions
   fetchProjectIssues: (workspaceSlug: string, projectId: string) => Promise<IKpiIssueRow[]>;
   fetchProjectMemberAggregates: (workspaceSlug: string, projectId: string) => Promise<IKpiMemberAggregate[]>;
+  fetchWorkspaceMemberAggregates: (workspaceSlug: string) => Promise<IKpiMemberAggregate[]>;
   fetchIssueAttributes: (workspaceSlug: string, projectId: string, issueId: string) => Promise<IKpiIssueAttribute>;
   updateIssueAttributes: (
     workspaceSlug: string,
@@ -80,6 +82,7 @@ export class KpiStore implements IKpiStore {
   issues: Record<string, IKpiIssueRow[]> = {};
   aggregates: Record<string, IKpiAggregates> = {};
   memberAggregates: Record<string, IKpiMemberAggregateResponse> = {};
+  workspaceMemberAggregates: Record<string, IKpiMemberAggregateResponse> = {};
   issueAttributes: Record<string, IKpiIssueAttribute> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
@@ -103,6 +106,7 @@ export class KpiStore implements IKpiStore {
       resetProjectConfig: action,
       fetchProjectIssues: action,
       fetchProjectMemberAggregates: action,
+      fetchWorkspaceMemberAggregates: action,
       fetchIssueAttributes: action,
       updateIssueAttributes: action,
       updateIssueEstimate: action,
@@ -184,6 +188,17 @@ export class KpiStore implements IKpiStore {
       return response.results;
     } finally {
       this._setLoading(`member-aggregates-${projectId}`, false);
+    }
+  };
+
+  fetchWorkspaceMemberAggregates = async (workspaceSlug: string): Promise<IKpiMemberAggregate[]> => {
+    this._setLoading(`ws-member-aggregates-${workspaceSlug}`, true);
+    try {
+      const response = await this.kpiService.getWorkspaceMemberAggregates(workspaceSlug);
+      runInAction(() => set(this.workspaceMemberAggregates, [workspaceSlug], response));
+      return response.results;
+    } finally {
+      this._setLoading(`ws-member-aggregates-${workspaceSlug}`, false);
     }
   };
 
