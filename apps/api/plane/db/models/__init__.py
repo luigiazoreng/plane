@@ -108,3 +108,9 @@ from .kpi import (
     KpiConfig,
     KpiIssueAttribute,
 )
+
+from .ai import (
+    AIAgentRun,
+    AIAgentAction,
+    AIAgentConversation,
+)
