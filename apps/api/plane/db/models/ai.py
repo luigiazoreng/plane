@@ -13,7 +13,7 @@ class AIAgentRun(BaseModel):
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="ai_runs")
     mode = models.CharField(max_length=20) # 'ask' or 'build'
     provider = models.CharField(max_length=50) # 'openai', 'anthropic', etc.
-    model = models.CharField(max_length=50)
+    llm_model = models.CharField(max_length=50)
     status = models.CharField(max_length=20) # 'running', 'completed', 'failed', 'awaiting_approval'
     input_text = models.TextField()
     context_snapshot = models.JSONField(default=dict)
@@ -48,7 +48,7 @@ class AIAgentAction(BaseModel):
 
 class AIAgentConversation(BaseModel):
     workspace = models.ForeignKey("db.Workspace", on_delete=models.CASCADE, related_name="ai_conversations")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="ai_conversations")
+    # created_by is inherited from BaseModel -> AuditModel -> UserAuditModel
     title = models.CharField(max_length=255)
     context_type = models.CharField(max_length=50, null=True, blank=True)
     context_entity_id = models.UUIDField(null=True, blank=True)

@@ -4,5 +4,6 @@
  * See the LICENSE file for details.
  */
 
+export * from "./ai.store";
 export * from "./rich-filters";
 export * from "./work-item-filters";

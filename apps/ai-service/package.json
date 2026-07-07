@@ -1,12 +1,15 @@
 {
-  "name": "ai-service",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "name": "@plane/ai-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plane AI Agent orchestration service",
   "keywords": [],
+  "license": "AGPL-3.0-only",
   "author": "",
-  "license": "ISC"
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "echo 'AI service dev server not yet configured'",
+    "build": "echo 'AI service build not yet configured'",
+    "test": "echo 'No tests configured yet'"
+  }
 }
