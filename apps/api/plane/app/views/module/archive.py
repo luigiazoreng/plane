@@ -30,7 +30,14 @@ from rest_framework import status
 from rest_framework.response import Response
 from plane.app.permissions import ProjectEntityPermission
 from plane.app.serializers import ModuleDetailSerializer
-from plane.db.models import Issue, Module, ModuleLink, UserFavorite, Project
+from plane.db.models import (
+    Issue,
+    Module,
+    ModuleLink,
+    UserFavorite,
+    NUMERIC_ESTIMATE_TYPES,
+    project_has_active_numeric_estimate,
+)
 from plane.utils.analytics_plot import burndown_plot
 from plane.utils.timezone_converter import user_timezone_converter
 
@@ -111,7 +118,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
         )
         completed_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="completed",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -123,7 +130,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
 
         total_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
             )
@@ -133,7 +140,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
         )
         backlog_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="backlog",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -144,7 +151,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
         )
         unstarted_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="unstarted",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -155,7 +162,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
         )
         started_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="started",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -166,7 +173,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
         )
         cancelled_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="cancelled",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -308,12 +315,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
                 )
             )
 
-            estimate_type = Project.objects.filter(
-                workspace__slug=slug,
-                pk=project_id,
-                estimate__isnull=False,
-                estimate__type="points",
-            ).exists()
+            estimate_type = project_has_active_numeric_estimate(slug, project_id)
 
             data = ModuleDetailSerializer(queryset.first()).data
             modules = queryset.first()
@@ -321,6 +323,12 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
             data["estimate_distribution"] = {}
 
             if estimate_type:
+                # Only Points/Time estimate values are numeric; a Categories estimate
+                # can still be active on the same project, so scope every
+                # Sum(Cast(...)) via `filter=` rather than the base queryset, so
+                # assignees/labels whose issues aren't numerically estimated still
+                # appear with a 0/None total.
+                numeric_point = Q(estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES)
                 assignee_distribution = (
                     Issue.issue_objects.filter(
                         issue_module__module_id=pk,
@@ -359,11 +367,12 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
                         "avatar_url",
                         "display_name",
                     )
-                    .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+                    .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
                     .annotate(
                         completed_estimates=Sum(
                             Cast("estimate_point__value", FloatField()),
-                            filter=Q(
+                            filter=numeric_point
+                            & Q(
                                 completed_at__isnull=False,
                                 archived_at__isnull=True,
                                 is_draft=False,
@@ -373,7 +382,8 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
                     .annotate(
                         pending_estimates=Sum(
                             Cast("estimate_point__value", FloatField()),
-                            filter=Q(
+                            filter=numeric_point
+                            & Q(
                                 completed_at__isnull=True,
                                 archived_at__isnull=True,
                                 is_draft=False,
@@ -393,11 +403,12 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
                     .annotate(color=F("labels__color"))
                     .annotate(label_id=F("labels__id"))
                     .values("label_name", "color", "label_id")
-                    .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+                    .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
                     .annotate(
                         completed_estimates=Sum(
                             Cast("estimate_point__value", FloatField()),
-                            filter=Q(
+                            filter=numeric_point
+                            & Q(
                                 completed_at__isnull=False,
                                 archived_at__isnull=True,
                                 is_draft=False,
@@ -407,7 +418,8 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
                     .annotate(
                         pending_estimates=Sum(
                             Cast("estimate_point__value", FloatField()),
-                            filter=Q(
+                            filter=numeric_point
+                            & Q(
                                 completed_at__isnull=True,
                                 archived_at__isnull=True,
                                 is_draft=False,

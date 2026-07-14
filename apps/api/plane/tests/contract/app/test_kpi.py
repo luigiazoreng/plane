@@ -140,17 +140,19 @@ class TestKpiIssueAttributes:
 @pytest.mark.django_db
 class TestKpiIssueList:
     def test_scoring_matches_spec_case(self, session_client, workspace, project, state, create_user):
-        # Difficulty comes from the issue's estimate (mapped "Hard-Low" -> 45);
+        # Difficulty comes from the issue's estimate (mapped point -> 45);
         # Importance is the native priority (high -> points 27). With high
         # priority (b=0.25), d=2 -> Vp = 45 + 27 = 72, p=0.5, Vf=36.
-        tables = default_kpi_tables()
-        tables["difficulty"] = {"Hard-Low": 45}
-        KpiConfig.objects.create(workspace=workspace, project=project, tables=tables)
-
         estimate = Estimate.objects.create(name="Points", project=project, type="points", created_by=create_user)
         point = EstimatePoint.objects.create(
             estimate=estimate, project=project, key=0, value="Hard-Low", created_by=create_user
         )
+
+        # tables['difficulty'] is keyed by EstimatePoint id, not value (see
+        # migration 0145_kpi_difficulty_rekey_by_point_id).
+        tables = default_kpi_tables()
+        tables["difficulty"] = {str(point.id): 45}
+        KpiConfig.objects.create(workspace=workspace, project=project, tables=tables)
 
         issue = _make_issue(
             project, workspace, state, create_user,
@@ -206,10 +208,6 @@ class TestKpiIssueList:
     ):
         # KPI Difficulty/Repetitive use their own configured estimate systems.
         # Updating them must not overwrite Issue.estimate_point.
-        tables = default_kpi_tables()
-        tables["difficulty"] = {"8": 8}
-        tables["repetitive"] = {"High": 4}
-
         difficulty_estimate = Estimate.objects.create(
             name="Difficulty", project=project, type="points", created_by=create_user
         )
@@ -222,6 +220,12 @@ class TestKpiIssueList:
         repetitive_point = EstimatePoint.objects.create(
             estimate=repetitive_estimate, project=project, key=0, value="High", created_by=create_user
         )
+
+        # tables['difficulty']/['repetitive'] are keyed by EstimatePoint id, not
+        # value (see migration 0145_kpi_difficulty_rekey_by_point_id).
+        tables = default_kpi_tables()
+        tables["difficulty"] = {str(difficulty_point.id): 8}
+        tables["repetitive"] = {str(repetitive_point.id): 4}
         KpiConfig.objects.create(
             workspace=workspace,
             project=project,
@@ -295,13 +299,18 @@ class TestKpiIssueList:
     def test_legacy_fallbacks_use_native_estimate_and_repetitive_text(
         self, session_client, workspace, project, state, create_user
     ):
+        estimate = Estimate.objects.create(name="Legacy", project=project, type="points", created_by=create_user)
+        point = EstimatePoint.objects.create(estimate=estimate, project=project, key=0, value="5", created_by=create_user)
+
+        # tables['difficulty'] is keyed by EstimatePoint id, not value (see
+        # migration 0145_kpi_difficulty_rekey_by_point_id). 'repetitive' stays
+        # value-keyed here since this test exercises the legacy free-text
+        # fallback (no repetitive_estimate configured), not a point-based one.
         tables = default_kpi_tables()
-        tables["difficulty"] = {"5": 5}
+        tables["difficulty"] = {str(point.id): 5}
         tables["repetitive"] = {"High": 4}
         KpiConfig.objects.create(workspace=workspace, project=project, tables=tables)
 
-        estimate = Estimate.objects.create(name="Legacy", project=project, type="points", created_by=create_user)
-        point = EstimatePoint.objects.create(estimate=estimate, project=project, key=0, value="5", created_by=create_user)
         issue = _make_issue(project, workspace, state, create_user, priority="none")
         Issue.objects.filter(id=issue.id).update(estimate_point=point)
         KpiIssueAttribute.objects.create(workspace=workspace, project=project, issue=issue, repetitive="High")

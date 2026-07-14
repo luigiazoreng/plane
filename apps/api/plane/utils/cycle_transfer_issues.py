@@ -25,7 +25,8 @@ from plane.db.models import (
     Cycle,
     CycleIssue,
     Issue,
-    Project,
+    NUMERIC_ESTIMATE_TYPES,
+    project_has_active_numeric_estimate,
 )
 from plane.utils.analytics_plot import burndown_plot
 from plane.bgtasks.issue_activities_task import issue_activity
@@ -148,12 +149,7 @@ def transfer_cycle_issues(
         }
 
     # Check if project uses estimates
-    estimate_type = Project.objects.filter(
-        workspace__slug=slug,
-        pk=project_id,
-        estimate__isnull=False,
-        estimate__type="points",
-    ).exists()
+    estimate_type = project_has_active_numeric_estimate(slug, project_id)
 
     # Initialize estimate distribution variables
     assignee_estimate_distribution = []
@@ -161,6 +157,11 @@ def transfer_cycle_issues(
     estimate_completion_chart = {}
 
     if estimate_type:
+        # Only Points/Time estimate values are numeric; a Categories estimate can
+        # still be active on the same project, so scope every Sum(Cast(...)) via
+        # `filter=` rather than the base queryset, so assignees/labels whose
+        # issues aren't numerically estimated still appear with a 0/None total.
+        numeric_point = Q(estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES)
         assignee_estimate_data = (
             Issue.issue_objects.filter(
                 issue_cycle__cycle_id=cycle_id,
@@ -191,11 +192,12 @@ def transfer_cycle_issues(
                 )
             )
             .values("display_name", "assignee_id", "avatar_url")
-            .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+            .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
             .annotate(
                 completed_estimates=Sum(
                     Cast("estimate_point__value", FloatField()),
-                    filter=Q(
+                    filter=numeric_point
+                    & Q(
                         completed_at__isnull=False,
                         archived_at__isnull=True,
                         is_draft=False,
@@ -205,7 +207,8 @@ def transfer_cycle_issues(
             .annotate(
                 pending_estimates=Sum(
                     Cast("estimate_point__value", FloatField()),
-                    filter=Q(
+                    filter=numeric_point
+                    & Q(
                         completed_at__isnull=True,
                         archived_at__isnull=True,
                         is_draft=False,
@@ -238,11 +241,12 @@ def transfer_cycle_issues(
             .annotate(color=F("labels__color"))
             .annotate(label_id=F("labels__id"))
             .values("label_name", "color", "label_id")
-            .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+            .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
             .annotate(
                 completed_estimates=Sum(
                     Cast("estimate_point__value", FloatField()),
-                    filter=Q(
+                    filter=numeric_point
+                    & Q(
                         completed_at__isnull=False,
                         archived_at__isnull=True,
                         is_draft=False,
@@ -252,7 +256,8 @@ def transfer_cycle_issues(
             .annotate(
                 pending_estimates=Sum(
                     Cast("estimate_point__value", FloatField()),
-                    filter=Q(
+                    filter=numeric_point
+                    & Q(
                         completed_at__isnull=True,
                         archived_at__isnull=True,
                         is_draft=False,

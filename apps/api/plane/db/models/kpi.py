@@ -12,12 +12,18 @@ def default_kpi_tables():
     display name and is freely editable by the user.
     """
     return {
-        # Difficulty is driven by the project's estimate system: keys are the
-        # estimate point values (e.g. "1", "2", "8" or "XS", "M") and the value
-        # is the difficulty points that estimate contributes to Vp. Empty by
-        # default -- an unmapped estimate contributes 0 (configured per project
-        # in KPI Settings against that project's estimate points).
+        # Difficulty is driven by the project's estimate system: keys are
+        # EstimatePoint ids (not values, so renaming a point doesn't silently
+        # zero its contribution -- see migration 0145_kpi_difficulty_rekey_by_
+        # point_id) and the value is the difficulty points that estimate
+        # contributes to Vp. Empty by default -- an unmapped estimate
+        # contributes 0 (configured per project in KPI Settings against that
+        # project's estimate points).
         "difficulty": {},
+        # Repetitive defaults to fixed labels (matching KpiIssueAttribute's
+        # legacy free-text `repetitive` field). If a `repetitive_estimate` is
+        # configured instead, this table is keyed by EstimatePoint id the same
+        # way as `difficulty` above.
         "repetitive": {"High": 4, "Medium": 2, "Low": 0},
         "type": {"Feature": 0, "Enhancement": 0, "Support": 0, "Bug": 0},
         # Importance (I) = native priority. ``points`` is the Importance

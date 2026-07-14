@@ -62,7 +62,10 @@ export const ModuleAnalyticsProgress = observer(function ModuleAnalyticsProgress
   const isCurrentProjectEstimateEnabled = projectId && areEstimateEnabledByProjectId(projectId) ? true : false;
   const estimateDetails =
     isCurrentProjectEstimateEnabled && currentActiveEstimateId && estimateById(currentActiveEstimateId);
-  const isCurrentEstimateTypeIsPoints = estimateDetails && estimateDetails?.type === EEstimateSystem.POINTS;
+  const isCurrentEstimateTypeIsPoints =
+    estimateDetails &&
+    estimateDetails.type &&
+    [EEstimateSystem.POINTS, EEstimateSystem.TIME].includes(estimateDetails.type);
   const completedIssues = moduleDetails?.completed_issues || 0;
   const totalIssues = moduleDetails?.total_issues || 0;
   const completedEstimatePoints = moduleDetails?.completed_estimate_points || 0;

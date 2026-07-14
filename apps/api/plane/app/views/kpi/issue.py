@@ -17,12 +17,28 @@ def _issue_type_name(issue, attribute):
     return None
 
 
-def _difficulty_value(issue, attribute):
-    """Difficulty key = KPI difficulty estimate point, falling back to native estimate.
+def _difficulty_lookup_key(issue, attribute):
+    """Difficulty key for config.tables.difficulty = KPI difficulty estimate point id,
+    falling back to the native Issue.estimate_point id.
 
-    The selected estimate point value is looked up in ``config.tables.difficulty``.
-    Fallback to Issue.estimate_point preserves historical KPI data.
+    Keyed by EstimatePoint id, not value, so renaming a point's value doesn't
+    silently zero its configured contribution to Vp (see migration
+    0145_kpi_difficulty_rekey_by_point_id). Use _difficulty_display_value for the
+    human-readable value instead -- this key is for the engine lookup only.
     """
+    if (
+        attribute is not None
+        and attribute.difficulty_estimate_point_id
+        and attribute.difficulty_estimate_point is not None
+    ):
+        return str(attribute.difficulty_estimate_point_id)
+    if issue.estimate_point_id and issue.estimate_point is not None:
+        return str(issue.estimate_point_id)
+    return None
+
+
+def _difficulty_display_value(issue, attribute):
+    """Human-readable difficulty value for display; not used in Vp calculation."""
     if (
         attribute is not None
         and attribute.difficulty_estimate_point_id
@@ -34,7 +50,22 @@ def _difficulty_value(issue, attribute):
     return None
 
 
-def _repetitive_value(attribute):
+def _repetitive_lookup_key(attribute):
+    """Repetitive key for config.tables.repetitive = KPI repetitive estimate point id
+    when configured, else the legacy free-text label. Keyed by point id (not
+    value) for the same rename-safety reason as _difficulty_lookup_key.
+    """
+    if (
+        attribute is not None
+        and attribute.repetitive_estimate_point_id
+        and attribute.repetitive_estimate_point is not None
+    ):
+        return str(attribute.repetitive_estimate_point_id)
+    return attribute.repetitive if attribute else None
+
+
+def _repetitive_display_value(attribute):
+    """Human-readable repetitive value for display; not used in Vp calculation."""
     if (
         attribute is not None
         and attribute.repetitive_estimate_point_id
@@ -49,8 +80,8 @@ def _build_task(issue, attribute):
         "priority": issue.priority,
         "due_date": issue.target_date,
         "delivered_date": issue.completed_at,
-        "difficulty": _difficulty_value(issue, attribute),
-        "repetitive": _repetitive_value(attribute),
+        "difficulty": _difficulty_lookup_key(issue, attribute),
+        "repetitive": _repetitive_lookup_key(attribute),
         "type": _issue_type_name(issue, attribute),
     }
 
@@ -121,8 +152,8 @@ class KpiIssueListEndpoint(BaseAPIView):
                         if attribute and attribute.repetitive_estimate_point_id
                         else None
                     ),
-                    "difficulty": task["difficulty"],
-                    "repetitive": task["repetitive"],
+                    "difficulty": _difficulty_display_value(issue, attribute),
+                    "repetitive": _repetitive_display_value(attribute),
                     "type": task["type"],
                     "vp": calc["Vp"],
                     "d": calc["d"],

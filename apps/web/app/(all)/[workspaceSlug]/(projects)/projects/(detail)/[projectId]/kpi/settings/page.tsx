@@ -51,11 +51,15 @@ function ProjectKpiSettingsPage() {
       Object.fromEntries(
         estimateIds.map((id) => {
           const estimate = estimateById(id);
-          const values =
+          const points =
             estimate?.estimatePointIds
-              ?.map((pointId) => estimate.estimatePointById(pointId)?.value)
-              .filter((value): value is string => typeof value === "string") ?? [];
-          return [id, values];
+              ?.map((pointId) => {
+                const point = estimate.estimatePointById(pointId);
+                if (!point?.id || typeof point.value !== "string") return undefined;
+                return { id: point.id, value: point.value };
+              })
+              .filter((point): point is { id: string; value: string } => !!point) ?? [];
+          return [id, points];
         })
       ),
     [estimateIds, estimateById]

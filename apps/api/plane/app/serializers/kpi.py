@@ -49,10 +49,28 @@ class KpiConfigSerializer(BaseSerializer):
         if not project_id:
             return attrs
 
-        for field in ("difficulty_estimate", "repetitive_estimate"):
+        tables = attrs.get("tables", getattr(self.instance, "tables", None) or {})
+        errors = {}
+        for field, table_name in (("difficulty_estimate", "difficulty"), ("repetitive_estimate", "repetitive")):
             estimate = attrs.get(field, getattr(self.instance, field, None))
-            if estimate is not None and str(estimate.project_id) != str(project_id):
-                raise serializers.ValidationError({field: "Estimate must belong to this project."})
+            if estimate is None:
+                continue
+            if str(estimate.project_id) != str(project_id):
+                errors[field] = "Estimate must belong to this project."
+                continue
+            # tables[table_name] is keyed by EstimatePoint id (not value) -- see
+            # migration 0145_kpi_difficulty_rekey_by_point_id -- so every key must
+            # be a real point under the configured estimate.
+            table = (tables or {}).get(table_name)
+            if table:
+                valid_point_ids = {str(pk) for pk in estimate.points.values_list("id", flat=True)}
+                invalid_keys = [key for key in table if key not in valid_point_ids]
+                if invalid_keys:
+                    errors[f"tables.{table_name}"] = (
+                        f"{invalid_keys} are not valid point ids for the configured {field}."
+                    )
+        if errors:
+            raise serializers.ValidationError(errors)
         return attrs
 
 

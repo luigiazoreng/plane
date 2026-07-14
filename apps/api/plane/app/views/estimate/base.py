@@ -16,7 +16,15 @@ from rest_framework import status
 # Module imports
 from ..base import BaseViewSet, BaseAPIView
 from plane.app.permissions import ProjectEntityPermission, allow_permission, ROLE
-from plane.db.models import Project, Estimate, EstimatePoint, Issue
+from plane.db.models import (
+    Project,
+    Estimate,
+    EstimatePoint,
+    Issue,
+    KpiConfig,
+    KpiIssueAttribute,
+    NUMERIC_ESTIMATE_TYPES,
+)
 from plane.app.serializers import (
     EstimateSerializer,
     EstimatePointSerializer,
@@ -25,10 +33,38 @@ from plane.app.serializers import (
 from plane.utils.cache import invalidate_cache
 from plane.bgtasks.issue_activities_task import issue_activity
 
+# Mirrors packages/constants/src/estimates.ts's `estimateCount`
+ESTIMATE_POINT_COUNT_MIN = 2
+ESTIMATE_POINT_COUNT_MAX = 6
+
 
 def generate_random_name(length=10):
     letters = string.ascii_lowercase
     return "".join(random.choice(letters) for i in range(length))
+
+
+def _activate_numeric_estimate(project, estimate):
+    """Enforce at most one active (last_used=True) numeric (points/time) estimate per
+    project. Categories estimates are exempt since they're excluded from analytics.
+
+    If the estimate being deactivated was the project's default, promote the newly
+    activated estimate to default so `project.estimate` never points at an inactive row.
+    """
+    if estimate.type not in NUMERIC_ESTIMATE_TYPES:
+        return
+    conflicting = Estimate.objects.filter(
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        last_used=True,
+        type__in=NUMERIC_ESTIMATE_TYPES,
+    ).exclude(pk=estimate.id)
+    conflicting_ids = list(conflicting.values_list("id", flat=True))
+    if not conflicting_ids:
+        return
+    conflicting.update(last_used=False)
+    if project.estimate_id in conflicting_ids:
+        project.estimate = estimate
+        project.save(update_fields=["estimate", "updated_at"])
 
 
 class ProjectEstimatePointEndpoint(BaseAPIView):
@@ -36,10 +72,13 @@ class ProjectEstimatePointEndpoint(BaseAPIView):
     def get(self, request, slug, project_id):
         project = Project.objects.get(workspace__slug=slug, pk=project_id)
         if project.estimate_id is not None:
+            # Scope to the project's actual default estimate, not every active
+            # estimate -- a project can have multiple active (last_used=True)
+            # estimates of different types (see _activate_numeric_estimate).
             estimate_points = EstimatePoint.objects.filter(
                 project_id=project_id,
                 workspace__slug=slug,
-                estimate__last_used=True,
+                estimate_id=project.estimate_id,
             )
             serializer = EstimatePointSerializer(estimate_points, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -63,24 +102,47 @@ class BulkEstimatePointEndpoint(BaseViewSet):
     @invalidate_cache(path="/api/workspaces/:slug/estimates/", url_params=True, user=False)
     def create(self, request, slug, project_id):
         project = Project.objects.get(workspace__slug=slug, pk=project_id)
-        estimate = request.data.get("estimate") or {}
-        estimate_name = (estimate.get("name") or "").strip() or generate_random_name()
-        estimate_type = estimate.get("type", "categories")
-        last_used = estimate.get("last_used", False)
-        estimate_points = request.data.get("estimate_points", [])
+        estimate_payload = request.data.get("estimate") or {}
+        estimate_name = (estimate_payload.get("name") or "").strip() or generate_random_name()
+        estimate_points_data = request.data.get("estimate_points", [])
 
-        serializer = EstimatePointSerializer(data=estimate_points, many=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not (ESTIMATE_POINT_COUNT_MIN <= len(estimate_points_data) <= ESTIMATE_POINT_COUNT_MAX):
+            return Response(
+                {
+                    "error": (
+                        f"An estimate must have between {ESTIMATE_POINT_COUNT_MIN} and "
+                        f"{ESTIMATE_POINT_COUNT_MAX} points"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        estimate = Estimate.objects.create(
-            name=estimate_name,
-            project_id=project_id,
-            last_used=last_used,
-            type=estimate_type,
+        if Estimate.objects.filter(workspace__slug=slug, project_id=project_id, name=estimate_name).exists():
+            return Response(
+                {"error": "An estimate with this name already exists"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        estimate_serializer = EstimateSerializer(
+            data={
+                "name": estimate_name,
+                "type": estimate_payload.get("type", "categories"),
+                "last_used": estimate_payload.get("last_used", False),
+            }
         )
+        if not estimate_serializer.is_valid():
+            return Response(estimate_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        estimate_points = EstimatePoint.objects.bulk_create(
+        estimate_type = estimate_serializer.validated_data.get("type")
+        points_serializer = EstimatePointSerializer(
+            data=estimate_points_data, many=True, context={"estimate_type": estimate_type}
+        )
+        if not points_serializer.is_valid():
+            return Response(points_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        estimate = estimate_serializer.save(project_id=project_id)
+
+        EstimatePoint.objects.bulk_create(
             [
                 EstimatePoint(
                     estimate=estimate,
@@ -92,7 +154,7 @@ class BulkEstimatePointEndpoint(BaseViewSet):
                     created_by=request.user,
                     updated_by=request.user,
                 )
-                for estimate_point in estimate_points
+                for estimate_point in estimate_points_data
             ],
             batch_size=10,
             ignore_conflicts=True,
@@ -104,6 +166,9 @@ class BulkEstimatePointEndpoint(BaseViewSet):
             if not estimate.last_used:
                 estimate.last_used = True
                 estimate.save(update_fields=["last_used", "updated_at"])
+
+        if estimate.last_used:
+            _activate_numeric_estimate(project, estimate)
 
         serializer = EstimateReadSerializer(estimate)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -128,16 +193,20 @@ class BulkEstimatePointEndpoint(BaseViewSet):
         project = Project.objects.get(workspace__slug=slug, pk=project_id)
 
         if estimate_payload:
+            metadata = {}
             estimate_name = estimate_payload.get("name")
-            estimate.name = (
-                estimate_name.strip()
-                if isinstance(estimate_name, str) and estimate_name.strip()
-                else estimate.name
-            )
-            estimate.type = estimate_payload.get("type", estimate.type)
+            if isinstance(estimate_name, str) and estimate_name.strip():
+                metadata["name"] = estimate_name.strip()
+            if "type" in estimate_payload:
+                metadata["type"] = estimate_payload.get("type")
             if "last_used" in estimate_payload:
-                estimate.last_used = bool(estimate_payload.get("last_used"))
-            estimate.save(update_fields=["name", "type", "last_used", "updated_at"])
+                metadata["last_used"] = bool(estimate_payload.get("last_used"))
+
+            if metadata:
+                estimate_serializer = EstimateSerializer(estimate, data=metadata, partial=True)
+                if not estimate_serializer.is_valid():
+                    return Response(estimate_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                estimate = estimate_serializer.save()
 
             if estimate.last_used and project.estimate_id is None:
                 project.estimate = estimate
@@ -152,6 +221,9 @@ class BulkEstimatePointEndpoint(BaseViewSet):
                 project.estimate = replacement_estimate
                 project.save(update_fields=["estimate", "updated_at"])
 
+            if estimate.last_used:
+                _activate_numeric_estimate(project, estimate)
+
         if not estimate_points_data:
             estimate_serializer = EstimateReadSerializer(estimate)
             return Response(estimate_serializer.data, status=status.HTTP_200_OK)
@@ -162,6 +234,12 @@ class BulkEstimatePointEndpoint(BaseViewSet):
             project_id=project_id,
             estimate_id=estimate_id,
         )
+
+        points_serializer = EstimatePointSerializer(
+            data=estimate_points_data, many=True, partial=True, context={"estimate_type": estimate.type}
+        )
+        if not points_serializer.is_valid():
+            return Response(points_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         updated_estimate_points = []
         for estimate_point in estimate_points:
@@ -187,6 +265,28 @@ class BulkEstimatePointEndpoint(BaseViewSet):
             .first()
         )
         Project.objects.filter(pk=project_id, estimate_id=estimate_id).update(estimate=replacement_estimate)
+
+        # Null out references synchronously rather than relying solely on the
+        # async soft-delete cascade (soft_delete_related_objects) -- Estimate.
+        # delete() is a soft delete, so Django's own on_delete=SET_NULL/CASCADE
+        # collector never fires for it, and the user-visible effect shouldn't
+        # depend on Celery being up.
+        Issue.objects.filter(project_id=project_id, estimate_point__estimate_id=estimate_id).update(
+            estimate_point=None
+        )
+        KpiConfig.objects.filter(workspace__slug=slug, difficulty_estimate_id=estimate_id).update(
+            difficulty_estimate=None
+        )
+        KpiConfig.objects.filter(workspace__slug=slug, repetitive_estimate_id=estimate_id).update(
+            repetitive_estimate=None
+        )
+        KpiIssueAttribute.objects.filter(
+            workspace__slug=slug, difficulty_estimate_point__estimate_id=estimate_id
+        ).update(difficulty_estimate_point=None)
+        KpiIssueAttribute.objects.filter(
+            workspace__slug=slug, repetitive_estimate_point__estimate_id=estimate_id
+        ).update(repetitive_estimate_point=None)
+
         estimate.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -200,8 +300,15 @@ class EstimatePointEndpoint(BaseViewSet):
                 {"error": "Key and value are required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        key = request.data.get("key", 0)
-        value = request.data.get("value", "")
+        # Ensure the estimate belongs to this project/workspace before attaching a point to it
+        estimate = Estimate.objects.get(pk=estimate_id, project_id=project_id, workspace__slug=slug)
+
+        serializer = EstimatePointSerializer(data=request.data, context={"estimate_type": estimate.type})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        key = serializer.validated_data.get("key", request.data.get("key", 0))
+        value = serializer.validated_data.get("value", request.data.get("value", ""))
         estimate_point = EstimatePoint.objects.create(
             estimate_id=estimate_id, project_id=project_id, key=key, value=value
         )
@@ -217,7 +324,10 @@ class EstimatePointEndpoint(BaseViewSet):
             project_id=project_id,
             workspace__slug=slug,
         )
-        serializer = EstimatePointSerializer(estimate_point, data=request.data, partial=True)
+        serializer = EstimatePointSerializer(
+            estimate_point, data=request.data, partial=True,
+            context={"estimate_type": estimate_point.estimate.type},
+        )
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
@@ -229,6 +339,16 @@ class EstimatePointEndpoint(BaseViewSet):
         estimate_points = EstimatePoint.objects.filter(
             estimate_id=estimate_id, project_id=project_id, workspace__slug=slug
         )
+        # Confirm the point actually belongs to this project/estimate/workspace
+        # before doing anything else (404 for a mismatched id rather than a
+        # confusing "must have at least N points" on an empty scoped queryset).
+        if not estimate_points.filter(pk=estimate_point_id).exists():
+            return Response(status=status.HTTP_404_NOT_FOUND, data={"error": "Estimate point not found"})
+        if estimate_points.count() <= ESTIMATE_POINT_COUNT_MIN:
+            return Response(
+                {"error": f"An estimate must have at least {ESTIMATE_POINT_COUNT_MIN} points"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # update all the issues with the new estimate
         if new_estimate_id:
             issues = Issue.objects.filter(
@@ -269,7 +389,12 @@ class EstimatePointEndpoint(BaseViewSet):
                 )
 
         # delete the estimate point
-        old_estimate_point = EstimatePoint.objects.filter(pk=estimate_point_id).first()
+        old_estimate_point = EstimatePoint.objects.get(
+            pk=estimate_point_id,
+            estimate_id=estimate_id,
+            project_id=project_id,
+            workspace__slug=slug,
+        )
 
         # rearrange the estimate points
         updated_estimate_points = []

@@ -21,7 +21,7 @@ type Props = {
   onSave: (data: Partial<IKpiConfig>) => void;
   onReset?: () => void;
   estimateOptions?: { id: string; name: string; type?: string }[];
-  estimateValuesById?: Record<string, string[]>;
+  estimateValuesById?: Record<string, { id: string; value: string }[]>;
 };
 
 type SimpleTableKey = "type";
@@ -110,7 +110,7 @@ const EstimateMappingEditor = (props: {
   table: Record<string, number>;
   estimateId: string | null;
   estimateOptions: { id: string; name: string; type?: string }[];
-  estimateValues: string[];
+  estimateValues: { id: string; value: string }[];
   disabled: boolean;
   onEstimateChange: (estimateId: string | null) => void;
   onChange: (table: Record<string, number>) => void;
@@ -127,15 +127,18 @@ const EstimateMappingEditor = (props: {
     onChange,
   } = props;
 
-  const setPoints = (key: string, points: number) => onChange({ ...table, [key]: points });
-  const removeKey = (key: string) => {
+  // table is keyed by EstimatePoint id (not value), so renaming a point's value
+  // doesn't silently zero its configured contribution to Vp.
+  const setPoints = (pointId: string, points: number) => onChange({ ...table, [pointId]: points });
+  const removeKey = (pointId: string) => {
     const next = { ...table };
-    delete next[key];
+    delete next[pointId];
     onChange(next);
   };
 
-  // Keys present in the mapping but no longer in the active estimate.
-  const orphanKeys = Object.keys(table).filter((k) => !estimateValues.includes(k));
+  const estimatePointIds = new Set(estimateValues.map((point) => point.id));
+  // Keys present in the mapping but no longer in the active estimate (point deleted).
+  const orphanKeys = Object.keys(table).filter((k) => !estimatePointIds.has(k));
   const selectedEstimateName = estimateId ? (estimateOptions.find((o) => o.id === estimateId)?.name ?? "—") : null;
 
   return (
@@ -169,36 +172,36 @@ const EstimateMappingEditor = (props: {
         </p>
       ) : (
         <div className="space-y-2">
-          {estimateValues.map((val) => (
-            <div key={val} className="flex items-center gap-2">
-              <span className="flex-1 truncate text-13 text-secondary">{val}</span>
+          {estimateValues.map((point) => (
+            <div key={point.id} className="flex items-center gap-2">
+              <span className="flex-1 truncate text-13 text-secondary">{point.value}</span>
               <Input
                 type="number"
                 inputSize="xs"
                 className="w-20"
-                value={table[val] ?? 0}
+                value={table[point.id] ?? 0}
                 disabled={disabled}
-                onChange={(e) => setPoints(val, Number(e.target.value))}
+                onChange={(e) => setPoints(point.id, Number(e.target.value))}
               />
             </div>
           ))}
-          {orphanKeys.map((val) => (
-            <div key={val} className="flex items-center gap-2 opacity-70">
+          {orphanKeys.map((pointId) => (
+            <div key={pointId} className="flex items-center gap-2 opacity-70">
               <span className="flex-1 truncate text-13 text-tertiary">
-                {val} <span className="text-12 italic">(not in current estimate)</span>
+                Deleted point <span className="text-12 italic">(not in current estimate)</span>
               </span>
               <Input
                 type="number"
                 inputSize="xs"
                 className="w-20"
-                value={table[val] ?? 0}
+                value={table[pointId] ?? 0}
                 disabled={disabled}
-                onChange={(e) => setPoints(val, Number(e.target.value))}
+                onChange={(e) => setPoints(pointId, Number(e.target.value))}
               />
               {!disabled && (
                 <button
                   type="button"
-                  onClick={() => removeKey(val)}
+                  onClick={() => removeKey(pointId)}
                   className="text-tertiary transition-colors hover:text-danger-primary"
                 >
                   <Trash2 className="size-4" />

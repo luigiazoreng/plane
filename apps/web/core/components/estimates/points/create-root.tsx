@@ -67,7 +67,10 @@ export const EstimatePointCreateRoot = observer(function EstimatePointCreateRoot
         case "remove":
           setEstimatePoints((prevValue) => {
             prevValue = prevValue ? [...prevValue] : [];
-            return prevValue.filter((item) => item.key !== value.key);
+            // Reindex remaining keys so a later add (which derives its key from
+            // `estimatePoints.length`) can't collide with a key left behind by
+            // removing a point from the middle of the list.
+            return prevValue.filter((item) => item.key !== value.key).map((item, index) => ({ ...item, key: index + 1 }));
           });
           break;
         default:
