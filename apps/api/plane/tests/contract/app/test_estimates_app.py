@@ -119,6 +119,58 @@ class TestEstimateAppAPI:
         assert str(Project.objects.get(id=project.id).estimate_id) == second_id
 
     @pytest.mark.django_db
+    def test_creating_second_numeric_estimate_inactive_does_not_disturb_active_default(
+        self, session_client, workspace, create_user
+    ):
+        """A second Points/Time estimate created for e.g. KPI-only use (last_used
+        omitted/False, matching the frontend's create-estimate default) must not
+        deactivate or replace the project's existing active numeric estimate --
+        only an explicit activation should trigger that. KpiConfig.difficulty_
+        estimate/repetitive_estimate don't require last_used=True to work, so an
+        inactive estimate must remain fully usable."""
+        project = Project.objects.create(
+            name="Estimate Project",
+            identifier="EP",
+            workspace=workspace,
+            created_by=create_user,
+            updated_by=create_user,
+        )
+        ProjectMember.objects.create(project=project, member=create_user, role=20)
+
+        first = session_client.post(
+            get_estimates_url(workspace.slug, project.id),
+            {
+                "estimate": {"name": "Story Points", "type": "points", "last_used": True},
+                "estimate_points": [{"key": 1, "value": "1"}, {"key": 2, "value": "2"}],
+            },
+            format="json",
+        )
+        assert first.status_code == status.HTTP_200_OK
+        first_id = first.data["id"]
+
+        second = session_client.post(
+            get_estimates_url(workspace.slug, project.id),
+            {
+                "estimate": {"name": "KPI Difficulty Scale", "type": "points", "last_used": False},
+                "estimate_points": [{"key": 1, "value": "1"}, {"key": 2, "value": "10"}],
+            },
+            format="json",
+        )
+        assert second.status_code == status.HTTP_200_OK
+        second_id = second.data["id"]
+
+        assert Estimate.objects.get(pk=first_id).last_used is True
+        assert Estimate.objects.get(pk=second_id).last_used is False
+        project.refresh_from_db()
+        assert str(project.estimate_id) == first_id
+
+        # Still fully usable (e.g. as a KPI difficulty/repetitive source) despite
+        # being inactive -- its points remain intact and retrievable.
+        response = session_client.get(get_estimates_url(workspace.slug, project.id))
+        second_row = next(row for row in response.data if row["id"] == second_id)
+        assert len(second_row["points"]) == 2
+
+    @pytest.mark.django_db
     def test_activating_second_numeric_estimate_deactivates_first(self, session_client, workspace, create_user):
         project = Project.objects.create(
             name="Estimate Project",

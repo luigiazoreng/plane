@@ -110,7 +110,14 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
           estimate: {
             name: trimmedEstimateName,
             type: estimateSystem,
-            last_used: true,
+            // Don't force this estimate active: a project's first-ever estimate
+            // is auto-activated by the backend regardless, but a second (or
+            // later) estimate might be a KPI-only lookup table (see
+            // KpiConfig.difficulty_estimate/repetitive_estimate, which don't
+            // require last_used) that shouldn't silently replace the project's
+            // current active numeric estimate. Admins can still explicitly
+            // activate it via "Set default" in the estimates list.
+            last_used: false,
           },
           estimate_points: estimatePoints,
         };
