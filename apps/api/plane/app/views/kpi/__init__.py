@@ -7,8 +7,6 @@ from .issue import (
     KpiMemberAggregateEndpoint,
     WorkspaceKpiMemberAggregateEndpoint,
     KpiIssueAttributeEndpoint,
-    KpiIssueEstimateEndpoint,
-    KpiIssueRepetitiveEstimateEndpoint,
     KpiIssuePriorityEndpoint,
     KpiPreviewEndpoint,
 )
@@ -20,8 +18,6 @@ __all__ = [
     "KpiMemberAggregateEndpoint",
     "WorkspaceKpiMemberAggregateEndpoint",
     "KpiIssueAttributeEndpoint",
-    "KpiIssueEstimateEndpoint",
-    "KpiIssueRepetitiveEstimateEndpoint",
     "KpiIssuePriorityEndpoint",
     "KpiPreviewEndpoint",
 ]

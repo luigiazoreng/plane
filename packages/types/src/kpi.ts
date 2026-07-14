@@ -35,8 +35,6 @@ export interface IKpiConfig {
   max_multiplier: number | null;
   vf_decimals: number;
   is_active: boolean;
-  difficulty_estimate: string | null;
-  repetitive_estimate: string | null;
   project?: string | null;
   // Resolution metadata returned by the API
   is_default_seed?: boolean;
@@ -103,16 +101,7 @@ export interface IKpiIssueAttribute {
   id?: string;
   issue?: string;
   repetitive: string | null;
-  difficulty_estimate_point: string | null;
-  repetitive_estimate_point: string | null;
   type_override: string | null;
-}
-
-export interface IKpiIssueEstimate {
-  issue: string;
-  estimate_point?: string | null;
-  difficulty_estimate_point?: string | null;
-  repetitive_estimate_point?: string | null;
 }
 
 export interface IKpiIssuePriority {

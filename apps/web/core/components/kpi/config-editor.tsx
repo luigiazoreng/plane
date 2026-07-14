@@ -22,6 +22,13 @@ type Props = {
   onReset?: () => void;
   estimateOptions?: { id: string; name: string; type?: string }[];
   estimateValuesById?: Record<string, { id: string; value: string }[]>;
+  // Difficulty/Repetitive are EstimateProperty rows (kpi_role-tagged), not
+  // KpiConfig fields -- saved immediately on change, independent of the
+  // draft+Save flow the rest of this form uses.
+  difficultyEstimateId?: string | null;
+  repetitiveEstimateId?: string | null;
+  onDifficultyEstimateChange?: (estimateId: string | null) => void;
+  onRepetitiveEstimateChange?: (estimateId: string | null) => void;
 };
 
 type SimpleTableKey = "type";
@@ -270,7 +277,19 @@ const PriorityTableEditor = (props: {
 };
 
 export const KpiConfigEditor = (props: Props) => {
-  const { config, canEdit, saving, onSave, onReset, estimateOptions = [], estimateValuesById = {} } = props;
+  const {
+    config,
+    canEdit,
+    saving,
+    onSave,
+    onReset,
+    estimateOptions = [],
+    estimateValuesById = {},
+    difficultyEstimateId = null,
+    repetitiveEstimateId = null,
+    onDifficultyEstimateChange,
+    onRepetitiveEstimateChange,
+  } = props;
   const [draft, setDraft] = useState<IKpiConfig>(config);
   const [selectedPriorityLevel, setSelectedPriorityLevel] = useState<string | null>(null);
 
@@ -290,8 +309,6 @@ export const KpiConfigEditor = (props: Props) => {
       allow_negative: draft.allow_negative,
       max_multiplier: draft.max_multiplier,
       vf_decimals: draft.vf_decimals,
-      difficulty_estimate: draft.difficulty_estimate,
-      repetitive_estimate: draft.repetitive_estimate,
     });
   };
 
@@ -456,13 +473,11 @@ export const KpiConfigEditor = (props: Props) => {
                   title="Difficulty (D)"
                   description="Choose which project estimate system represents difficulty, then map each point to the value it adds to Vp."
                   table={draft.tables.difficulty ?? {}}
-                  estimateId={draft.difficulty_estimate}
+                  estimateId={difficultyEstimateId}
                   estimateOptions={estimateOptions}
-                  estimateValues={
-                    draft.difficulty_estimate ? (estimateValuesById[draft.difficulty_estimate] ?? []) : []
-                  }
+                  estimateValues={difficultyEstimateId ? (estimateValuesById[difficultyEstimateId] ?? []) : []}
                   disabled={!canEdit}
-                  onEstimateChange={(estimateId) => patch({ difficulty_estimate: estimateId })}
+                  onEstimateChange={(estimateId) => onDifficultyEstimateChange?.(estimateId)}
                   onChange={(table) => patchTable("difficulty", table)}
                 />
 
@@ -470,13 +485,11 @@ export const KpiConfigEditor = (props: Props) => {
                   title="Repetitive (R)"
                   description="Choose which project estimate system represents repetition, then map each point to the value it adds to Vp."
                   table={draft.tables.repetitive ?? {}}
-                  estimateId={draft.repetitive_estimate}
+                  estimateId={repetitiveEstimateId}
                   estimateOptions={estimateOptions}
-                  estimateValues={
-                    draft.repetitive_estimate ? (estimateValuesById[draft.repetitive_estimate] ?? []) : []
-                  }
+                  estimateValues={repetitiveEstimateId ? (estimateValuesById[repetitiveEstimateId] ?? []) : []}
                   disabled={!canEdit}
-                  onEstimateChange={(estimateId) => patch({ repetitive_estimate: estimateId })}
+                  onEstimateChange={(estimateId) => onRepetitiveEstimateChange?.(estimateId)}
                   onChange={(table) => patchTable("repetitive", table)}
                 />
               </div>

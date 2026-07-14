@@ -15,7 +15,15 @@ from .draft import (
     DraftIssueModule,
     DraftIssueCycle,
 )
-from .estimate import Estimate, EstimatePoint, NUMERIC_ESTIMATE_TYPES, project_has_active_numeric_estimate
+from .estimate import (
+    Estimate,
+    EstimatePoint,
+    EstimateProperty,
+    EstimatePropertyRole,
+    IssueEstimatePropertyValue,
+    NUMERIC_ESTIMATE_TYPES,
+    project_has_active_numeric_estimate,
+)
 from .exporter import ExporterHistory
 from .importer import Importer
 from .intake import Intake, IntakeIssue

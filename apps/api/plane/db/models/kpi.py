@@ -12,7 +12,8 @@ def default_kpi_tables():
     display name and is freely editable by the user.
     """
     return {
-        # Difficulty is driven by the project's estimate system: keys are
+        # Difficulty is driven by the project's EstimateProperty tagged
+        # kpi_role="difficulty" (plane.db.models.estimate): keys are
         # EstimatePoint ids (not values, so renaming a point doesn't silently
         # zero its contribution -- see migration 0145_kpi_difficulty_rekey_by_
         # point_id) and the value is the difficulty points that estimate
@@ -21,9 +22,9 @@ def default_kpi_tables():
         # project's estimate points).
         "difficulty": {},
         # Repetitive defaults to fixed labels (matching KpiIssueAttribute's
-        # legacy free-text `repetitive` field). If a `repetitive_estimate` is
-        # configured instead, this table is keyed by EstimatePoint id the same
-        # way as `difficulty` above.
+        # legacy free-text `repetitive` field). If an EstimateProperty tagged
+        # kpi_role="repetitive" is configured instead, this table is keyed by
+        # EstimatePoint id the same way as `difficulty` above.
         "repetitive": {"High": 4, "Medium": 2, "Low": 0},
         "type": {"Feature": 0, "Enhancement": 0, "Support": 0, "Bug": 0},
         # Importance (I) = native priority. ``points`` is the Importance
@@ -81,20 +82,6 @@ class KpiConfig(WorkspaceBaseModel):
     max_multiplier = models.FloatField(null=True, blank=True)
     vf_decimals = models.PositiveSmallIntegerField(default=2)
     is_active = models.BooleanField(default=True)
-    difficulty_estimate = models.ForeignKey(
-        "db.Estimate",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="difficulty_kpi_configs",
-    )
-    repetitive_estimate = models.ForeignKey(
-        "db.Estimate",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="repetitive_kpi_configs",
-    )
 
     class Meta:
         unique_together = ["workspace", "project", "deleted_at"]
@@ -112,10 +99,11 @@ class KpiIssueAttribute(WorkspaceBaseModel):
 
     priority/due_date/delivered_date are NOT duplicated here -- they come from
     Issue.priority / Issue.target_date / Issue.completed_at respectively.
-    Difficulty and Repetitive can use KPI-specific estimate points configured
-    per project. Legacy native estimate/repetitive values remain as fallbacks.
-    Importance is NOT stored here -- it is the native Issue.priority, whose
-    points/b live in KpiConfig.tables.priority.
+    Difficulty and Repetitive come from IssueEstimatePropertyValue, via the
+    project's EstimateProperty rows tagged kpi_role="difficulty"/"repetitive"
+    (see plane.db.models.estimate). Legacy native repetitive text value
+    remains as a fallback here. Importance is NOT stored here -- it is the
+    native Issue.priority, whose points/b live in KpiConfig.tables.priority.
     """
 
     issue = models.OneToOneField(
@@ -124,20 +112,6 @@ class KpiIssueAttribute(WorkspaceBaseModel):
         related_name="kpi_attribute",
     )
     repetitive = models.CharField(max_length=255, null=True, blank=True)
-    difficulty_estimate_point = models.ForeignKey(
-        "db.EstimatePoint",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="difficulty_kpi_issue_attributes",
-    )
-    repetitive_estimate_point = models.ForeignKey(
-        "db.EstimatePoint",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="repetitive_kpi_issue_attributes",
-    )
     type_override = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:

@@ -26,6 +26,7 @@ import { DeleteEstimateModal } from "./delete/modal";
 import { EstimateDisableSwitch } from "./estimate-disable-switch";
 import { EstimateList } from "./estimate-list";
 import { EstimateLoaderScreen } from "./loader-screen";
+import { EstimatePropertiesSection } from "./properties/root";
 
 type TEstimateRoot = {
   workspaceSlug: string;
@@ -138,6 +139,8 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
                   onToggleActiveClick={handleToggleEstimateActive}
                 />
               </div>
+
+              <EstimatePropertiesSection workspaceSlug={workspaceSlug} projectId={projectId} isAdmin={isAdmin} />
             </>
           ) : (
             <EmptyStateCompact

@@ -5,7 +5,7 @@
 # Module imports
 from .base import BaseSerializer
 
-from plane.db.models import Estimate, EstimatePoint, NUMERIC_ESTIMATE_TYPES
+from plane.db.models import Estimate, EstimatePoint, EstimateProperty, IssueEstimatePropertyValue, NUMERIC_ESTIMATE_TYPES
 
 from rest_framework import serializers
 
@@ -70,3 +70,30 @@ class WorkspaceEstimateSerializer(BaseSerializer):
         model = Estimate
         fields = "__all__"
         read_only_fields = ["points", "name", "description"]
+
+
+class EstimatePropertySerializer(BaseSerializer):
+    class Meta:
+        model = EstimateProperty
+        fields = "__all__"
+        # kpi_role is reserved -- only the KPI-role upsert path (in the view)
+        # sets it; the general create/update flow (custom, admin-defined
+        # properties) can't set or change it via this serializer.
+        read_only_fields = ["workspace", "project", "deleted_at", "kpi_role"]
+
+
+class IssueEstimatePropertyValueSerializer(BaseSerializer):
+    def validate(self, data):
+        estimate_point = data.get("estimate_point")
+        property_instance = self.context.get("property") or (self.instance.property if self.instance else None)
+        if estimate_point is not None and property_instance is not None:
+            if estimate_point.estimate_id != property_instance.estimate_id:
+                raise serializers.ValidationError(
+                    {"estimate_point": "This point does not belong to the property's configured estimate."}
+                )
+        return data
+
+    class Meta:
+        model = IssueEstimatePropertyValue
+        fields = "__all__"
+        read_only_fields = ["workspace", "project", "issue", "property", "deleted_at"]

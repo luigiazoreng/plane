@@ -13,6 +13,7 @@ from rest_framework import status
 from plane.db.models import (
     Estimate,
     EstimatePoint,
+    EstimateProperty,
     Issue,
     IssueAssignee,
     KpiConfig,
@@ -206,8 +207,9 @@ class TestKpiIssueList:
     def test_set_issue_estimates_update_kpi_fields_without_native_estimate(
         self, session_client, workspace, project, state, create_user
     ):
-        # KPI Difficulty/Repetitive use their own configured estimate systems.
-        # Updating them must not overwrite Issue.estimate_point.
+        # Difficulty/Repetitive are EstimateProperty rows tagged kpi_role,
+        # independent of the project's native estimate. Updating them must not
+        # overwrite Issue.estimate_point.
         difficulty_estimate = Estimate.objects.create(
             name="Difficulty", project=project, type="points", created_by=create_user
         )
@@ -220,19 +222,19 @@ class TestKpiIssueList:
         repetitive_point = EstimatePoint.objects.create(
             estimate=repetitive_estimate, project=project, key=0, value="High", created_by=create_user
         )
+        difficulty_property = EstimateProperty.objects.create(
+            name="Difficulty", estimate=difficulty_estimate, project=project, workspace=workspace, kpi_role="difficulty"
+        )
+        repetitive_property = EstimateProperty.objects.create(
+            name="Repetitive", estimate=repetitive_estimate, project=project, workspace=workspace, kpi_role="repetitive"
+        )
 
         # tables['difficulty']/['repetitive'] are keyed by EstimatePoint id, not
         # value (see migration 0145_kpi_difficulty_rekey_by_point_id).
         tables = default_kpi_tables()
         tables["difficulty"] = {str(difficulty_point.id): 8}
         tables["repetitive"] = {str(repetitive_point.id): 4}
-        KpiConfig.objects.create(
-            workspace=workspace,
-            project=project,
-            tables=tables,
-            difficulty_estimate=difficulty_estimate,
-            repetitive_estimate=repetitive_estimate,
-        )
+        KpiConfig.objects.create(workspace=workspace, project=project, tables=tables)
 
         issue = _make_issue(
             project, workspace, state, create_user,
@@ -242,20 +244,30 @@ class TestKpiIssueList:
         )
 
         est_url = reverse(
-            "kpi-issue-estimate",
-            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
+            "issue-estimate-property-value",
+            kwargs={
+                "slug": workspace.slug,
+                "project_id": project.id,
+                "issue_id": issue.id,
+                "property_id": difficulty_property.id,
+            },
         )
         put = session_client.put(est_url, {"estimate_point": str(difficulty_point.id)}, format="json")
         assert put.status_code == status.HTTP_200_OK
-        assert put.json()["difficulty_estimate_point"] == str(difficulty_point.id)
+        assert put.json()["estimate_point"] == str(difficulty_point.id)
 
         repetitive_url = reverse(
-            "kpi-issue-repetitive-estimate",
-            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
+            "issue-estimate-property-value",
+            kwargs={
+                "slug": workspace.slug,
+                "project_id": project.id,
+                "issue_id": issue.id,
+                "property_id": repetitive_property.id,
+            },
         )
         rep_put = session_client.put(repetitive_url, {"estimate_point": str(repetitive_point.id)}, format="json")
         assert rep_put.status_code == status.HTTP_200_OK
-        assert rep_put.json()["repetitive_estimate_point"] == str(repetitive_point.id)
+        assert rep_put.json()["estimate_point"] == str(repetitive_point.id)
 
         issue.refresh_from_db()
         assert issue.estimate_point_id is None
@@ -286,12 +298,23 @@ class TestKpiIssueList:
         other_point = EstimatePoint.objects.create(
             estimate=other_estimate, project=project, key=0, value="13", created_by=create_user
         )
-        KpiConfig.objects.create(workspace=workspace, project=project, difficulty_estimate=configured_estimate)
+        difficulty_property = EstimateProperty.objects.create(
+            name="Difficulty",
+            estimate=configured_estimate,
+            project=project,
+            workspace=workspace,
+            kpi_role="difficulty",
+        )
         issue = _make_issue(project, workspace, state, create_user)
 
         est_url = reverse(
-            "kpi-issue-estimate",
-            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id},
+            "issue-estimate-property-value",
+            kwargs={
+                "slug": workspace.slug,
+                "project_id": project.id,
+                "issue_id": issue.id,
+                "property_id": difficulty_property.id,
+            },
         )
         response = session_client.put(est_url, {"estimate_point": str(other_point.id)}, format="json")
         assert response.status_code == status.HTTP_400_BAD_REQUEST

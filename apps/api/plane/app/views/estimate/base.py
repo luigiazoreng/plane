@@ -20,9 +20,9 @@ from plane.db.models import (
     Project,
     Estimate,
     EstimatePoint,
+    EstimateProperty,
     Issue,
-    KpiConfig,
-    KpiIssueAttribute,
+    IssueEstimatePropertyValue,
     NUMERIC_ESTIMATE_TYPES,
 )
 from plane.app.serializers import (
@@ -274,18 +274,16 @@ class BulkEstimatePointEndpoint(BaseViewSet):
         Issue.objects.filter(project_id=project_id, estimate_point__estimate_id=estimate_id).update(
             estimate_point=None
         )
-        KpiConfig.objects.filter(workspace__slug=slug, difficulty_estimate_id=estimate_id).update(
-            difficulty_estimate=None
+        IssueEstimatePropertyValue.objects.filter(
+            workspace__slug=slug, estimate_point__estimate_id=estimate_id
+        ).update(estimate_point=None)
+        # EstimateProperty.estimate is required (not nullable) -- a property
+        # whose estimate was just deleted can't be repointed, so soft-delete it
+        # too (covers both KPI-tagged and custom properties; the async cascade
+        # would eventually do the same, this just makes it immediate).
+        EstimateProperty.objects.filter(workspace__slug=slug, estimate_id=estimate_id).update(
+            deleted_at=timezone.now()
         )
-        KpiConfig.objects.filter(workspace__slug=slug, repetitive_estimate_id=estimate_id).update(
-            repetitive_estimate=None
-        )
-        KpiIssueAttribute.objects.filter(
-            workspace__slug=slug, difficulty_estimate_point__estimate_id=estimate_id
-        ).update(difficulty_estimate_point=None)
-        KpiIssueAttribute.objects.filter(
-            workspace__slug=slug, repetitive_estimate_point__estimate_id=estimate_id
-        ).update(repetitive_estimate_point=None)
 
         estimate.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

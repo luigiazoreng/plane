@@ -4,7 +4,14 @@ from rest_framework.response import Response
 from plane.app.views.base import BaseAPIView
 from plane.app.permissions import ROLE, allow_permission
 from plane.app.serializers.kpi import KpiIssueAttributeSerializer
-from plane.db.models import EstimatePoint, Issue, KpiIssueAttribute, Workspace
+from plane.db.models import (
+    EstimateProperty,
+    EstimatePropertyRole,
+    Issue,
+    IssueEstimatePropertyValue,
+    KpiIssueAttribute,
+    Workspace,
+)
 from plane.kpi.contract import resolve_contract
 from plane.kpi.engine import calcular, sample_curve
 
@@ -17,71 +24,91 @@ def _issue_type_name(issue, attribute):
     return None
 
 
-def _difficulty_lookup_key(issue, attribute):
-    """Difficulty key for config.tables.difficulty = KPI difficulty estimate point id,
-    falling back to the native Issue.estimate_point id.
+class KpiPropertyResolver:
+    """Bulk-resolves the project's Difficulty/Repetitive EstimateProperty and each
+    issue's selected IssueEstimatePropertyValue, to avoid N+1 queries across
+    KpiIssueListEndpoint / KpiMemberAggregateEndpoint /
+    WorkspaceKpiMemberAggregateEndpoint. `issues` must be a materialized list
+    (not a lazy queryset), since every issue's id/project_id is needed upfront.
+    """
+
+    def __init__(self, issues):
+        project_ids = {issue.project_id for issue in issues}
+        self._property_ids_by_project = {pid: {} for pid in project_ids}
+        for row in EstimateProperty.objects.filter(project_id__in=project_ids, kpi_role__isnull=False).values(
+            "project_id", "kpi_role", "id"
+        ):
+            self._property_ids_by_project[row["project_id"]][row["kpi_role"]] = row["id"]
+
+        all_property_ids = {pid for roles in self._property_ids_by_project.values() for pid in roles.values()}
+        self._points = {}
+        if all_property_ids:
+            issue_ids = [issue.id for issue in issues]
+            for value in IssueEstimatePropertyValue.objects.filter(
+                issue_id__in=issue_ids, property_id__in=all_property_ids, estimate_point__isnull=False
+            ).select_related("estimate_point"):
+                self._points[(value.issue_id, value.property_id)] = value.estimate_point
+
+    def points_for(self, issue):
+        """Returns (difficulty_point, repetitive_point), either an EstimatePoint or None."""
+        roles = self._property_ids_by_project.get(issue.project_id, {})
+        difficulty_property_id = roles.get(EstimatePropertyRole.DIFFICULTY)
+        repetitive_property_id = roles.get(EstimatePropertyRole.REPETITIVE)
+        difficulty_point = self._points.get((issue.id, difficulty_property_id)) if difficulty_property_id else None
+        repetitive_point = self._points.get((issue.id, repetitive_property_id)) if repetitive_property_id else None
+        return difficulty_point, repetitive_point
+
+
+def _difficulty_lookup_key(issue, difficulty_point):
+    """Difficulty key for config.tables.difficulty = the resolved Difficulty
+    EstimateProperty's point id, falling back to the native Issue.estimate_point id.
 
     Keyed by EstimatePoint id, not value, so renaming a point's value doesn't
     silently zero its configured contribution to Vp (see migration
     0145_kpi_difficulty_rekey_by_point_id). Use _difficulty_display_value for the
     human-readable value instead -- this key is for the engine lookup only.
     """
-    if (
-        attribute is not None
-        and attribute.difficulty_estimate_point_id
-        and attribute.difficulty_estimate_point is not None
-    ):
-        return str(attribute.difficulty_estimate_point_id)
+    if difficulty_point is not None:
+        return str(difficulty_point.id)
     if issue.estimate_point_id and issue.estimate_point is not None:
         return str(issue.estimate_point_id)
     return None
 
 
-def _difficulty_display_value(issue, attribute):
+def _difficulty_display_value(issue, difficulty_point):
     """Human-readable difficulty value for display; not used in Vp calculation."""
-    if (
-        attribute is not None
-        and attribute.difficulty_estimate_point_id
-        and attribute.difficulty_estimate_point is not None
-    ):
-        return attribute.difficulty_estimate_point.value
+    if difficulty_point is not None:
+        return difficulty_point.value
     if issue.estimate_point_id and issue.estimate_point is not None:
         return issue.estimate_point.value
     return None
 
 
-def _repetitive_lookup_key(attribute):
-    """Repetitive key for config.tables.repetitive = KPI repetitive estimate point id
-    when configured, else the legacy free-text label. Keyed by point id (not
-    value) for the same rename-safety reason as _difficulty_lookup_key.
+def _repetitive_lookup_key(attribute, repetitive_point):
+    """Repetitive key for config.tables.repetitive = the resolved Repetitive
+    EstimateProperty's point id when configured, else the legacy free-text label.
+    Keyed by point id (not value) for the same rename-safety reason as
+    _difficulty_lookup_key.
     """
-    if (
-        attribute is not None
-        and attribute.repetitive_estimate_point_id
-        and attribute.repetitive_estimate_point is not None
-    ):
-        return str(attribute.repetitive_estimate_point_id)
+    if repetitive_point is not None:
+        return str(repetitive_point.id)
     return attribute.repetitive if attribute else None
 
 
-def _repetitive_display_value(attribute):
+def _repetitive_display_value(attribute, repetitive_point):
     """Human-readable repetitive value for display; not used in Vp calculation."""
-    if (
-        attribute is not None
-        and attribute.repetitive_estimate_point_id
-        and attribute.repetitive_estimate_point is not None
-    ):
-        return attribute.repetitive_estimate_point.value
+    if repetitive_point is not None:
+        return repetitive_point.value
     return attribute.repetitive if attribute else None
 
 
-def _build_task(issue, attribute):
+def _build_task(issue, attribute, difficulty_point, repetitive_point):
     return {
         "priority": issue.priority,
         "due_date": issue.target_date,
         "delivered_date": issue.completed_at,
-        "difficulty": _difficulty_lookup_key(issue, attribute),
-        "repetitive": _repetitive_lookup_key(attribute),
+        "difficulty": _difficulty_lookup_key(issue, difficulty_point),
+        "repetitive": _repetitive_lookup_key(attribute, repetitive_point),
         "type": _issue_type_name(issue, attribute),
     }
 
@@ -104,18 +131,12 @@ class KpiIssueListEndpoint(BaseAPIView):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)
 
-        issues = (
+        issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
-            .select_related(
-                "type",
-                "state",
-                "kpi_attribute",
-                "kpi_attribute__difficulty_estimate_point",
-                "kpi_attribute__repetitive_estimate_point",
-                "estimate_point",
-            )
+            .select_related("type", "state", "kpi_attribute", "estimate_point")
             .order_by("-created_at")
         )
+        resolver = KpiPropertyResolver(issues)
 
         results = []
         sum_vp = 0.0
@@ -124,7 +145,8 @@ class KpiIssueListEndpoint(BaseAPIView):
 
         for issue in issues:
             attribute = getattr(issue, "kpi_attribute", None)
-            task = _build_task(issue, attribute)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
             counts[row_status] += 1
@@ -142,18 +164,10 @@ class KpiIssueListEndpoint(BaseAPIView):
                     "completed_at": issue.completed_at,
                     "state_group": issue.state.group if issue.state_id else None,
                     "estimate_point": str(issue.estimate_point_id) if issue.estimate_point_id else None,
-                    "difficulty_estimate_point": (
-                        str(attribute.difficulty_estimate_point_id)
-                        if attribute and attribute.difficulty_estimate_point_id
-                        else None
-                    ),
-                    "repetitive_estimate_point": (
-                        str(attribute.repetitive_estimate_point_id)
-                        if attribute and attribute.repetitive_estimate_point_id
-                        else None
-                    ),
-                    "difficulty": _difficulty_display_value(issue, attribute),
-                    "repetitive": _repetitive_display_value(attribute),
+                    "difficulty_estimate_point": str(difficulty_point.id) if difficulty_point else None,
+                    "repetitive_estimate_point": str(repetitive_point.id) if repetitive_point else None,
+                    "difficulty": _difficulty_display_value(issue, difficulty_point),
+                    "repetitive": _repetitive_display_value(attribute, repetitive_point),
                     "type": task["type"],
                     "vp": calc["Vp"],
                     "d": calc["d"],
@@ -195,21 +209,20 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)
 
-        issues = Issue.issue_objects.filter(workspace=workspace, project_id=project_id).select_related(
-            "type",
-            "state",
-            "kpi_attribute",
-            "kpi_attribute__difficulty_estimate_point",
-            "kpi_attribute__repetitive_estimate_point",
-            "estimate_point",
-        ).prefetch_related("assignees")
+        issues = list(
+            Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
+            .select_related("type", "state", "kpi_attribute", "estimate_point")
+            .prefetch_related("assignees")
+        )
+        resolver = KpiPropertyResolver(issues)
 
         buckets = {}
         unassigned_count = 0
 
         for issue in issues:
             attribute = getattr(issue, "kpi_attribute", None)
-            task = _build_task(issue, attribute)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
 
@@ -259,14 +272,12 @@ class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
     def get(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
 
-        issues = Issue.issue_objects.filter(workspace=workspace).select_related(
-            "type",
-            "state",
-            "kpi_attribute",
-            "kpi_attribute__difficulty_estimate_point",
-            "kpi_attribute__repetitive_estimate_point",
-            "estimate_point",
-        ).prefetch_related("assignees")
+        issues = list(
+            Issue.issue_objects.filter(workspace=workspace)
+            .select_related("type", "state", "kpi_attribute", "estimate_point")
+            .prefetch_related("assignees")
+        )
+        resolver = KpiPropertyResolver(issues)
 
         buckets = {}
         unassigned_count = 0
@@ -280,7 +291,8 @@ class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
 
         for issue in issues:
             attribute = getattr(issue, "kpi_attribute", None)
-            task = _build_task(issue, attribute)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
             contract = get_contract(issue.project_id)
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
@@ -341,25 +353,6 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
                 return f"'{value}' is not a valid level for {field}."
         return None
 
-    def _validate_estimate_points(self, data, config, project_id):
-        checks = [
-            ("difficulty_estimate_point", "difficulty_estimate"),
-            ("repetitive_estimate_point", "repetitive_estimate"),
-        ]
-        for point_field, estimate_field in checks:
-            if point_field not in data:
-                continue
-            point_id = data.get(point_field)
-            if point_id in (None, ""):
-                continue
-            configured_estimate_id = getattr(config, f"{estimate_field}_id", None) if config else None
-            if configured_estimate_id is None:
-                return f"No {estimate_field} is configured for this project."
-            point = EstimatePoint.objects.filter(id=point_id, project_id=project_id).first()
-            if point is None or str(point.estimate_id) != str(configured_estimate_id):
-                return f"{point_field} is not valid for the configured {estimate_field}."
-        return None
-
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def get(self, request, slug, project_id, issue_id):
         attribute = KpiIssueAttribute.objects.filter(
@@ -370,8 +363,6 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
                 {
                     "issue": str(issue_id),
                     "repetitive": None,
-                    "difficulty_estimate_point": None,
-                    "repetitive_estimate_point": None,
                     "type_override": None,
                 }
             )
@@ -381,11 +372,8 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
     def put(self, request, slug, project_id, issue_id):
         workspace = Workspace.objects.get(slug=slug)
         # Validate categorical levels against the effective config.
-        contract, config = resolve_contract(workspace, project_id)
+        contract, _ = resolve_contract(workspace, project_id)
         error = self._validate_levels(request.data, contract)
-        if error:
-            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-        error = self._validate_estimate_points(request.data, config, project_id)
         if error:
             return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -400,110 +388,6 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(workspace=workspace, project_id=project_id, issue=issue)
         return Response(serializer.data)
-
-
-def _get_issue_and_attribute(slug, project_id, issue_id):
-    issue = Issue.objects.filter(workspace__slug=slug, project_id=project_id, id=issue_id).first()
-    if issue is None:
-        return None, None
-    attribute, _ = KpiIssueAttribute.objects.get_or_create(
-        workspace=issue.workspace,
-        project_id=project_id,
-        issue=issue,
-    )
-    return issue, attribute
-
-
-def _configured_estimate_error(config, estimate_field):
-    if config is None or getattr(config, f"{estimate_field}_id", None) is None:
-        return f"No {estimate_field} is configured for this project."
-    return None
-
-
-def _estimate_point_for_config(point_id, project_id, estimate_id):
-    if point_id in (None, ""):
-        return None
-    return EstimatePoint.objects.filter(id=point_id, project_id=project_id, estimate_id=estimate_id).first()
-
-
-class KpiIssueEstimateEndpoint(BaseAPIView):
-    """Set KPI Difficulty estimate point without changing Issue.estimate_point.
-
-    This keeps the legacy route as a compatibility alias. Body:
-    ``{"estimate_point": "<id>" | null}``.
-    """
-
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
-    def put(self, request, slug, project_id, issue_id):
-        workspace = Workspace.objects.get(slug=slug)
-        _, config = resolve_contract(workspace, project_id)
-        issue, attribute = _get_issue_and_attribute(slug, project_id, issue_id)
-        if issue is None:
-            return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        estimate_point_id = request.data.get("estimate_point")
-
-        if estimate_point_id in (None, ""):
-            attribute.difficulty_estimate_point = None
-            attribute.save(update_fields=["difficulty_estimate_point", "updated_at"])
-            return Response(
-                {"issue": str(issue_id), "estimate_point": None, "difficulty_estimate_point": None}
-            )
-
-        error = _configured_estimate_error(config, "difficulty_estimate")
-        if error:
-            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-
-        point = _estimate_point_for_config(estimate_point_id, project_id, config.difficulty_estimate_id)
-        if point is None:
-            return Response(
-                {"error": "estimate_point is not valid for the configured difficulty_estimate."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        attribute.difficulty_estimate_point = point
-        attribute.save(update_fields=["difficulty_estimate_point", "updated_at"])
-        return Response(
-            {
-                "issue": str(issue_id),
-                "estimate_point": str(point.id),
-                "difficulty_estimate_point": str(point.id),
-            }
-        )
-
-
-class KpiIssueRepetitiveEstimateEndpoint(BaseAPIView):
-    """Set KPI Repetitive estimate point without using the legacy text field."""
-
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
-    def put(self, request, slug, project_id, issue_id):
-        workspace = Workspace.objects.get(slug=slug)
-        _, config = resolve_contract(workspace, project_id)
-        issue, attribute = _get_issue_and_attribute(slug, project_id, issue_id)
-        if issue is None:
-            return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        estimate_point_id = request.data.get("estimate_point")
-
-        if estimate_point_id in (None, ""):
-            attribute.repetitive_estimate_point = None
-            attribute.save(update_fields=["repetitive_estimate_point", "updated_at"])
-            return Response({"issue": str(issue_id), "repetitive_estimate_point": None})
-
-        error = _configured_estimate_error(config, "repetitive_estimate")
-        if error:
-            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-
-        point = _estimate_point_for_config(estimate_point_id, project_id, config.repetitive_estimate_id)
-        if point is None:
-            return Response(
-                {"error": "estimate_point is not valid for the configured repetitive_estimate."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        attribute.repetitive_estimate_point = point
-        attribute.save(update_fields=["repetitive_estimate_point", "updated_at"])
-        return Response({"issue": str(issue_id), "repetitive_estimate_point": str(point.id)})
 
 
 ALLOWED_PRIORITIES = {"urgent", "high", "medium", "low", "none"}

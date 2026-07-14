@@ -12,10 +12,14 @@ import type {
   IEstimate as IEstimateType,
   IEstimateFormData,
   IEstimatePoint as IEstimatePointType,
+  IEstimateProperty,
+  IIssueEstimatePropertyValue,
+  TEstimatePropertyKpiRole,
   TEstimateSystemKeys,
 } from "@plane/types";
 // plane web services
 import estimateService from "@/services/estimate.service";
+import estimatePropertyService from "@/services/estimate-property.service";
 // plane web store
 import type { IEstimate } from "@/plane-web/store/estimates/estimate";
 import { Estimate } from "@/plane-web/store/estimates/estimate";
@@ -45,6 +49,10 @@ export interface IProjectEstimateStore {
   estimateById: (estimateId: string) => IEstimate | undefined;
   estimatePointById: (estimatePointId: string, projectId?: string) => IEstimatePointType | undefined;
   estimateByEstimatePointId: (estimatePointId: string, projectId?: string) => IEstimate | undefined;
+  estimatePropertyIdsByProjectId: (projectId: string) => string[] | undefined;
+  activeEstimatePropertyIdsByProjectId: (projectId: string) => string[] | undefined;
+  estimatePropertyById: (propertyId: string) => IEstimateProperty | undefined;
+  issueEstimatePropertyValueFor: (issueId: string, propertyId: string) => IIssueEstimatePropertyValue | undefined;
   // actions
   getWorkspaceEstimates: (workspaceSlug: string, loader?: TEstimateLoader) => Promise<IEstimateType[] | undefined>;
   getProjectEstimates: (
@@ -65,6 +73,38 @@ export interface IProjectEstimateStore {
     data: IEstimateFormData
   ) => Promise<IEstimateType | undefined>;
   deleteEstimate: (workspaceSlug: string, projectId: string, estimateId: string) => Promise<void>;
+  // estimate properties
+  getProjectEstimateProperties: (workspaceSlug: string, projectId: string) => Promise<IEstimateProperty[] | undefined>;
+  createEstimateProperty: (
+    workspaceSlug: string,
+    projectId: string,
+    payload: { name: string; estimate: string }
+  ) => Promise<IEstimateProperty | undefined>;
+  updateEstimateProperty: (
+    workspaceSlug: string,
+    projectId: string,
+    propertyId: string,
+    payload: Partial<Pick<IEstimateProperty, "name" | "estimate" | "is_active" | "sort_order">>
+  ) => Promise<IEstimateProperty | undefined>;
+  deleteEstimateProperty: (workspaceSlug: string, projectId: string, propertyId: string) => Promise<void>;
+  upsertKpiRoleEstimateProperty: (
+    workspaceSlug: string,
+    projectId: string,
+    role: TEstimatePropertyKpiRole,
+    estimateId: string | null
+  ) => Promise<IEstimateProperty | undefined>;
+  getIssueEstimatePropertyValues: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string
+  ) => Promise<IIssueEstimatePropertyValue[] | undefined>;
+  updateIssueEstimatePropertyValue: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    propertyId: string,
+    estimatePointId: string | null
+  ) => Promise<IIssueEstimatePropertyValue | undefined>;
 }
 
 export class ProjectEstimateStore implements IProjectEstimateStore {
@@ -72,6 +112,8 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
   loader: TEstimateLoader = undefined;
   estimates: Record<string, IEstimate> = {}; // estimate_id -> estimate
   error: TErrorCodes | undefined = undefined;
+  estimateProperties: Record<string, IEstimateProperty> = {}; // property_id -> property
+  issueEstimatePropertyValues: Record<string, Record<string, IIssueEstimatePropertyValue>> = {}; // issue_id -> property_id -> value
 
   constructor(private store: CoreRootStore) {
     makeObservable(this, {
@@ -79,6 +121,8 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
       loader: observable.ref,
       estimates: observable,
       error: observable,
+      estimateProperties: observable,
+      issueEstimatePropertyValues: observable,
       // computed
       currentActiveEstimateId: computed,
       currentActiveEstimate: computed,
@@ -91,6 +135,13 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
       createEstimate: action,
       updateEstimate: action,
       deleteEstimate: action,
+      getProjectEstimateProperties: action,
+      createEstimateProperty: action,
+      updateEstimateProperty: action,
+      deleteEstimateProperty: action,
+      upsertKpiRoleEstimateProperty: action,
+      getIssueEstimatePropertyValues: action,
+      updateIssueEstimatePropertyValue: action,
     });
   }
 
@@ -213,6 +264,44 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
       (estimate) => !projectId || estimate.project === projectId
     );
     return estimates.find((estimate) => !!estimate.estimatePointById(estimatePointId));
+  });
+
+  /**
+   * @description get all estimate property ids for a project, ordered by sort_order
+   * @returns { string[] | undefined }
+   */
+  estimatePropertyIdsByProjectId = computedFn((projectId: string) => {
+    if (!projectId) return undefined;
+    return orderBy(
+      Object.values(this.estimateProperties || {}).filter((p) => p.project === projectId),
+      ["sort_order"],
+      "asc"
+    ).map((p) => p.id);
+  });
+
+  /**
+   * @description get active (is_active + estimate configured) estimate property ids for a project
+   * @returns { string[] | undefined }
+   */
+  activeEstimatePropertyIdsByProjectId = computedFn((projectId: string) => {
+    if (!projectId) return undefined;
+    return orderBy(
+      Object.values(this.estimateProperties || {}).filter(
+        (p) => p.project === projectId && p.is_active && !!p.estimate
+      ),
+      ["sort_order"],
+      "asc"
+    ).map((p) => p.id);
+  });
+
+  estimatePropertyById = computedFn((propertyId: string) => {
+    if (!propertyId) return undefined;
+    return this.estimateProperties[propertyId] ?? undefined;
+  });
+
+  issueEstimatePropertyValueFor = computedFn((issueId: string, propertyId: string) => {
+    if (!issueId || !propertyId) return undefined;
+    return this.issueEstimatePropertyValues[issueId]?.[propertyId] ?? undefined;
   });
 
   // actions
@@ -399,5 +488,105 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
       };
       throw error;
     }
+  };
+
+  // estimate properties
+
+  /**
+   * @description fetch every estimate property for a project (active + inactive)
+   */
+  getProjectEstimateProperties = async (
+    workspaceSlug: string,
+    projectId: string
+  ): Promise<IEstimateProperty[] | undefined> => {
+    const properties = await estimatePropertyService.fetchProjectEstimateProperties(workspaceSlug, projectId);
+    runInAction(() => {
+      properties.forEach((property) => set(this.estimateProperties, [property.id], property));
+    });
+    return properties;
+  };
+
+  createEstimateProperty = async (
+    workspaceSlug: string,
+    projectId: string,
+    payload: { name: string; estimate: string }
+  ): Promise<IEstimateProperty | undefined> => {
+    const property = await estimatePropertyService.createEstimateProperty(workspaceSlug, projectId, payload);
+    runInAction(() => set(this.estimateProperties, [property.id], property));
+    return property;
+  };
+
+  updateEstimateProperty = async (
+    workspaceSlug: string,
+    projectId: string,
+    propertyId: string,
+    payload: Partial<Pick<IEstimateProperty, "name" | "estimate" | "is_active" | "sort_order">>
+  ): Promise<IEstimateProperty | undefined> => {
+    const property = await estimatePropertyService.updateEstimateProperty(
+      workspaceSlug,
+      projectId,
+      propertyId,
+      payload
+    );
+    runInAction(() => set(this.estimateProperties, [property.id], property));
+    return property;
+  };
+
+  deleteEstimateProperty = async (workspaceSlug: string, projectId: string, propertyId: string): Promise<void> => {
+    await estimatePropertyService.deleteEstimateProperty(workspaceSlug, projectId, propertyId);
+    runInAction(() => unset(this.estimateProperties, [propertyId]));
+  };
+
+  /** Upsert (or clear, if estimateId is null) the reserved property for a KPI role. */
+  upsertKpiRoleEstimateProperty = async (
+    workspaceSlug: string,
+    projectId: string,
+    role: TEstimatePropertyKpiRole,
+    estimateId: string | null
+  ): Promise<IEstimateProperty | undefined> => {
+    const previousPropertyId = this.estimatePropertyIdsByProjectId(projectId)?.find(
+      (id) => this.estimateProperties[id]?.kpi_role === role
+    );
+    const property = await estimatePropertyService.upsertKpiRoleEstimateProperty(
+      workspaceSlug,
+      projectId,
+      role,
+      estimateId
+    );
+    runInAction(() => {
+      if (previousPropertyId) unset(this.estimateProperties, [previousPropertyId]);
+      if (property) set(this.estimateProperties, [property.id], property);
+    });
+    return property;
+  };
+
+  getIssueEstimatePropertyValues = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string
+  ): Promise<IIssueEstimatePropertyValue[] | undefined> => {
+    const values = await estimatePropertyService.fetchIssueEstimatePropertyValues(workspaceSlug, projectId, issueId);
+    runInAction(() => {
+      values.forEach((value) => set(this.issueEstimatePropertyValues, [issueId, value.property], value));
+    });
+    return values;
+  };
+
+  updateIssueEstimatePropertyValue = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    propertyId: string,
+    estimatePointId: string | null
+  ): Promise<IIssueEstimatePropertyValue | undefined> => {
+    const value = await estimatePropertyService.updateIssueEstimatePropertyValue(
+      workspaceSlug,
+      projectId,
+      issueId,
+      propertyId,
+      estimatePointId
+    );
+    runInAction(() => set(this.issueEstimatePropertyValues, [issueId, propertyId], value));
+    return value;
   };
 }

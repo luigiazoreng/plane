@@ -108,6 +108,8 @@ from .estimate import (
     EstimatePointSerializer,
     EstimateReadSerializer,
     WorkspaceEstimateSerializer,
+    EstimatePropertySerializer,
+    IssueEstimatePropertyValueSerializer,
 )
 
 from .intake import (

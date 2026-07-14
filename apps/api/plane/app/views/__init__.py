@@ -189,6 +189,13 @@ from .estimate.base import (
     BulkEstimatePointEndpoint,
     EstimatePointEndpoint,
 )
+from .estimate.property import (
+    EstimatePropertyListCreateEndpoint,
+    EstimatePropertyDetailEndpoint,
+    EstimatePropertyKpiRoleEndpoint,
+    IssueEstimatePropertyValueListEndpoint,
+    IssueEstimatePropertyValueEndpoint,
+)
 
 from .intake.base import (
     IntakeViewSet,

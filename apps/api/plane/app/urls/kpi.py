@@ -7,8 +7,6 @@ from plane.app.views.kpi import (
     KpiMemberAggregateEndpoint,
     WorkspaceKpiMemberAggregateEndpoint,
     KpiIssueAttributeEndpoint,
-    KpiIssueEstimateEndpoint,
-    KpiIssueRepetitiveEstimateEndpoint,
     KpiIssuePriorityEndpoint,
     KpiPreviewEndpoint,
 )
@@ -50,17 +48,9 @@ urlpatterns = [
         KpiIssueAttributeEndpoint.as_view(),
         name="kpi-issue-attributes",
     ),
-    # Per-issue estimate (Difficulty source)
-    path(
-        "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/issues/<uuid:issue_id>/estimate/",
-        KpiIssueEstimateEndpoint.as_view(),
-        name="kpi-issue-estimate",
-    ),
-    path(
-        "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/issues/<uuid:issue_id>/repetitive-estimate/",
-        KpiIssueRepetitiveEstimateEndpoint.as_view(),
-        name="kpi-issue-repetitive-estimate",
-    ),
+    # Per-issue Difficulty/Repetitive estimate values now live under
+    # estimate-properties/ (see plane.app.urls.estimate) -- they're no longer
+    # KPI-specific routes, since EstimateProperty generalizes them to N slots.
     # Per-issue priority (Importance source)
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/issues/<uuid:issue_id>/priority/",
