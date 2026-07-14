@@ -8,26 +8,38 @@ import { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useTheme } from "next-themes";
 import { ArrowLeft } from "lucide-react";
 import { EUserPermissionsLevel } from "@plane/constants";
+import { useTranslation } from "@plane/i18n";
 import { EUserProjectRoles } from "@plane/types";
 import type { IKpiConfig } from "@plane/types";
 import { Spinner } from "@plane/ui";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+// assets
+import darkEmptyState from "@/app/assets/empty-state/disabled-feature/views-dark.webp?url";
+import lightEmptyState from "@/app/assets/empty-state/disabled-feature/views-light.webp?url";
 // components
+import { DetailedEmptyState } from "@/components/empty-state/detailed-empty-state-root";
 import { PageHead } from "@/components/core/page-title";
 import { KpiConfigEditor } from "@/components/kpi/config-editor";
 import { SettingsHeading } from "@/components/settings/heading";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useKpi } from "@/hooks/store/use-kpi";
+import { useProject } from "@/hooks/store/use-project";
 import { useUserPermissions } from "@/hooks/store/user";
+import { useAppRouter } from "@/hooks/use-app-router";
 
 function ProjectKpiSettingsPage() {
   const { workspaceSlug, projectId } = useParams() as { workspaceSlug: string; projectId: string };
   const { projectConfig, fetchProjectConfig, updateProjectConfig, resetProjectConfig } = useKpi();
   const { getProjectEstimates, estimateIdsByProjectId, estimateById } = useProjectEstimates();
+  const { currentProjectDetails } = useProject();
   const { allowPermissions } = useUserPermissions();
+  const router = useAppRouter();
+  const { resolvedTheme } = useTheme();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -104,6 +116,28 @@ function ProjectKpiSettingsPage() {
       setSaving(false);
     }
   };
+
+  // No access to KPI
+  if (currentProjectDetails?.kpi_view === false) {
+    const resolvedEmptyState = resolvedTheme === "light" ? lightEmptyState : darkEmptyState;
+    const hasAdminLevelPermission = allowPermissions([EUserProjectRoles.ADMIN], EUserPermissionsLevel.PROJECT);
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <DetailedEmptyState
+          title={t("disabled_project.empty_state.kpi.title")}
+          description={t("disabled_project.empty_state.kpi.description")}
+          assetPath={resolvedEmptyState}
+          primaryButton={{
+            text: t("disabled_project.empty_state.kpi.primary_button.text"),
+            onClick: () => {
+              router.push(`/${workspaceSlug}/settings/projects/${projectId}/features/kpi`);
+            },
+            disabled: !hasAdminLevelPermission,
+          }}
+        />
+      </div>
+    );
+  }
 
   if (loading || !config) {
     return (

@@ -11,6 +11,7 @@ import { setPromiseToast } from "@plane/propel/toast";
 import { Tooltip } from "@plane/propel/tooltip";
 import type { IProject } from "@plane/types";
 import { CycleIcon, IntakeIcon, ModuleIcon, PageIcon, ViewsIcon } from "@plane/propel/icons";
+import { Gauge } from "lucide-react";
 // components
 import { SettingsBoxedControlItem } from "@/components/settings/boxed-control-item";
 import { SettingsHeading } from "@/components/settings/heading";
@@ -70,6 +71,15 @@ const PROJECT_FEATURES_LIST = {
     title: "Intake",
     description: "Consider and discuss work items before you add them to your project.",
     icon: <IntakeIcon className="h-5 w-5 flex-shrink-0 text-tertiary" />,
+    isPro: false,
+    isEnabled: true,
+  },
+  kpi: {
+    key: "kpi",
+    property: "kpi_view",
+    title: "KPI",
+    description: "Score work items by difficulty, priority, and delay to track team performance.",
+    icon: <Gauge className="h-5 w-5 flex-shrink-0 text-tertiary" />,
     isPro: false,
     isEnabled: true,
   },

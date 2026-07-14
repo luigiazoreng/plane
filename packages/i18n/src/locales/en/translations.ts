@@ -216,6 +216,7 @@ export default {
   modules: "Modules",
   pages: "Pages",
   intake: "Intake",
+  kpi: "KPI",
   time_tracking: "Time Tracking",
   work_management: "Work management",
   projects_and_issues: "Projects and work items",
@@ -226,6 +227,7 @@ export default {
   views_description: "Save custom sorts, filters, and display options or share them with your team.",
   pages_description: "Create and edit free-form content; notes, docs, anything.",
   intake_description: "Let non-members share bugs, feedback, and suggestions; without disrupting your workflow.",
+  kpi_description: "Score work items by difficulty, priority, and delay to track team performance.",
   time_tracking_description: "Log time spent on work items and projects.",
   work_management_description: "Manage your work and projects with ease.",
   documentation: "Documentation",
@@ -1884,6 +1886,13 @@ export default {
         toggle_title: "Enable intake",
         toggle_description: "Let project members create in app intake requests.",
       },
+      kpi: {
+        title: "KPI",
+        short_title: "KPI",
+        description: "Score work items by difficulty, priority, and delay to track team performance.",
+        toggle_title: "Enable KPI",
+        toggle_description: "Project members will be able to view and configure the KPI dashboard.",
+      },
     },
   },
   project_cycles: {
@@ -2296,6 +2305,14 @@ export default {
         title: "Views are not enabled for the project.",
         description:
           "Views are the building blocks of your project. Enable views from project settings to start using them.",
+        primary_button: {
+          text: "Manage features",
+        },
+      },
+      kpi: {
+        title: "KPI is not enabled for this project.",
+        description:
+          "Score work items by difficulty, priority, and delay to track team performance. Enable the KPI feature for your project to start using it.",
         primary_button: {
           text: "Manage features",
         },

@@ -72,6 +72,13 @@ export const PROJECT_SETTINGS: Record<TProjectSettingsTabs, TProjectSettingsItem
     access: [EUserProjectRoles.ADMIN],
     highlight: (pathname: string, baseUrl: string) => pathname === `${baseUrl}/features/intake/`,
   },
+  features_kpi: {
+    key: "features_kpi",
+    i18n_label: "project_settings.features.kpi.short_title",
+    href: `/features/kpi`,
+    access: [EUserProjectRoles.ADMIN],
+    highlight: (pathname: string, baseUrl: string) => pathname === `${baseUrl}/features/kpi/`,
+  },
   states: {
     key: "states",
     i18n_label: "common.states",
@@ -112,6 +119,7 @@ export const GROUPED_PROJECT_SETTINGS: Record<PROJECT_SETTINGS_CATEGORY, TProjec
     PROJECT_SETTINGS["features_views"],
     PROJECT_SETTINGS["features_pages"],
     PROJECT_SETTINGS["features_intake"],
+    PROJECT_SETTINGS["features_kpi"],
   ],
   [PROJECT_SETTINGS_CATEGORY.WORK_STRUCTURE]: [
     PROJECT_SETTINGS["states"],
