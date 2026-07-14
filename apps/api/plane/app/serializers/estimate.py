@@ -14,7 +14,14 @@ class EstimateSerializer(BaseSerializer):
     class Meta:
         model = Estimate
         fields = "__all__"
-        read_only_fields = ["workspace", "project"]
+        # deleted_at is part of Estimate's unique_together (name, project,
+        # deleted_at) for the soft-delete-aware uniqueness constraint. DRF's
+        # auto-generated UniqueTogetherValidator treats any unique_together
+        # field that isn't read_only as required+writable, which would force
+        # clients to supply this internal soft-delete bookkeeping field on
+        # every create -- read_only excludes it from that (matching how
+        # `project`, also in unique_together, is already handled).
+        read_only_fields = ["workspace", "project", "deleted_at"]
 
 
 class EstimatePointSerializer(BaseSerializer):
