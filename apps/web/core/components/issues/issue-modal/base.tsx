@@ -79,7 +79,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
     allowedProjectIds,
     handleCreateUpdatePropertyValues,
     handleCreateSubWorkItem,
-    handleCreateUpdateKpiAttributes,
+    handleCreateUpdateEstimatePropertyValues,
   } = useIssueModal();
   const { getProjectByIdentifier } = useProject();
   // current store details
@@ -238,8 +238,8 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
           parentId: response.id,
         });
 
-        // persist KPI Difficulty/Repetitive (separate entity from TIssue)
-        await handleCreateUpdateKpiAttributes({
+        // persist dynamic estimate-property values (Difficulty/Repetitive/custom -- separate entity from TIssue)
+        await handleCreateUpdateEstimatePropertyValues({
           issueId: response.id,
           projectId: response.project_id,
           workspaceSlug: workspaceSlug?.toString(),
@@ -352,7 +352,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
         workspaceSlug: workspaceSlug?.toString(),
         isDraft: isDraft,
       });
-      await handleCreateUpdateKpiAttributes({
+      await handleCreateUpdateEstimatePropertyValues({
         issueId: data.id,
         projectId: payload.project_id,
         workspaceSlug: workspaceSlug?.toString(),

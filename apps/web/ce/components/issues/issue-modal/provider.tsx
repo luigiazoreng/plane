@@ -10,9 +10,12 @@ import { observer } from "mobx-react";
 import type { ISearchIssueResponse, TIssue } from "@plane/types";
 // components
 import { IssueModalContext } from "@/components/issues/issue-modal/context";
-import type { TCreateUpdateKpiAttributesProps, TIssueModalContext } from "@/components/issues/issue-modal/context";
+import type {
+  TCreateUpdateEstimatePropertyValuesProps,
+  TIssueModalContext,
+} from "@/components/issues/issue-modal/context";
 // hooks
-import { useKpi } from "@/hooks/store/use-kpi";
+import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useUser } from "@/hooks/store/user/user-user";
 
 export type TIssueModalProviderProps = {
@@ -26,35 +29,30 @@ export const IssueModalProvider = observer(function IssueModalProvider(props: TI
   const { children, allowedProjectIds } = props;
   // states
   const [selectedParentIssue, setSelectedParentIssue] = useState<ISearchIssueResponse | null>(null);
-  const [kpiDifficultyEstimatePoint, setKpiDifficultyEstimatePoint] = useState<string | null | undefined>(undefined);
-  const [kpiRepetitiveEstimatePoint, setKpiRepetitiveEstimatePoint] = useState<string | null | undefined>(undefined);
+  const [estimatePropertyValues, setEstimatePropertyValues] = useState<Record<string, string | null>>({});
   // store hooks
   const { projectsWithCreatePermissions } = useUser();
-  const { updateIssueDifficultyEstimate, updateIssueRepetitiveEstimate } = useKpi();
+  const { updateIssueEstimatePropertyValue } = useProjectEstimates();
   // derived values
   const projectIdsWithCreatePermissions = Object.keys(projectsWithCreatePermissions ?? {});
 
-  const handleCreateUpdateKpiAttributes = useCallback(
-    async (createUpdateProps: TCreateUpdateKpiAttributesProps) => {
+  const setEstimatePropertyValue = useCallback((propertyId: string, value: string | null) => {
+    setEstimatePropertyValues((prev) => ({ ...prev, [propertyId]: value }));
+  }, []);
+
+  const handleCreateUpdateEstimatePropertyValues = useCallback(
+    async (createUpdateProps: TCreateUpdateEstimatePropertyValuesProps) => {
       const { issueId, projectId, workspaceSlug } = createUpdateProps;
-      const calls: Promise<void>[] = [];
-      if (kpiDifficultyEstimatePoint !== undefined) {
-        calls.push(updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, kpiDifficultyEstimatePoint));
-      }
-      if (kpiRepetitiveEstimatePoint !== undefined) {
-        calls.push(updateIssueRepetitiveEstimate(workspaceSlug, projectId, issueId, kpiRepetitiveEstimatePoint));
-      }
-      if (calls.length === 0) return;
-      await Promise.all(calls);
-      setKpiDifficultyEstimatePoint(undefined);
-      setKpiRepetitiveEstimatePoint(undefined);
+      const entries = Object.entries(estimatePropertyValues);
+      if (entries.length === 0) return;
+      await Promise.all(
+        entries.map(([propertyId, value]) =>
+          updateIssueEstimatePropertyValue(workspaceSlug, projectId, issueId, propertyId, value)
+        )
+      );
+      setEstimatePropertyValues({});
     },
-    [
-      kpiDifficultyEstimatePoint,
-      kpiRepetitiveEstimatePoint,
-      updateIssueDifficultyEstimate,
-      updateIssueRepetitiveEstimate,
-    ]
+    [estimatePropertyValues, updateIssueEstimatePropertyValue]
   );
 
   const contextValue = useMemo<TIssueModalContext>(
@@ -70,11 +68,9 @@ export const IssueModalProvider = observer(function IssueModalProvider(props: TI
       setIssuePropertyValues: () => {},
       issuePropertyValueErrors: {},
       setIssuePropertyValueErrors: () => {},
-      kpiDifficultyEstimatePoint,
-      setKpiDifficultyEstimatePoint,
-      kpiRepetitiveEstimatePoint,
-      setKpiRepetitiveEstimatePoint,
-      handleCreateUpdateKpiAttributes,
+      estimatePropertyValues,
+      setEstimatePropertyValue,
+      handleCreateUpdateEstimatePropertyValues,
       getIssueTypeIdOnProjectChange: () => null,
       getActiveAdditionalPropertiesLength: () => 0,
       handlePropertyValuesValidation: () => true,
@@ -88,9 +84,9 @@ export const IssueModalProvider = observer(function IssueModalProvider(props: TI
       allowedProjectIds,
       projectIdsWithCreatePermissions,
       selectedParentIssue,
-      kpiDifficultyEstimatePoint,
-      kpiRepetitiveEstimatePoint,
-      handleCreateUpdateKpiAttributes,
+      estimatePropertyValues,
+      setEstimatePropertyValue,
+      handleCreateUpdateEstimatePropertyValues,
     ]
   );
 

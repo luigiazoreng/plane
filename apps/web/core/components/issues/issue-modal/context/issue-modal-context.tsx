@@ -40,7 +40,7 @@ export type TCreateSubWorkItemProps = {
   parentId: string;
 };
 
-export type TCreateUpdateKpiAttributesProps = {
+export type TCreateUpdateEstimatePropertyValuesProps = {
   issueId: string;
   projectId: string;
   workspaceSlug: string;
@@ -77,14 +77,13 @@ export type TIssueModalContext = {
   setIssuePropertyValues: React.Dispatch<React.SetStateAction<TIssuePropertyValues>>;
   issuePropertyValueErrors: TIssuePropertyValueErrors;
   setIssuePropertyValueErrors: React.Dispatch<React.SetStateAction<TIssuePropertyValueErrors>>;
-  // KPI Difficulty/Repetitive: not part of TIssue, stored separately on
-  // KpiIssueAttribute. `undefined` = untouched (skip on submit), `null` =
-  // explicitly cleared, string = selected estimate point id.
-  kpiDifficultyEstimatePoint: string | null | undefined;
-  setKpiDifficultyEstimatePoint: React.Dispatch<React.SetStateAction<string | null | undefined>>;
-  kpiRepetitiveEstimatePoint: string | null | undefined;
-  setKpiRepetitiveEstimatePoint: React.Dispatch<React.SetStateAction<string | null | undefined>>;
-  handleCreateUpdateKpiAttributes: (props: TCreateUpdateKpiAttributesProps) => Promise<void>;
+  // Draft values for dynamic EstimateProperty rows (Difficulty/Repetitive and any
+  // custom properties): not part of TIssue, stored separately on
+  // IssueEstimatePropertyValue. Keyed by property id; a missing key = untouched
+  // (skip on submit), `null` = explicitly cleared, string = selected estimate point id.
+  estimatePropertyValues: Record<string, string | null>;
+  setEstimatePropertyValue: (propertyId: string, value: string | null) => void;
+  handleCreateUpdateEstimatePropertyValues: (props: TCreateUpdateEstimatePropertyValuesProps) => Promise<void>;
   getIssueTypeIdOnProjectChange: (projectId: string) => string | null;
   getActiveAdditionalPropertiesLength: (props: TActiveAdditionalPropertiesProps) => number;
   handlePropertyValuesValidation: (props: TPropertyValuesValidationProps) => boolean;

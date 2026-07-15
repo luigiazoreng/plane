@@ -30,7 +30,6 @@ import { IssueLabelSelect } from "@/components/issues/select";
 // hooks
 import { useIssueModal } from "@/hooks/context/use-issue-modal";
 import { useProjectEstimates } from "@/hooks/store/estimates";
-import { useKpi } from "@/hooks/store/use-kpi";
 import { useProject } from "@/hooks/store/use-project";
 import { useUserPermissions } from "@/hooks/store/user";
 import { usePlatformOS } from "@/hooks/use-platform-os";
@@ -69,48 +68,26 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
   const [parentIssueListModalOpen, setParentIssueListModalOpen] = useState(false);
   // store hooks
   const { t } = useTranslation();
-  const { areEstimateEnabledByProjectId } = useProjectEstimates();
+  const {
+    areEstimateEnabledByProjectId,
+    activeEstimatePropertyIdsByProjectId,
+    estimatePropertyById,
+    issueEstimatePropertyValueFor,
+    getIssueEstimatePropertyValues,
+  } = useProjectEstimates();
   const { getProjectById } = useProject();
   const { isMobile } = usePlatformOS();
   const { allowPermissions } = useUserPermissions();
-  const { projectConfig: kpiProjectConfig, fetchProjectConfig: fetchKpiProjectConfig, fetchIssueAttributes } = useKpi();
-  const {
-    kpiDifficultyEstimatePoint,
-    setKpiDifficultyEstimatePoint,
-    kpiRepetitiveEstimatePoint,
-    setKpiRepetitiveEstimatePoint,
-  } = useIssueModal();
+  const { estimatePropertyValues, setEstimatePropertyValue } = useIssueModal();
   // derived values
   const projectDetails = getProjectById(projectId);
-  const kpiConfig = projectId ? kpiProjectConfig[projectId] : undefined;
+  const estimatePropertyIds = (projectId && activeEstimatePropertyIdsByProjectId(projectId)) || [];
 
-  // Load the project's KPI config so we know which estimate systems (if any)
-  // drive Difficulty/Repetitive for this project.
-  useEffect(() => {
-    if (!projectId || !workspaceSlug) return;
-    fetchKpiProjectConfig(workspaceSlug, projectId).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, workspaceSlug]);
-
-  // Editing an existing work item: preload its current KPI attributes so a
+  // Editing an existing work item: load its current estimate-property values so a
   // submit that never touches these fields doesn't wipe existing values.
   useEffect(() => {
     if (!id || !projectId || !workspaceSlug) return;
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const attribute = await fetchIssueAttributes(workspaceSlug, projectId, id);
-        if (cancelled) return;
-        setKpiDifficultyEstimatePoint(attribute.difficulty_estimate_point);
-        setKpiRepetitiveEstimatePoint(attribute.repetitive_estimate_point);
-      } catch {
-        // ignore: fields simply stay untouched (undefined)
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
+    getIssueEstimatePropertyValues(workspaceSlug, projectId, id).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, projectId, workspaceSlug]);
 
@@ -305,36 +282,34 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
           )}
         />
       )}
-      {projectId && kpiConfig?.difficulty_estimate && (
-        <div className="h-7">
-          <EstimateDropdown
-            value={kpiDifficultyEstimatePoint ?? undefined}
-            estimateId={kpiConfig.difficulty_estimate}
-            onChange={(estimatePoint) => {
-              setKpiDifficultyEstimatePoint(estimatePoint ?? null);
-              handleFormChange();
-            }}
-            projectId={projectId}
-            buttonVariant="border-with-text"
-            placeholder="Difficulty"
-          />
-        </div>
-      )}
-      {projectId && kpiConfig?.repetitive_estimate && (
-        <div className="h-7">
-          <EstimateDropdown
-            value={kpiRepetitiveEstimatePoint ?? undefined}
-            estimateId={kpiConfig.repetitive_estimate}
-            onChange={(estimatePoint) => {
-              setKpiRepetitiveEstimatePoint(estimatePoint ?? null);
-              handleFormChange();
-            }}
-            projectId={projectId}
-            buttonVariant="border-with-text"
-            placeholder="Repetitive"
-          />
-        </div>
-      )}
+      {projectId &&
+        estimatePropertyIds.map((propertyId) => {
+          const property = estimatePropertyById(propertyId);
+          if (!property) return null;
+          // KPI-reserved properties (Difficulty/Repetitive) only show while the project's KPI feature is on;
+          // custom properties are independent of that toggle.
+          if (property.kpi_role && !projectDetails?.kpi_view) return null;
+          const draftValue = estimatePropertyValues[propertyId];
+          const currentValue =
+            draftValue !== undefined
+              ? draftValue
+              : (issueEstimatePropertyValueFor(id ?? "", propertyId)?.estimate_point ?? null);
+          return (
+            <div key={propertyId} className="h-7">
+              <EstimateDropdown
+                value={currentValue ?? undefined}
+                estimateId={property.estimate}
+                onChange={(estimatePoint) => {
+                  setEstimatePropertyValue(propertyId, estimatePoint ?? null);
+                  handleFormChange();
+                }}
+                projectId={projectId}
+                buttonVariant="border-with-text"
+                placeholder={property.name}
+              />
+            </div>
+          );
+        })}
       <div className="h-7">
         {parentId ? (
           <CustomMenu

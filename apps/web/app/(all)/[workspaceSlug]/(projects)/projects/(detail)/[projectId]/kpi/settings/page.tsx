@@ -34,7 +34,15 @@ import { useAppRouter } from "@/hooks/use-app-router";
 function ProjectKpiSettingsPage() {
   const { workspaceSlug, projectId } = useParams() as { workspaceSlug: string; projectId: string };
   const { projectConfig, fetchProjectConfig, updateProjectConfig, resetProjectConfig } = useKpi();
-  const { getProjectEstimates, estimateIdsByProjectId, estimateById } = useProjectEstimates();
+  const {
+    getProjectEstimates,
+    estimateIdsByProjectId,
+    estimateById,
+    getProjectEstimateProperties,
+    estimatePropertyIdsByProjectId,
+    estimatePropertyById,
+    upsertKpiRoleEstimateProperty,
+  } = useProjectEstimates();
   const { currentProjectDetails } = useProject();
   const { allowPermissions } = useUserPermissions();
   const router = useAppRouter();
@@ -83,15 +91,40 @@ function ProjectKpiSettingsPage() {
     projectId
   );
 
+  const propertyIds = estimatePropertyIdsByProjectId(projectId) ?? [];
+  const difficultyEstimateId =
+    propertyIds.map((id) => estimatePropertyById(id)).find((property) => property?.kpi_role === "difficulty")
+      ?.estimate ?? null;
+  const repetitiveEstimateId =
+    propertyIds.map((id) => estimatePropertyById(id)).find((property) => property?.kpi_role === "repetitive")
+      ?.estimate ?? null;
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
     getProjectEstimates(workspaceSlug, projectId).catch(() => {});
+    getProjectEstimateProperties(workspaceSlug, projectId).catch(() => {});
     fetchProjectConfig(workspaceSlug, projectId).finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, projectId, fetchProjectConfig, getProjectEstimates]);
+  }, [workspaceSlug, projectId, fetchProjectConfig, getProjectEstimates, getProjectEstimateProperties]);
+
+  const handleDifficultyEstimateChange = async (estimateId: string | null) => {
+    try {
+      await upsertKpiRoleEstimateProperty(workspaceSlug, projectId, "difficulty", estimateId);
+    } catch {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not update the Difficulty estimate." });
+    }
+  };
+
+  const handleRepetitiveEstimateChange = async (estimateId: string | null) => {
+    try {
+      await upsertKpiRoleEstimateProperty(workspaceSlug, projectId, "repetitive", estimateId);
+    } catch {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not update the Repetitive estimate." });
+    }
+  };
 
   const handleSave = async (data: Partial<IKpiConfig>) => {
     setSaving(true);
@@ -173,6 +206,10 @@ function ProjectKpiSettingsPage() {
             onReset={handleReset}
             estimateOptions={estimateOptions}
             estimateValuesById={estimateValuesById}
+            difficultyEstimateId={difficultyEstimateId}
+            repetitiveEstimateId={repetitiveEstimateId}
+            onDifficultyEstimateChange={handleDifficultyEstimateChange}
+            onRepetitiveEstimateChange={handleRepetitiveEstimateChange}
           />
         </div>
       </div>
