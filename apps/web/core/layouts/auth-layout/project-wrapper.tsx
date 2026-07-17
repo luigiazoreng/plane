@@ -21,6 +21,7 @@ import {
   PROJECT_MEMBER_PREFERENCES,
   PROJECT_STATES,
   PROJECT_ESTIMATES,
+  PROJECT_ESTIMATE_PROPERTIES,
   PROJECT_ALL_CYCLES,
   PROJECT_MODULES,
   PROJECT_VIEWS,
@@ -63,7 +64,7 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
   const { fetchProjectStates, fetchProjectIntakeState } = useProjectState();
   const { data: currentUserData } = useUser();
   const { fetchProjectLabels } = useLabel();
-  const { getProjectEstimates } = useProjectEstimates();
+  const { getProjectEstimates, getProjectEstimateProperties } = useProjectEstimates();
   // derived values
   const hasPermissionToCurrentProject = allowPermissions(
     [EUserPermissions.ADMIN, EUserPermissions.MEMBER, EUserPermissions.GUEST],
@@ -117,6 +118,15 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
     revalidateIfStale: false,
     revalidateOnFocus: false,
   });
+  // fetching project estimate properties
+  useSWR(
+    PROJECT_ESTIMATE_PROPERTIES(projectId, currentProjectRole),
+    () => getProjectEstimateProperties(workspaceSlug, projectId),
+    {
+      revalidateIfStale: false,
+      revalidateOnFocus: false,
+    }
+  );
   // fetching project cycles
   useSWR(PROJECT_ALL_CYCLES(projectId, currentProjectRole), () => fetchAllCycles(workspaceSlug, projectId), {
     revalidateIfStale: false,

@@ -181,6 +181,9 @@ export const PROJECT_INTAKE_STATE = (projectId: string, projectRole: EUserPermis
 export const PROJECT_ESTIMATES = (projectId: string, projectRole: EUserPermissions | undefined) =>
   `PROJECT_ESTIMATES_${projectId.toString().toUpperCase()}_${projectRole}`;
 
+export const PROJECT_ESTIMATE_PROPERTIES = (projectId: string, projectRole: EUserPermissions | undefined) =>
+  `PROJECT_ESTIMATE_PROPERTIES_${projectId.toString().toUpperCase()}_${projectRole}`;
+
 export const PROJECT_ALL_CYCLES = (projectId: string, projectRole: EUserPermissions | undefined) =>
   `PROJECT_ALL_CYCLES_${projectId.toString().toUpperCase()}_${projectRole}`;
 
