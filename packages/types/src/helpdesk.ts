@@ -26,6 +26,8 @@ export interface IHelpdeskPortal {
   auto_assignment_config: IHelpdeskAutoAssignmentConfig;
   sla_first_response_hours: number | null;
   sla_resolution_hours: number | null;
+  no_reply_email_address: string | null;
+  default_agent_email_address: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -163,6 +165,10 @@ export interface IHelpdeskRequestComment {
   customer?: string | null;
   content: string;
   is_internal: boolean;
+  delivery_channels?: string[];
+  email_status?: "not_sent" | "pending" | "sent" | "failed";
+  email_sent_at?: string | null;
+  email_message_id?: string | null;
   created_at: string;
   updated_at: string;
 }

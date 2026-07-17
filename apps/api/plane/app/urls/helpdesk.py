@@ -27,6 +27,7 @@ from plane.app.views.helpdesk import (
     HelpdeskMemberViewSet,
     HelpdeskCustomerViewSet,
 )
+from plane.app.views.helpdesk.inbound import PublicHelpdeskInboundEmailEndpoint
 
 urlpatterns = [
     # --- Customer auth (workspace-level) ---
@@ -282,5 +283,12 @@ urlpatterns = [
         "helpdesk/public/portals/<str:public_slug>/requests/<uuid:request_pk>/comments/",
         PublicHelpdeskCommentEndpoint.as_view(),
         name="public-helpdesk-comment",
+    ),
+
+    # --- Inbound Email Webhook ---
+    path(
+        "helpdesk/public/inbound/",
+        PublicHelpdeskInboundEmailEndpoint.as_view(),
+        name="public-helpdesk-inbound",
     ),
 ]

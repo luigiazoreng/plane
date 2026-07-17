@@ -48,6 +48,8 @@ class HelpdeskPortal(WorkspaceBaseModel):
     auto_assignment_config = models.JSONField(default=dict, blank=True)
     sla_first_response_hours = models.IntegerField(null=True, blank=True)
     sla_resolution_hours = models.IntegerField(null=True, blank=True)
+    no_reply_email_address = models.EmailField(max_length=255, null=True, blank=True)
+    default_agent_email_address = models.EmailField(max_length=255, null=True, blank=True)
 
     class Meta:
         verbose_name = "Helpdesk Portal"
@@ -211,6 +213,21 @@ class HelpdeskRequestComment(WorkspaceBaseModel):
     )
     content = models.TextField()
     is_internal = models.BooleanField(default=False)
+
+    class EmailDeliveryStatus(models.TextChoices):
+        NOT_SENT = "not_sent", "Not Sent"
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    delivery_channels = models.JSONField(default=list, blank=True)
+    email_status = models.CharField(
+        max_length=20,
+        choices=EmailDeliveryStatus.choices,
+        default=EmailDeliveryStatus.NOT_SENT,
+    )
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    email_message_id = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         verbose_name = "Helpdesk Request Comment"

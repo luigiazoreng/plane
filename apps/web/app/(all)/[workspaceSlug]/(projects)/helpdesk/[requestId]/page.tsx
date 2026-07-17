@@ -97,6 +97,20 @@ const WorkspaceRequestDetailPage = observer(() => {
   const [isForwarding, setIsForwarding] = useState(false);
   const previousAcceptedIssueIdsRef = useRef<string[]>([]);
 
+  const [deliveryChannels, setDeliveryChannels] = useState<string[]>(() => {
+    try {
+      const stored = sessionStorage.getItem("helpdesk_delivery_channels");
+      return stored ? JSON.parse(stored) : ["portal"];
+    } catch {
+      return ["portal"];
+    }
+  });
+
+  const updateDeliveryChannels = (channels: string[]) => {
+    setDeliveryChannels(channels);
+    sessionStorage.setItem("helpdesk_delivery_channels", JSON.stringify(channels));
+  };
+
   useEffect(() => {
     if (!workspaceSlug || !requestId) return;
     const wSlug = workspaceSlug.toString();
@@ -193,6 +207,7 @@ const WorkspaceRequestDetailPage = observer(() => {
       await helpdeskStore.createRequestComment(wSlug, rId, {
         content: newComment.trim(),
         is_internal: isInternalNote,
+        delivery_channels: isInternalNote ? ["portal"] : deliveryChannels,
       });
       setNewComment("");
       setToast({
@@ -412,6 +427,21 @@ const WorkspaceRequestDetailPage = observer(() => {
                                 Internal note
                               </Badge>
                             )}
+                            {!comment.is_internal &&
+                              comment.delivery_channels &&
+                              comment.delivery_channels.length > 0 && (
+                                <Badge variant="neutral" size="sm">
+                                  Sent via{" "}
+                                  {comment.delivery_channels
+                                    .map((c) => c.charAt(0).toUpperCase() + c.slice(1))
+                                    .join(" + ")}
+                                </Badge>
+                              )}
+                            {comment.email_status === "failed" && (
+                              <Badge variant="danger" size="sm">
+                                ❌ Delivery failed
+                              </Badge>
+                            )}
                             <span className="text-text-400 text-11">
                               {new Date(comment.created_at).toLocaleString()}
                             </span>
@@ -473,6 +503,28 @@ const WorkspaceRequestDetailPage = observer(() => {
                     </button>
                     <div className="flex items-center gap-2">
                       <p className="text-text-400 hidden text-11 sm:block">Ctrl/Cmd + Enter</p>
+                      {!isInternalNote && (
+                        <select
+                          className="text-xs text-text-200 h-7 rounded-md border border-subtle bg-surface-2 px-2 py-1 outline-none"
+                          value={
+                            deliveryChannels.includes("email")
+                              ? deliveryChannels.includes("portal")
+                                ? "both"
+                                : "email"
+                              : "portal"
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "portal") updateDeliveryChannels(["portal"]);
+                            else if (val === "email") updateDeliveryChannels(["email"]);
+                            else updateDeliveryChannels(["portal", "email"]);
+                          }}
+                        >
+                          <option value="portal">Send via Portal</option>
+                          <option value="email">Send via Email</option>
+                          <option value="both">Send via Portal + Email</option>
+                        </select>
+                      )}
                       <Button
                         variant="primary"
                         size="sm"

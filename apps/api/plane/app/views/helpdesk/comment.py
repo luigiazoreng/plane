@@ -58,17 +58,30 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
         return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
+        from plane.bgtasks.helpdesk_email_task import send_helpdesk_comment_email
+
         hd_request = HelpdeskRequest.objects.get(id=self.kwargs.get("request_pk"))
+        
+        # Determine email_status before saving
+        delivery_channels = serializer.validated_data.get("delivery_channels", [])
+        email_status = HelpdeskRequestComment.EmailDeliveryStatus.NOT_SENT
+        if "email" in delivery_channels:
+            email_status = HelpdeskRequestComment.EmailDeliveryStatus.PENDING
+
         comment = serializer.save(
             workspace_id=hd_request.workspace_id,
             request_id=hd_request.id,
             actor=self.request.user,
+            email_status=email_status,
         )
         if hd_request.first_responded_at is None and comment.actor is not None:
             HelpdeskRequest.objects.filter(id=hd_request.id).update(
                 first_responded_at=comment.created_at
             )
         publish(self.kwargs.get("slug", ""), {"type": "comment.created", "request_id": str(hd_request.id)})
+
+        if "email" in delivery_channels:
+            send_helpdesk_comment_email.delay(comment.id)
 
 
 class PublicHelpdeskCommentEndpoint(BaseAPIView):

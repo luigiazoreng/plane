@@ -246,7 +246,14 @@ class HelpdeskRequestCommentSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskRequestComment
         fields = "__all__"
-        read_only_fields = READ_ONLY_BASE + ["request", "actor", "customer"]
+        read_only_fields = READ_ONLY_BASE + [
+            "request", 
+            "actor", 
+            "customer",
+            "email_status",
+            "email_sent_at",
+            "email_message_id",
+        ]
 
 
 class HelpdeskRequestIssueSerializer(BaseSerializer):
