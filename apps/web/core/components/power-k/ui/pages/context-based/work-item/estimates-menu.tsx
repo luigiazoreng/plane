@@ -17,59 +17,110 @@ import { useProjectEstimates } from "@/hooks/store/estimates";
 // local imports
 import { PowerKModalCommandItem } from "../../../modal/command-item";
 
+export type TEstimateMenuSelection = { propertyId: string; estimatePointId: string | null };
+
 type Props = {
-  handleSelect: (estimatePointId: string | null) => void;
+  handleSelect: (selection: TEstimateMenuSelection) => void;
   workItemDetails: TIssue;
 };
 
 export const PowerKWorkItemEstimatesMenu = observer(function PowerKWorkItemEstimatesMenu(props: Props) {
   const { handleSelect, workItemDetails } = props;
   // store hooks
-  const { activeEstimateIdsByProjectId, getEstimateById } = useProjectEstimates();
-  const projectEstimateIds = workItemDetails.project_id
-    ? (activeEstimateIdsByProjectId(workItemDetails.project_id) ?? [])
+  const {
+    getEstimateById,
+    activeEstimatePropertyIdsByProjectId,
+    estimateSystemPropertyIdsByProjectId,
+    estimatePropertyById,
+    issueEstimatePropertyValueFor,
+  } = useProjectEstimates();
+  const estimateSystemPropertyIds = workItemDetails.project_id
+    ? estimateSystemPropertyIdsByProjectId(workItemDetails.project_id) ?? []
+    : [];
+  const estimatePropertyIds = workItemDetails.project_id
+    ? activeEstimatePropertyIdsByProjectId(workItemDetails.project_id) ?? []
     : [];
   // translation
   const { t } = useTranslation();
-  const estimateOptions = projectEstimateIds.flatMap((estimateId) => {
-    const estimate = getEstimateById(estimateId);
-    if (!estimate) return [];
-
-    return (estimate.estimatePointIds ?? []).map((estimatePointId) => ({
-      estimate,
-      estimatePoint: estimate.estimatePointById(estimatePointId),
-    }));
-  });
 
   return (
-    <Command.Group>
-      <PowerKModalCommandItem
-        icon={Triangle}
-        label={t("project_settings.estimates.no_estimate")}
-        isSelected={workItemDetails.estimate_point === null}
-        onSelect={() => handleSelect(null)}
-      />
-      {estimateOptions.length > 0 ? (
-        estimateOptions.map(({ estimate, estimatePoint }) => {
-          if (!estimatePoint) return null;
+    <>
+      {estimateSystemPropertyIds.map((propertyId) => {
+        const property = estimatePropertyById(propertyId);
+        if (!property) return null;
+        const estimate = getEstimateById(property.estimate);
+        if (!estimate) return null;
+        const currentValue = issueEstimatePropertyValueFor(workItemDetails.id, propertyId)?.estimate_point ?? null;
+        const estimatePoints = (estimate.estimatePointIds ?? [])
+          .map((estimatePointId) => estimate.estimatePointById(estimatePointId))
+          .filter((point): point is NonNullable<typeof point> => !!point);
 
-          return (
+        return (
+          <Command.Group key={propertyId} heading={estimate.name}>
             <PowerKModalCommandItem
-              key={estimatePoint.id}
               icon={Triangle}
-              label={`${estimate.name ? `${estimate.name}: ` : ""}${
-                estimate.type === EEstimateSystem.TIME
-                  ? convertMinutesToHoursMinutesString(Number(estimatePoint.value))
-                  : estimatePoint.value
-              }`}
-              isSelected={workItemDetails.estimate_point === estimatePoint.id}
-              onSelect={() => handleSelect(estimatePoint.id ?? null)}
+              label={t("project_settings.estimates.no_estimate")}
+              isSelected={currentValue === null}
+              onSelect={() => handleSelect({ propertyId, estimatePointId: null })}
             />
-          );
-        })
-      ) : (
-        <div className="text-center">No estimate found</div>
-      )}
-    </Command.Group>
+            {estimatePoints.length > 0 ? (
+              estimatePoints.map((estimatePoint) => (
+                <PowerKModalCommandItem
+                  key={estimatePoint.id}
+                  icon={Triangle}
+                  label={
+                    estimate.type === EEstimateSystem.TIME
+                      ? convertMinutesToHoursMinutesString(Number(estimatePoint.value))
+                      : (estimatePoint.value ?? "")
+                  }
+                  isSelected={currentValue === estimatePoint.id}
+                  onSelect={() => handleSelect({ propertyId, estimatePointId: estimatePoint.id ?? null })}
+                />
+              ))
+            ) : (
+              <div className="text-center">No estimate found</div>
+            )}
+          </Command.Group>
+        );
+      })}
+      {estimatePropertyIds.map((propertyId) => {
+        const property = estimatePropertyById(propertyId);
+        if (!property) return null;
+        const estimate = getEstimateById(property.estimate);
+        if (!estimate) return null;
+        const currentValue = issueEstimatePropertyValueFor(workItemDetails.id, propertyId)?.estimate_point ?? null;
+        const estimatePoints = (estimate.estimatePointIds ?? [])
+          .map((estimatePointId) => estimate.estimatePointById(estimatePointId))
+          .filter((point): point is NonNullable<typeof point> => !!point);
+
+        return (
+          <Command.Group key={propertyId} heading={property.name}>
+            <PowerKModalCommandItem
+              icon={Triangle}
+              label={t("project_settings.estimates.no_estimate")}
+              isSelected={currentValue === null}
+              onSelect={() => handleSelect({ propertyId, estimatePointId: null })}
+            />
+            {estimatePoints.length > 0 ? (
+              estimatePoints.map((estimatePoint) => (
+                <PowerKModalCommandItem
+                  key={estimatePoint.id}
+                  icon={Triangle}
+                  label={
+                    estimate.type === EEstimateSystem.TIME
+                      ? convertMinutesToHoursMinutesString(Number(estimatePoint.value))
+                      : (estimatePoint.value ?? "")
+                  }
+                  isSelected={currentValue === estimatePoint.id}
+                  onSelect={() => handleSelect({ propertyId, estimatePointId: estimatePoint.id ?? null })}
+                />
+              ))
+            ) : (
+              <div className="text-center">No estimate found</div>
+            )}
+          </Command.Group>
+        );
+      })}
+    </>
   );
 });

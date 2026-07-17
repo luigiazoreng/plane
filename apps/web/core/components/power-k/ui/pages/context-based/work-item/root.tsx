@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import { useEffect } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // plane imports
@@ -13,6 +14,7 @@ import type { TPowerKPageType } from "@/components/power-k/core/types";
 // hooks
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useMember } from "@/hooks/store/use-member";
+import { useProjectEstimates } from "@/hooks/store/estimates";
 // local imports
 import { PowerKMembersMenu } from "../../../../menus/members";
 import { PowerKWorkItemCyclesMenu } from "./cycles-menu";
@@ -30,7 +32,7 @@ type Props = {
 export const PowerKWorkItemContextBasedPages = observer(function PowerKWorkItemContextBasedPages(props: Props) {
   const { activePage, handleSelection } = props;
   // navigation
-  const { workItem: entityIdentifier } = useParams();
+  const { workspaceSlug, workItem: entityIdentifier } = useParams();
   // store hooks
   const {
     issue: { getIssueById, getIssueIdByIdentifier },
@@ -38,10 +40,18 @@ export const PowerKWorkItemContextBasedPages = observer(function PowerKWorkItemC
   const {
     project: { getProjectMemberIds },
   } = useMember();
+  const { getIssueEstimatePropertyValues } = useProjectEstimates();
+
   // derived values
   const entityId = entityIdentifier ? getIssueIdByIdentifier(entityIdentifier.toString()) : null;
   const entityDetails = entityId ? getIssueById(entityId) : null;
   const projectMemberIds = entityDetails?.project_id ? getProjectMemberIds(entityDetails.project_id, false) : [];
+
+  useEffect(() => {
+    if (activePage === "update-work-item-estimate" && workspaceSlug && entityDetails?.project_id && entityDetails?.id) {
+      getIssueEstimatePropertyValues(workspaceSlug.toString(), entityDetails.project_id, entityDetails.id).catch(() => {});
+    }
+  }, [activePage, workspaceSlug, entityDetails?.project_id, entityDetails?.id, getIssueEstimatePropertyValues]);
 
   if (!entityDetails) return null;
 

@@ -45,7 +45,8 @@ export const usePowerKWorkItemContextBasedCommands = (): TPowerKCommandConfig[] 
   } = useUser();
   const { toggleDeleteIssueModal } = useCommandPalette();
   const { getProjectById } = useProject();
-  const { areEstimateEnabledByProjectId } = useProjectEstimates();
+  const { areEstimateEnabledByProjectId, issueEstimatePropertyValueFor, updateIssueEstimatePropertyValue } =
+    useProjectEstimates();
   const {
     issue: { getIssueById, getIssueIdByIdentifier, addCycleToIssue, removeIssueFromCycle, changeModulesInIssue },
     subscription: { getSubscriptionByIssueId, createSubscription, removeSubscription },
@@ -280,11 +281,17 @@ export const usePowerKWorkItemContextBasedCommands = (): TPowerKCommandConfig[] 
       type: "change-page",
       page: "update-work-item-estimate",
       onSelect: (data) => {
-        const estimatePointId = data as string | null;
-        if (entityDetails?.estimate_point === estimatePointId) return;
-        handleUpdateEntity({
-          estimate_point: estimatePointId,
-        });
+        const { propertyId, estimatePointId } = data as { propertyId: string; estimatePointId: string | null };
+        if (!workspaceSlug || !entityDetails || !entityDetails.project_id) return;
+        const currentValue = issueEstimatePropertyValueFor(entityDetails.id, propertyId)?.estimate_point ?? null;
+        if (currentValue === estimatePointId) return;
+        updateIssueEstimatePropertyValue(
+          workspaceSlug.toString(),
+          entityDetails.project_id,
+          entityDetails.id,
+          propertyId,
+          estimatePointId
+        ).catch(() => {});
       },
       modifierShortcut: "shift+e",
       isEnabled: () => isEstimateEnabled && isEditingAllowed,

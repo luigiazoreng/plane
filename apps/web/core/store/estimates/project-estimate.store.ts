@@ -51,6 +51,7 @@ export interface IProjectEstimateStore {
   estimateByEstimatePointId: (estimatePointId: string, projectId?: string) => IEstimate | undefined;
   estimatePropertyIdsByProjectId: (projectId: string) => string[] | undefined;
   activeEstimatePropertyIdsByProjectId: (projectId: string) => string[] | undefined;
+  estimateSystemPropertyIdsByProjectId: (projectId: string) => string[] | undefined;
   estimatePropertyById: (propertyId: string) => IEstimateProperty | undefined;
   issueEstimatePropertyValueFor: (issueId: string, propertyId: string) => IIssueEstimatePropertyValue | undefined;
   // actions
@@ -280,17 +281,38 @@ export class ProjectEstimateStore implements IProjectEstimateStore {
   });
 
   /**
-   * @description get active (is_active + estimate configured) estimate property ids for a project
+   * @description get active (is_active + estimate configured) estimate property ids for a project,
+   * excluding the system-default rows (those are surfaced separately via
+   * `estimateSystemPropertyIdsByProjectId`) so KPI/custom-property call sites don't double-render
+   * the per-system "Estimates" group.
    * @returns { string[] | undefined }
    */
   activeEstimatePropertyIdsByProjectId = computedFn((projectId: string) => {
     if (!projectId) return undefined;
     return orderBy(
       Object.values(this.estimateProperties || {}).filter(
-        (p) => p.project === projectId && p.is_active && !!p.estimate
+        (p) => p.project === projectId && p.is_active && !!p.estimate && !p.is_estimate_default
       ),
       ["sort_order"],
       "asc"
+    ).map((p) => p.id);
+  });
+
+  /**
+   * @description get the system-default estimate property ids for a project (one per active
+   * Estimate system), ordered to match `activeEstimateIdsByProjectId`'s estimate ordering
+   * (by the backing estimate's created_at desc) so system rows appear in a stable, predictable
+   * order in the "Estimates" group.
+   * @returns { string[] | undefined }
+   */
+  estimateSystemPropertyIdsByProjectId = computedFn((projectId: string) => {
+    if (!projectId) return undefined;
+    return orderBy(
+      Object.values(this.estimateProperties || {}).filter(
+        (p) => p.project === projectId && p.is_active && p.is_estimate_default
+      ),
+      [(p) => this.getEstimateById(p.estimate)?.created_at],
+      "desc"
     ).map((p) => p.id);
   });
 

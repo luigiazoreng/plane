@@ -63,8 +63,74 @@ def _activate_numeric_estimate(project, estimate):
         return
     conflicting.update(last_used=False)
     if project.estimate_id in conflicting_ids:
+        old_estimate_id = project.estimate_id
         project.estimate = estimate
         project.save(update_fields=["estimate", "updated_at"])
+        _bulk_resync_issue_estimate_point(project, estimate, old_estimate_id)
+
+
+def _ensure_estimate_default_property(estimate):
+    """Auto-maintain the single "default" EstimateProperty row (is_estimate_
+    default=True) for an Estimate system that just became active (last_used=
+    True), so the new per-system Properties panel UI has a row to render for
+    it. Idempotent -- get_or_create no-ops if the row already exists (e.g. on
+    repeated/duplicate activation calls).
+    """
+    EstimateProperty.objects.get_or_create(
+        project_id=estimate.project_id,
+        estimate_id=estimate.id,
+        is_estimate_default=True,
+        defaults={
+            "name": estimate.name,
+            "workspace_id": estimate.workspace_id,
+            "kpi_role": None,
+        },
+    )
+
+
+def _bulk_resync_issue_estimate_point(project, new_default_estimate, old_estimate_id=None):
+    """Step B8 -- closes the gap where Design Decision 2's per-issue dual-write
+    (IssueEstimatePropertyValueEndpoint.put) only keeps Issue.estimate_point in
+    sync at the moment a value is set through the new per-system endpoint. When
+    Project.estimate itself is reassigned to a DIFFERENT already-active system
+    (promotion, via either _activate_numeric_estimate's conflict-resolution
+    branch or BulkEstimatePointEndpoint.partial_update's explicit
+    deactivation-promotion branch), every issue's estimate_point would
+    otherwise keep pointing at the OLD default's stale value until
+    individually touched again. Resync every issue in the project from the
+    new default's own per-issue IssueEstimatePropertyValue rows -- issues with
+    no value under the new default get estimate_point cleared to None (they
+    had no value under the new system either), not left stale.
+
+    No activity-log entries for this bulk resync -- it's a system-level
+    consistency fix, not a user-initiated per-issue change (mirrors how
+    Estimate.destroy() already does silent bulk nulling for its own cleanup).
+    """
+    default_property = (
+        EstimateProperty.objects.filter(
+            project_id=project.id, estimate_id=new_default_estimate.id, is_estimate_default=True
+        ).first()
+        if new_default_estimate is not None
+        else None
+    )
+
+    if default_property is None:
+        if old_estimate_id:
+            Issue.objects.filter(project_id=project.id, estimate_point__estimate_id=old_estimate_id).update(estimate_point=None)
+        return
+
+    for value in (
+        IssueEstimatePropertyValue.objects.filter(property_id=default_property.id, deleted_at__isnull=True)
+        .select_related("issue")
+        .iterator(chunk_size=500)
+    ):
+        value.issue.estimate_point_id = value.estimate_point_id
+        value.issue.save(update_fields=["estimate_point", "updated_at"])
+
+    Issue.objects.filter(project_id=project.id).exclude(
+        estimate_property_values__property_id=default_property.id,
+        estimate_property_values__deleted_at__isnull=True,
+    ).update(estimate_point=None)
 
 
 class ProjectEstimatePointEndpoint(BaseAPIView):
@@ -169,6 +235,7 @@ class BulkEstimatePointEndpoint(BaseViewSet):
 
         if estimate.last_used:
             _activate_numeric_estimate(project, estimate)
+            _ensure_estimate_default_property(estimate)
 
         serializer = EstimateReadSerializer(estimate)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -218,11 +285,14 @@ class BulkEstimatePointEndpoint(BaseViewSet):
                     .order_by("-created_at")
                     .first()
                 )
+                old_estimate_id = project.estimate_id
                 project.estimate = replacement_estimate
                 project.save(update_fields=["estimate", "updated_at"])
+                _bulk_resync_issue_estimate_point(project, replacement_estimate, old_estimate_id)
 
             if estimate.last_used:
                 _activate_numeric_estimate(project, estimate)
+                _ensure_estimate_default_property(estimate)
 
         if not estimate_points_data:
             estimate_serializer = EstimateReadSerializer(estimate)
@@ -275,7 +345,7 @@ class BulkEstimatePointEndpoint(BaseViewSet):
             estimate_point=None
         )
         IssueEstimatePropertyValue.objects.filter(
-            workspace__slug=slug, estimate_point__estimate_id=estimate_id
+            project_id=project_id, workspace__slug=slug, estimate_point__estimate_id=estimate_id
         ).update(estimate_point=None)
         # EstimateProperty.estimate is required (not nullable) -- a property
         # whose estimate was just deleted can't be repointed, so soft-delete it
@@ -367,6 +437,9 @@ class EstimatePointEndpoint(BaseViewSet):
                     epoch=int(timezone.now().timestamp()),
                 )
                 issues.update(estimate_point_id=new_estimate_id)
+                IssueEstimatePropertyValue.objects.filter(
+                    project_id=project_id, workspace__slug=slug, estimate_point_id=estimate_point_id
+                ).update(estimate_point_id=new_estimate_id)
         else:
             issues = Issue.objects.filter(
                 project_id=project_id,
@@ -385,6 +458,16 @@ class EstimatePointEndpoint(BaseViewSet):
                     ),
                     epoch=int(timezone.now().timestamp()),
                 )
+            # Synchronous nulling (Step B9, mirrors Estimate.destroy()'s
+            # existing precedent) -- EstimatePoint.delete() below is a soft
+            # delete (SoftDeleteModel), so Django's on_delete=SET_NULL
+            # collector never fires for it; the user-visible effect shouldn't
+            # depend on the async soft_delete_related_objects cascade/Celery
+            # being up.
+            issues.update(estimate_point_id=None)
+            IssueEstimatePropertyValue.objects.filter(
+                project_id=project_id, workspace__slug=slug, estimate_point_id=estimate_point_id
+            ).update(estimate_point=None)
 
         # delete the estimate point
         old_estimate_point = EstimatePoint.objects.get(

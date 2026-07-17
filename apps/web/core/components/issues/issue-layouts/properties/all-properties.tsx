@@ -5,7 +5,7 @@
  */
 
 import type { SyntheticEvent } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useEffect } from "react";
 import { xor } from "lodash-es";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
@@ -160,6 +160,36 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
 
   const handleEstimate = async (value: string | undefined) => {
     if (updateIssue) await updateIssue(issue.project_id, issue.id, { estimate_point: value });
+  };
+
+  // Fetch estimate values
+  const {
+    activeEstimatePropertyIdsByProjectId,
+    estimateSystemPropertyIdsByProjectId,
+    estimatePropertyById,
+    issueEstimatePropertyValueFor,
+    getIssueEstimatePropertyValues,
+    updateIssueEstimatePropertyValue,
+  } = useProjectEstimates();
+
+  useEffect(() => {
+    if (!workspaceSlug || !issue.project_id || !issue.id) return;
+    getIssueEstimatePropertyValues(workspaceSlug.toString(), issue.project_id, issue.id).catch(() => {});
+  }, [workspaceSlug, issue.project_id, issue.id, getIssueEstimatePropertyValues]);
+
+  const estimateSystemPropertyIds = (projectId && estimateSystemPropertyIdsByProjectId(projectId?.toString())) || [];
+  const estimatePropertyIds = (projectId && activeEstimatePropertyIdsByProjectId(projectId?.toString())) || [];
+
+  const handleEstimateChange = async (propertyId: string, val: string | undefined) => {
+    if (workspaceSlug && issue.project_id) {
+      await updateIssueEstimatePropertyValue(
+        workspaceSlug.toString(),
+        issue.project_id,
+        issue.id,
+        propertyId,
+        val ?? null
+      );
+    }
   };
 
   const workItemLink = generateWorkItemLink({
@@ -376,17 +406,47 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
       {/* estimates */}
       {projectId && areEstimateEnabledByProjectId(projectId?.toString()) && (
         <WithDisplayPropertiesHOC displayProperties={displayProperties} displayPropertyKey="estimate">
-          <div className="h-5" onFocus={handleEventPropagation} onClick={handleEventPropagation}>
-            <EstimateDropdown
-              value={issue.estimate_point ?? undefined}
-              onChange={handleEstimate}
-              projectId={issue.project_id}
-              disabled={isReadOnly}
-              buttonVariant="border-with-text"
-              renderByDefault={isMobile}
-              showTooltip
-            />
-          </div>
+          {estimateSystemPropertyIds.map((propertyId) => {
+            const property = estimatePropertyById(propertyId);
+            if (!property) return null;
+            const value = issueEstimatePropertyValueFor(issue.id, propertyId);
+            return (
+              <div key={propertyId} className="h-5" onFocus={handleEventPropagation} onClick={handleEventPropagation}>
+                <EstimateDropdown
+                  value={value?.estimate_point ?? undefined}
+                  estimateId={property.estimate}
+                  onChange={(val) => handleEstimateChange(propertyId, val)}
+                  projectId={issue.project_id}
+                  disabled={isReadOnly}
+                  buttonVariant="border-with-text"
+                  renderByDefault={isMobile}
+                  showTooltip
+                />
+              </div>
+            );
+          })}
+          {estimatePropertyIds.map((propertyId) => {
+            const property = estimatePropertyById(propertyId);
+            if (!property) return null;
+            // KPI-reserved properties (Difficulty/Repetitive) only show while the project's KPI feature is on;
+            // custom properties are independent of that toggle.
+            if (property.kpi_role && !projectDetails?.kpi_view) return null;
+            const value = issueEstimatePropertyValueFor(issue.id, propertyId);
+            return (
+              <div key={propertyId} className="h-5" onFocus={handleEventPropagation} onClick={handleEventPropagation}>
+                <EstimateDropdown
+                  value={value?.estimate_point ?? undefined}
+                  estimateId={property.estimate}
+                  onChange={(val) => handleEstimateChange(propertyId, val)}
+                  projectId={issue.project_id}
+                  disabled={isReadOnly}
+                  buttonVariant="border-with-text"
+                  renderByDefault={isMobile}
+                  showTooltip
+                />
+              </div>
+            );
+          })}
         </WithDisplayPropertiesHOC>
       )}
 

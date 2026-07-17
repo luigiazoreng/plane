@@ -100,6 +100,12 @@ class EstimateProperty(ProjectBaseModel):
     is_active = models.BooleanField(default=True)
     sort_order = models.FloatField(default=65535)
     kpi_role = models.CharField(max_length=32, choices=EstimatePropertyRole.choices, null=True, blank=True)
+    # Marks "the row that represents an Estimate system's own primary value"
+    # (as opposed to kpi_role-tagged rows or free-form admin-defined custom
+    # columns). One such row is auto-maintained per (project, Estimate) pair
+    # for every Estimate with last_used=True. System-managed -- see
+    # EstimatePropertySerializer.Meta.read_only_fields.
+    is_estimate_default = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.name} <{self.project.name}>"
@@ -111,7 +117,12 @@ class EstimateProperty(ProjectBaseModel):
                 fields=["project", "kpi_role"],
                 condition=Q(kpi_role__isnull=False, deleted_at__isnull=True),
                 name="estimateproperty_unique_kpi_role_per_project",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["project", "estimate"],
+                condition=Q(is_estimate_default=True, deleted_at__isnull=True),
+                name="estimateproperty_unique_default_per_project_estimate",
+            ),
         ]
         # Deliberately no legacy `unique_together` here (unlike Estimate.Meta) --
         # unique_together makes DRF's ModelSerializer auto-generate a

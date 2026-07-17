@@ -121,7 +121,7 @@ export const EstimatePropertiesSection = observer(function EstimatePropertiesSec
                   label={selectedEstimateName ?? "Not configured"}
                   onChange={(value: string) => handleEstimateChange(propertyId, value)}
                   input
-                  disabled={!isAdmin}
+                  disabled={!isAdmin || property.is_estimate_default}
                   buttonClassName="text-13 w-full"
                   className="w-full"
                 >

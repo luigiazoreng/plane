@@ -76,10 +76,12 @@ class EstimatePropertySerializer(BaseSerializer):
     class Meta:
         model = EstimateProperty
         fields = "__all__"
-        # kpi_role is reserved -- only the KPI-role upsert path (in the view)
-        # sets it; the general create/update flow (custom, admin-defined
-        # properties) can't set or change it via this serializer.
-        read_only_fields = ["workspace", "project", "deleted_at", "kpi_role"]
+        # kpi_role and is_estimate_default are both reserved/system-managed --
+        # kpi_role is only set by the KPI-role upsert path, is_estimate_default
+        # is only set by _ensure_estimate_default_property (estimate/base.py).
+        # The general create/update flow (custom, admin-defined properties)
+        # can't set or change either via this serializer.
+        read_only_fields = ["workspace", "project", "deleted_at", "kpi_role", "is_estimate_default"]
 
 
 class IssueEstimatePropertyValueSerializer(BaseSerializer):

@@ -63,9 +63,10 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
   // store hooks
   const { getProjectById } = useProject();
   const {
-    areEstimateEnabledByProjectId,
     activeEstimatePropertyIdsByProjectId,
+    estimateSystemPropertyIdsByProjectId,
     estimatePropertyById,
+    estimateById,
     issueEstimatePropertyValueFor,
     getIssueEstimatePropertyValues,
     updateIssueEstimatePropertyValue,
@@ -90,6 +91,7 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
   const projectDetails = getProjectById(issue.project_id);
   const stateDetails = getStateById(issue.state_id);
   const estimatePropertyIds = (projectId && activeEstimatePropertyIdsByProjectId(projectId)) || [];
+  const estimateSystemPropertyIds = (projectId && estimateSystemPropertyIdsByProjectId(projectId)) || [];
 
   const minDate = issue.start_date ? getDate(issue.start_date) : null;
   minDate?.setDate(minDate.getDate());
@@ -203,26 +205,33 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
               </div>
             </SidebarPropertyListItem>
 
-            {projectId && areEstimateEnabledByProjectId(projectId) && (
-              <SidebarPropertyListItem icon={EstimatePropertyIcon} label={t("common.estimate")}>
-                <EstimateDropdown
-                  value={issue?.estimate_point ?? undefined}
-                  onChange={(val: string | undefined) =>
-                    issueOperations.update(workspaceSlug, projectId, issueId, { estimate_point: val })
-                  }
-                  projectId={projectId}
-                  disabled={!isEditable}
-                  buttonVariant="transparent-with-text"
-                  className="group w-full grow"
-                  buttonContainerClassName="w-full text-left h-7.5"
-                  buttonClassName={`text-body-xs-regular ${issue?.estimate_point !== null ? "" : "text-placeholder"}`}
-                  placeholder={t("common.none")}
-                  hideIcon
-                  dropdownArrow
-                  dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
-                />
-              </SidebarPropertyListItem>
-            )}
+            {estimateSystemPropertyIds.map((propertyId) => {
+              const property = estimatePropertyById(propertyId);
+              if (!property) return null;
+              const systemName = estimateById(property.estimate)?.name ?? t("common.estimate");
+              const value = issueEstimatePropertyValueFor(issueId, propertyId);
+              return (
+                <SidebarPropertyListItem key={propertyId} icon={EstimatePropertyIcon} label={systemName}>
+                  <EstimateDropdown
+                    value={value?.estimate_point ?? undefined}
+                    estimateId={property.estimate}
+                    onChange={(val: string | undefined) =>
+                      updateIssueEstimatePropertyValue(workspaceSlug, projectId, issueId, propertyId, val ?? null)
+                    }
+                    projectId={projectId}
+                    disabled={!isEditable}
+                    buttonVariant="transparent-with-text"
+                    className="group w-full grow"
+                    buttonContainerClassName="w-full text-left h-7.5"
+                    buttonClassName={`text-body-xs-regular ${value?.estimate_point ? "" : "text-placeholder"}`}
+                    placeholder={t("common.none")}
+                    hideIcon
+                    dropdownArrow
+                    dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
+                  />
+                </SidebarPropertyListItem>
+              );
+            })}
 
             {estimatePropertyIds.map((propertyId) => {
               const property = estimatePropertyById(propertyId);

@@ -69,9 +69,10 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
   // store hooks
   const { t } = useTranslation();
   const {
-    areEstimateEnabledByProjectId,
     activeEstimatePropertyIdsByProjectId,
+    estimateSystemPropertyIdsByProjectId,
     estimatePropertyById,
+    estimateById,
     issueEstimatePropertyValueFor,
     getIssueEstimatePropertyValues,
   } = useProjectEstimates();
@@ -82,6 +83,7 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
   // derived values
   const projectDetails = getProjectById(projectId);
   const estimatePropertyIds = (projectId && activeEstimatePropertyIdsByProjectId(projectId)) || [];
+  const estimateSystemPropertyIds = (projectId && estimateSystemPropertyIdsByProjectId(projectId)) || [];
 
   // Editing an existing work item: load its current estimate-property values so a
   // submit that never touches these fields doesn't wipe existing values.
@@ -261,27 +263,32 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
           )}
         />
       )}
-      {projectId && areEstimateEnabledByProjectId(projectId) && (
-        <Controller
-          control={control}
-          name="estimate_point"
-          render={({ field: { value, onChange } }) => (
-            <div className="h-7">
+      {projectId &&
+        estimateSystemPropertyIds.map((propertyId) => {
+          const property = estimatePropertyById(propertyId);
+          if (!property) return null;
+          const systemName = estimateById(property.estimate)?.name ?? t("estimate");
+          const draftValue = estimatePropertyValues[propertyId];
+          const currentValue =
+            draftValue !== undefined
+              ? draftValue
+              : (issueEstimatePropertyValueFor(id ?? "", propertyId)?.estimate_point ?? null);
+          return (
+            <div key={propertyId} className="h-7">
               <EstimateDropdown
-                value={value || undefined}
+                value={currentValue ?? undefined}
+                estimateId={property.estimate}
                 onChange={(estimatePoint) => {
-                  onChange(estimatePoint);
+                  setEstimatePropertyValue(propertyId, estimatePoint ?? null);
                   handleFormChange();
                 }}
                 projectId={projectId}
                 buttonVariant="border-with-text"
-                tabIndex={getIndex("estimate_point")}
-                placeholder={t("estimate")}
+                placeholder={systemName}
               />
             </div>
-          )}
-        />
-      )}
+          );
+        })}
       {projectId &&
         estimatePropertyIds.map((propertyId) => {
           const property = estimatePropertyById(propertyId);

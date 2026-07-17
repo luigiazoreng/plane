@@ -103,6 +103,7 @@ export interface IEstimateProperty {
   is_active: boolean;
   sort_order: number;
   kpi_role: TEstimatePropertyKpiRole | null;
+  is_estimate_default: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
