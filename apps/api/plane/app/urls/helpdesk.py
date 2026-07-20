@@ -10,6 +10,7 @@ from plane.app.views.helpdesk import (
     PublicHelpdeskCustomerResetPasswordEndpoint,
     HelpdeskPortalViewSet,
     PublicHelpdeskPortalEndpoint,
+    HelpdeskPortalEmailLogsEndpoint,
     HelpdeskFormViewSet,
     HelpdeskFormFieldViewSet,
     PublicHelpdeskFormListEndpoint,
@@ -83,6 +84,11 @@ urlpatterns = [
             "delete": "destroy",
         }),
         name="helpdesk-portal-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/email-logs/",
+        HelpdeskPortalEmailLogsEndpoint.as_view(),
+        name="helpdesk-portal-email-logs",
     ),
     path(
         "workspaces/<str:slug>/helpdesk/forms/",

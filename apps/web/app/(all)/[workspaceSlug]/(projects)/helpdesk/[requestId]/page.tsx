@@ -442,6 +442,11 @@ const WorkspaceRequestDetailPage = observer(() => {
                                 ❌ Delivery failed
                               </Badge>
                             )}
+                            {comment.email_status === "pending" && (
+                              <Badge variant="warning" size="sm">
+                                ⏳ Pending
+                              </Badge>
+                            )}
                             <span className="text-text-400 text-11">
                               {new Date(comment.created_at).toLocaleString()}
                             </span>

@@ -114,3 +114,24 @@ class PublicHelpdeskPortalEndpoint(BaseAPIView):
 
         serializer = HelpdeskPortalSerializer(portal)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class HelpdeskPortalEmailLogsEndpoint(BaseAPIView):
+    def get(self, request, slug, pk):
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < ADMIN:
+            return Response({"error": "Only Helpdesk Admins can view email logs."}, status=status.HTTP_403_FORBIDDEN)
+            
+        from plane.db.models.helpdesk import HelpdeskRequestComment
+        from plane.app.serializers.helpdesk import HelpdeskRequestCommentSerializer
+        
+        # Fetch comments that have an email_status and are associated with this portal
+        comments = HelpdeskRequestComment.objects.filter(
+            request__portal_id=pk,
+            request__portal__workspace__slug=slug
+        ).exclude(
+            email_status=HelpdeskRequestComment.EmailDeliveryStatus.NOT_SENT
+        ).select_related("request", "actor", "customer").order_by("-created_at")[:100]  # Limit to 100 for now
+        
+        serializer = HelpdeskRequestCommentSerializer(comments, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -81,6 +81,10 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/portals/${portalId}/`).then((res) => res?.data);
   }
 
+  async getPortalEmailLogs(workspaceSlug: string, portalId: string): Promise<IHelpdeskRequestComment[]> {
+    return this.get(`${workspaceSlug}/helpdesk/portals/${portalId}/email-logs/`).then((res) => res?.data);
+  }
+
   // --- Form Management ---
 
   async getForms(workspaceSlug: string, portalId?: string): Promise<IHelpdeskForm[]> {

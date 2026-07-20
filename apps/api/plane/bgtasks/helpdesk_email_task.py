@@ -16,6 +16,7 @@ from plane.db.models.helpdesk import HelpdeskRequestComment, HelpdeskRequest
 from plane.license.utils.instance_value import get_email_configuration
 from plane.utils.email import generate_plain_text_from_html
 from plane.utils.exception_logger import log_exception
+from plane.app.helpdesk.sse_broker import publish
 
 logger = logging.getLogger("plane.worker")
 
@@ -23,7 +24,7 @@ logger = logging.getLogger("plane.worker")
 def send_helpdesk_comment_email(comment_id):
     try:
         comment = HelpdeskRequestComment.objects.select_related(
-            "request", "request__portal", "request__customer", "actor"
+            "request", "request__portal", "request__customer", "request__portal__workspace", "actor"
         ).get(id=comment_id)
         
         request = comment.request
@@ -37,7 +38,9 @@ def send_helpdesk_comment_email(comment_id):
         if not recipient_email:
             logger.warning(f"No recipient email found for HelpdeskRequest {request.id}")
             comment.email_status = HelpdeskRequestComment.EmailDeliveryStatus.FAILED
-            comment.save(update_fields=["email_status"])
+            comment.email_error = "No recipient email found."
+            comment.save(update_fields=["email_status", "email_error"])
+            publish(portal.workspace.slug, {"type": "comment.updated", "request_id": str(request.id)})
             return
 
         # Prepare email content
@@ -76,6 +79,14 @@ def send_helpdesk_comment_email(comment_id):
         elif portal.default_agent_email_address:
             from_email = portal.default_agent_email_address
             
+        if portal.smtp_host:
+            EMAIL_HOST = portal.smtp_host
+            EMAIL_PORT = portal.smtp_port or 587
+            EMAIL_HOST_USER = portal.smtp_username or ""
+            EMAIL_HOST_PASSWORD = portal.smtp_password or ""
+            EMAIL_USE_TLS = "1" if portal.smtp_use_tls else "0"
+            EMAIL_USE_SSL = "1" if portal.smtp_use_ssl else "0"
+
         connection = get_connection(
             host=EMAIL_HOST,
             port=int(EMAIL_PORT),
@@ -119,10 +130,18 @@ def send_helpdesk_comment_email(comment_id):
         comment.email_message_id = comment_msg_id
         comment.save(update_fields=["email_status", "email_sent_at", "email_message_id"])
         
+        # Publish SSE event
+        publish(portal.workspace.slug, {"type": "comment.updated", "request_id": str(request.id)})
+        
         logger.info(f"Helpdesk comment {comment.id} email sent successfully to {recipient_email}")
 
     except Exception as e:
         log_exception(e)
-        HelpdeskRequestComment.objects.filter(id=comment_id).update(
-            email_status=HelpdeskRequestComment.EmailDeliveryStatus.FAILED
-        )
+        try:
+            comment = HelpdeskRequestComment.objects.select_related("request__portal__workspace").get(id=comment_id)
+            comment.email_status = HelpdeskRequestComment.EmailDeliveryStatus.FAILED
+            comment.email_error = str(e)
+            comment.save(update_fields=["email_status", "email_error"])
+            publish(comment.request.portal.workspace.slug, {"type": "comment.updated", "request_id": str(comment.request.id)})
+        except Exception:
+            pass

@@ -82,6 +82,9 @@ class HelpdeskPortalSerializer(BaseSerializer):
         model = HelpdeskPortal
         fields = "__all__"
         read_only_fields = READ_ONLY_BASE
+        extra_kwargs = {
+            "smtp_password": {"write_only": True}
+        }
 
 
 class HelpdeskFormFieldSerializer(BaseSerializer):

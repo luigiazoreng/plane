@@ -50,6 +50,12 @@ class HelpdeskPortal(WorkspaceBaseModel):
     sla_resolution_hours = models.IntegerField(null=True, blank=True)
     no_reply_email_address = models.EmailField(max_length=255, null=True, blank=True)
     default_agent_email_address = models.EmailField(max_length=255, null=True, blank=True)
+    smtp_host = models.CharField(max_length=255, null=True, blank=True)
+    smtp_port = models.IntegerField(null=True, blank=True)
+    smtp_username = models.CharField(max_length=255, null=True, blank=True)
+    smtp_password = models.CharField(max_length=255, null=True, blank=True)
+    smtp_use_tls = models.BooleanField(default=False)
+    smtp_use_ssl = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Helpdesk Portal"
@@ -228,6 +234,7 @@ class HelpdeskRequestComment(WorkspaceBaseModel):
     )
     email_sent_at = models.DateTimeField(null=True, blank=True)
     email_message_id = models.CharField(max_length=255, null=True, blank=True)
+    email_error = models.TextField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Helpdesk Request Comment"

@@ -28,6 +28,12 @@ export interface IHelpdeskPortal {
   sla_resolution_hours: number | null;
   no_reply_email_address: string | null;
   default_agent_email_address: string | null;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  smtp_password?: string | null; // Optional, might be write-only on backend
+  smtp_use_tls: boolean;
+  smtp_use_ssl: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -169,6 +175,7 @@ export interface IHelpdeskRequestComment {
   email_status?: "not_sent" | "pending" | "sent" | "failed";
   email_sent_at?: string | null;
   email_message_id?: string | null;
+  email_error?: string | null;
   created_at: string;
   updated_at: string;
 }
