@@ -4,9 +4,10 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { observer } from "mobx-react";
 import { Plus, Trash2 } from "lucide-react";
+import useSWR from "swr";
 // plane imports
 import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
@@ -36,11 +37,19 @@ export const EstimatePropertiesSection = observer(function EstimatePropertiesSec
   } = useProjectEstimates();
 
   const [newName, setNewName] = useState("");
+  const [newEstimateId, setNewEstimateId] = useState<string | undefined>(undefined);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    getProjectEstimateProperties(workspaceSlug, projectId).catch(() => {});
-  }, [workspaceSlug, projectId, getProjectEstimateProperties]);
+  // F4a: SWR instead of a plain useEffect -- the previous effect's deps
+  // ([workspaceSlug, projectId, getProjectEstimateProperties]) never change
+  // when an estimate is activated/deactivated or when a property is
+  // created elsewhere, so this panel went stale until a full page reload.
+  // `estimates/root.tsx` calls `mutate` on this same key after those
+  // actions (same key family as its own `PROJECT_ESTIMATES_...` SWR key).
+  useSWR(
+    workspaceSlug && projectId ? `PROJECT_ESTIMATE_PROPERTIES_${workspaceSlug}_${projectId}` : null,
+    async () => workspaceSlug && projectId && getProjectEstimateProperties(workspaceSlug, projectId)
+  );
 
   const estimateIds = estimateIdsByProjectId(projectId) ?? [];
   const estimateOptions = estimateIds
@@ -73,14 +82,17 @@ export const EstimatePropertiesSection = observer(function EstimatePropertiesSec
     }
   };
 
+  const selectedNewEstimateId = newEstimateId ?? estimateOptions[0]?.id;
+  const selectedNewEstimateName = estimateOptions.find((e) => e.id === selectedNewEstimateId)?.name;
+
   const handleCreate = async () => {
     const trimmedName = newName.trim();
-    const firstEstimate = estimateOptions[0];
-    if (!trimmedName || !firstEstimate?.id) return;
+    if (!trimmedName || !selectedNewEstimateId) return;
     try {
       setCreating(true);
-      await createEstimateProperty(workspaceSlug, projectId, { name: trimmedName, estimate: firstEstimate.id });
+      await createEstimateProperty(workspaceSlug, projectId, { name: trimmedName, estimate: selectedNewEstimateId });
       setNewName("");
+      setNewEstimateId(undefined);
     } catch {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not create the estimate property." });
     } finally {
@@ -138,7 +150,7 @@ export const EstimatePropertiesSection = observer(function EstimatePropertiesSec
                 disabled={!isAdmin}
                 size="sm"
               />
-              {!property.kpi_role && (
+              {!property.kpi_role && !property.is_estimate_default && (
                 <button
                   type="button"
                   className="shrink-0 text-secondary transition-colors hover:text-danger-primary disabled:pointer-events-none disabled:opacity-50"
@@ -160,11 +172,28 @@ export const EstimatePropertiesSection = observer(function EstimatePropertiesSec
             placeholder="New estimate property name"
             className="max-w-64"
           />
+          <div className="w-56 shrink-0">
+            <CustomSelect
+              value={selectedNewEstimateId}
+              label={selectedNewEstimateName ?? "Select estimate"}
+              onChange={(value: string) => setNewEstimateId(value)}
+              input
+              disabled={estimateOptions.length === 0}
+              buttonClassName="text-13 w-full"
+              className="w-full"
+            >
+              {estimateOptions.map((estimate) => (
+                <CustomSelect.Option key={estimate.id} value={estimate.id ?? ""}>
+                  {estimate.name}
+                </CustomSelect.Option>
+              ))}
+            </CustomSelect>
+          </div>
           <Button
             variant="secondary"
             size="sm"
             onClick={handleCreate}
-            disabled={creating || !newName.trim() || estimateOptions.length === 0}
+            disabled={creating || !newName.trim() || !selectedNewEstimateId}
           >
             <Plus className="size-3.5" />
             Add estimate property

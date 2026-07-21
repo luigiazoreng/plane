@@ -18,6 +18,8 @@ Coverage matrix:
 | Default-system change (secondary, non-project-default)   | no legacy activity row              |
 """
 
+import uuid
+
 import pytest
 from django.urls import reverse
 from rest_framework import status
@@ -363,7 +365,117 @@ class TestIssueEstimatePropertyValueListEndpoint:
         
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 2
-        property_ids = [item["property"] for item in response.data]
+        property_ids = [str(item["property"]) for item in response.data]
         assert str(property_a.id) in property_ids
         assert str(property_b.id) in property_ids
+
+
+def _bulk_values_url(workspace_slug, project_id, issue_ids=None):
+    base = f"/api/workspaces/{workspace_slug}/projects/{project_id}/issue-estimate-properties/"
+    if issue_ids is None:
+        return base
+    return f"{base}?issue_ids={','.join(str(i) for i in issue_ids)}"
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+class TestIssueEstimatePropertyValueBulkListEndpoint:
+    """F1: bulk-list estimate property values for many issues of the SAME
+    project in a single request -- fixes the N+1 in list/kanban/spreadsheet/
+    workspace-draft layouts (all-properties.tsx, estimate-column.tsx,
+    draft-issue-properties.tsx each doing 1 request per row today).
+    Project-scoped (not workspace-scoped) by design -- see fix-plan.md."""
+
+    def test_bulk_returns_values_grouped_by_issue_and_isolates_by_project(
+        self, session_client, workspace, project, issue, state, create_user
+    ):
+        estimate = Estimate.objects.create(
+            name="Points", project=project, workspace=workspace, type="points", last_used=True, created_by=create_user,
+        )
+        point = EstimatePoint.objects.create(
+            estimate=estimate, project=project, workspace=workspace, key=0, value="5", created_by=create_user
+        )
+        property_a = EstimateProperty.objects.create(
+            name="A", estimate=estimate, project=project, workspace=workspace, is_estimate_default=True
+        )
+
+        # Reuse the `issue` fixture's State (same project can't have two
+        # States named "Todo" -- unique_together(name, project)).
+        issue_2 = Issue.objects.create(
+            name="Task 2", project=project, workspace=workspace, state=state, created_by=create_user
+        )
+        # No value ever set on this one -- must be absent from the payload, not an error.
+        issue_3_no_value = Issue.objects.create(
+            name="Task 3", project=project, workspace=workspace, state=state, created_by=create_user
+        )
+
+        session_client.put(
+            _value_url(workspace.slug, project.id, issue.id, property_a.id),
+            {"estimate_point": str(point.id)},
+            format="json",
+        )
+        session_client.put(
+            _value_url(workspace.slug, project.id, issue_2.id, property_a.id),
+            {"estimate_point": str(point.id)},
+            format="json",
+        )
+
+        # A second project in the SAME workspace, with a value on an issue
+        # whose id we deliberately ALSO pass in issue_ids -- must not leak.
+        project_b = Project.objects.create(
+            name="Other Project", identifier="OTHP", workspace=workspace, created_by=create_user
+        )
+        ProjectMember.objects.create(project=project_b, member=create_user, role=20, is_active=True)
+        state_b = State.objects.create(
+            name="Todo", color="#000000", group="unstarted", project=project_b, workspace=workspace, created_by=create_user
+        )
+        issue_b = Issue.objects.create(
+            name="Other Task", project=project_b, workspace=workspace, state=state_b, created_by=create_user
+        )
+        estimate_b = Estimate.objects.create(
+            name="Points", project=project_b, workspace=workspace, type="points", last_used=True, created_by=create_user,
+        )
+        point_b = EstimatePoint.objects.create(
+            estimate=estimate_b, project=project_b, workspace=workspace, key=0, value="3", created_by=create_user
+        )
+        property_b = EstimateProperty.objects.create(
+            name="B", estimate=estimate_b, project=project_b, workspace=workspace, is_estimate_default=True
+        )
+        session_client.put(
+            _value_url(workspace.slug, project_b.id, issue_b.id, property_b.id),
+            {"estimate_point": str(point_b.id)},
+            format="json",
+        )
+
+        response = session_client.get(
+            _bulk_values_url(workspace.slug, project.id, [issue.id, issue_2.id, issue_3_no_value.id, issue_b.id])
+        )
+        assert response.status_code == status.HTTP_200_OK
+        payload = response.data
+
+        assert str(issue.id) in payload
+        assert str(issue_2.id) in payload
+        assert len(payload[str(issue.id)]) == 1
+        assert str(payload[str(issue.id)][0]["property"]) == str(property_a.id)
+
+        # Issue with no values set -- absent from payload, not an error.
+        assert str(issue_3_no_value.id) not in payload
+
+        # Isolation: issue_b belongs to a DIFFERENT project -- must not leak
+        # even though its id was explicitly included in issue_ids.
+        assert str(issue_b.id) not in payload
+
+    def test_bulk_requires_issue_ids_param(self, session_client, workspace, project):
+        response = session_client.get(_bulk_values_url(workspace.slug, project.id))
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_bulk_empty_issue_ids_returns_empty_payload(self, session_client, workspace, project):
+        response = session_client.get(_bulk_values_url(workspace.slug, project.id, []))
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == {}
+
+    def test_bulk_rejects_more_than_cap_issue_ids(self, session_client, workspace, project):
+        too_many_ids = [str(uuid.uuid4()) for _ in range(201)]
+        response = session_client.get(_bulk_values_url(workspace.slug, project.id, too_many_ids))
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 

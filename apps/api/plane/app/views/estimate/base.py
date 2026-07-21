@@ -436,10 +436,19 @@ class EstimatePointEndpoint(BaseViewSet):
                     ),
                     epoch=int(timezone.now().timestamp()),
                 )
-                issues.update(estimate_point_id=new_estimate_id)
-                IssueEstimatePropertyValue.objects.filter(
-                    project_id=project_id, workspace__slug=slug, estimate_point_id=estimate_point_id
-                ).update(estimate_point_id=new_estimate_id)
+            # F3 fix: these two updates must run unconditionally, OUTSIDE the
+            # activity-log loop above -- they were previously nested inside
+            # `for issue in issues:`, so when no Issue used this point via
+            # the legacy Issue.estimate_point column (`issues` empty, the
+            # common case for any non-default estimate system),
+            # IssueEstimatePropertyValue rows never migrated to
+            # new_estimate_id and were left pointing at the point this
+            # method soft-deletes below -- orphaned. issue_activity.delay
+            # stays inside the loop (unchanged, one call per legacy issue).
+            issues.update(estimate_point_id=new_estimate_id)
+            IssueEstimatePropertyValue.objects.filter(
+                project_id=project_id, workspace__slug=slug, estimate_point_id=estimate_point_id
+            ).update(estimate_point_id=new_estimate_id)
         else:
             issues = Issue.objects.filter(
                 project_id=project_id,

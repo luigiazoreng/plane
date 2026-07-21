@@ -49,7 +49,15 @@ export const PowerKWorkItemContextBasedPages = observer(function PowerKWorkItemC
 
   useEffect(() => {
     if (activePage === "update-work-item-estimate" && workspaceSlug && entityDetails?.project_id && entityDetails?.id) {
-      getIssueEstimatePropertyValues(workspaceSlug.toString(), entityDetails.project_id, entityDetails.id).catch(() => {});
+      // force: true -- opening the estimate picker for a single work item
+      // expects current data, not a value the list coalescer cached
+      // earlier this session.
+      getIssueEstimatePropertyValues(
+        workspaceSlug.toString(),
+        entityDetails.project_id,
+        entityDetails.id,
+        true
+      ).catch(() => {});
     }
   }, [activePage, workspaceSlug, entityDetails?.project_id, entityDetails?.id, getIssueEstimatePropertyValues]);
 

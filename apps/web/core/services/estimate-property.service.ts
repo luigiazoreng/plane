@@ -84,6 +84,44 @@ export class EstimatePropertyService extends APIService {
     }
   }
 
+  /** F1: bulk-fetch estimate property values for many issues of the SAME
+   * project in as few requests as possible. Chunks at 200 ids per request,
+   * mirroring the backend's ISSUE_ESTIMATE_PROPERTY_VALUES_BULK_CAP
+   * (`app/views/estimate/property.py`). Response is grouped by issue id;
+   * an issue with no values set at all is simply absent from its chunk's
+   * payload. */
+  async fetchIssueEstimatePropertyValuesBulk(
+    workspaceSlug: string,
+    projectId: string,
+    issueIds: string[]
+  ): Promise<Record<string, IIssueEstimatePropertyValue[]>> {
+    try {
+      if (issueIds.length === 0) return {};
+
+      const CHUNK_SIZE = 200;
+      const chunks: string[][] = [];
+      for (let i = 0; i < issueIds.length; i += CHUNK_SIZE) {
+        chunks.push(issueIds.slice(i, i + CHUNK_SIZE));
+      }
+
+      const chunkResults = await Promise.all(
+        chunks.map(async (chunk) => {
+          const { data } = await this.get(
+            `/api/workspaces/${workspaceSlug}/projects/${projectId}/issue-estimate-properties/?issue_ids=${chunk.join(",")}`
+          );
+          return (data || {}) as Record<string, IIssueEstimatePropertyValue[]>;
+        })
+      );
+
+      return chunkResults.reduce<Record<string, IIssueEstimatePropertyValue[]>>(
+        (acc, chunk) => ({ ...acc, ...chunk }),
+        {}
+      );
+    } catch (error) {
+      throw error;
+    }
+  }
+
   /** Upsert the single reserved property for a KPI role (Difficulty/Repetitive).
    * Passing `estimateId: null` clears/removes the role's property. */
   async upsertKpiRoleEstimateProperty(

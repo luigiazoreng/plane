@@ -89,9 +89,10 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
   // submit that never touches these fields doesn't wipe existing values.
   useEffect(() => {
     if (!id || !projectId || !workspaceSlug) return;
-    getIssueEstimatePropertyValues(workspaceSlug, projectId, id).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, projectId, workspaceSlug]);
+    // force: true -- editing an existing work item expects current data,
+    // not a value the list coalescer cached earlier this session.
+    getIssueEstimatePropertyValues(workspaceSlug, projectId, id, true).catch(() => {});
+  }, [id, projectId, workspaceSlug, getIssueEstimatePropertyValues]);
 
   const { getIndex } = getTabIndex(ETabIndices.ISSUE_FORM, isMobile);
 

@@ -194,6 +194,7 @@ from .estimate.property import (
     EstimatePropertyDetailEndpoint,
     EstimatePropertyKpiRoleEndpoint,
     IssueEstimatePropertyValueListEndpoint,
+    IssueEstimatePropertyValueBulkListEndpoint,
     IssueEstimatePropertyValueEndpoint,
 )
 
