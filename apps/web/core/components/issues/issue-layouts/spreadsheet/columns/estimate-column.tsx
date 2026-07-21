@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
+import { useTranslation } from "@plane/i18n";
 // types
 import type { TIssue } from "@plane/types";
 // components
@@ -26,20 +27,24 @@ export const SpreadsheetEstimateColumn = observer(function SpreadsheetEstimateCo
   const { issue, disabled, onClose } = props;
   const { workspaceSlug } = useParams();
   const { getProjectById } = useProject();
+  const { t } = useTranslation();
 
   const {
     activeEstimatePropertyIdsByProjectId,
     estimateSystemPropertyIdsByProjectId,
     estimatePropertyById,
+    estimateById,
     issueEstimatePropertyValueFor,
+    ensureProjectEstimateProperties,
     getIssueEstimatePropertyValues,
     updateIssueEstimatePropertyValue,
   } = useProjectEstimates();
 
   useEffect(() => {
     if (!workspaceSlug || !issue.project_id || !issue.id) return;
+    ensureProjectEstimateProperties(workspaceSlug.toString(), issue.project_id).catch(() => {});
     getIssueEstimatePropertyValues(workspaceSlug.toString(), issue.project_id, issue.id).catch(() => {});
-  }, [workspaceSlug, issue.project_id, issue.id, getIssueEstimatePropertyValues]);
+  }, [workspaceSlug, issue.project_id, issue.id, ensureProjectEstimateProperties, getIssueEstimatePropertyValues]);
 
   const estimateSystemPropertyIds =
     (issue.project_id && estimateSystemPropertyIdsByProjectId(issue.project_id)) || [];
@@ -57,6 +62,7 @@ export const SpreadsheetEstimateColumn = observer(function SpreadsheetEstimateCo
         const property = estimatePropertyById(propertyId);
         if (!property) return null;
         const value = issueEstimatePropertyValueFor(issue.id, propertyId);
+        const systemName = estimateById(property.estimate)?.name ?? t("common.estimate");
         return (
           <EstimateDropdown
             key={propertyId}
@@ -73,7 +79,7 @@ export const SpreadsheetEstimateColumn = observer(function SpreadsheetEstimateCo
                 );
               }
             }}
-            placeholder="Estimate"
+            placeholder={systemName}
             projectId={issue.project_id ?? undefined}
             disabled={disabled}
             buttonVariant="transparent-with-text"
@@ -106,7 +112,7 @@ export const SpreadsheetEstimateColumn = observer(function SpreadsheetEstimateCo
                 );
               }
             }}
-            placeholder="Estimate"
+            placeholder={property.name}
             projectId={issue.project_id ?? undefined}
             disabled={disabled}
             buttonVariant="transparent-with-text"

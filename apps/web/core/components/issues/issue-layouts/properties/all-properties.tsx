@@ -79,7 +79,10 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
 
   // router
   const router = useAppRouter();
-  const { workspaceSlug, projectId } = useParams();
+  // F2: the route `projectId` param is undefined in multi-project contexts
+  // (e.g. `/[slug]/workspace-views/[id]`) -- estimates below derive from
+  // `issue.project_id` instead, which is always correct.
+  const { workspaceSlug } = useParams();
 
   // derived values
   const stateDetails = getStateById(issue.state_id);
@@ -158,27 +161,33 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
       await updateIssue(issue.project_id, issue.id, { target_date: date ? renderFormattedPayloadDate(date) : null });
   };
 
-  const handleEstimate = async (value: string | undefined) => {
-    if (updateIssue) await updateIssue(issue.project_id, issue.id, { estimate_point: value });
-  };
-
   // Fetch estimate values
   const {
     activeEstimatePropertyIdsByProjectId,
     estimateSystemPropertyIdsByProjectId,
     estimatePropertyById,
     issueEstimatePropertyValueFor,
+    ensureProjectEstimateProperties,
     getIssueEstimatePropertyValues,
     updateIssueEstimatePropertyValue,
   } = useProjectEstimates();
 
   useEffect(() => {
     if (!workspaceSlug || !issue.project_id || !issue.id) return;
+    // F2: this component renders in multi-project contexts (workspace-views)
+    // where the route has no projectId -- always resolve estimate
+    // properties for THIS issue's own project, not the route's, or the
+    // estimate column silently stays empty there.
+    ensureProjectEstimateProperties(workspaceSlug.toString(), issue.project_id).catch(() => {});
     getIssueEstimatePropertyValues(workspaceSlug.toString(), issue.project_id, issue.id).catch(() => {});
-  }, [workspaceSlug, issue.project_id, issue.id, getIssueEstimatePropertyValues]);
+  }, [workspaceSlug, issue.project_id, issue.id, ensureProjectEstimateProperties, getIssueEstimatePropertyValues]);
 
-  const estimateSystemPropertyIds = (projectId && estimateSystemPropertyIdsByProjectId(projectId?.toString())) || [];
-  const estimatePropertyIds = (projectId && activeEstimatePropertyIdsByProjectId(projectId?.toString())) || [];
+  // F2: derive from issue.project_id, NOT the route's `projectId` -- the
+  // latter is undefined outside `/[slug]/projects/[projectId]/...` (e.g.
+  // `/[slug]/workspace-views/[id]`), which silently hid estimates there.
+  const estimateSystemPropertyIds =
+    (issue.project_id && estimateSystemPropertyIdsByProjectId(issue.project_id)) || [];
+  const estimatePropertyIds = (issue.project_id && activeEstimatePropertyIdsByProjectId(issue.project_id)) || [];
 
   const handleEstimateChange = async (propertyId: string, val: string | undefined) => {
     if (workspaceSlug && issue.project_id) {
@@ -404,7 +413,8 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
       </>
 
       {/* estimates */}
-      {projectId && areEstimateEnabledByProjectId(projectId?.toString()) && (
+      {/* F2: issue.project_id, not the route's projectId -- see note above. */}
+      {areEstimateEnabledByProjectId(issue.project_id) && (
         <WithDisplayPropertiesHOC displayProperties={displayProperties} displayPropertyKey="estimate">
           {estimateSystemPropertyIds.map((propertyId) => {
             const property = estimatePropertyById(propertyId);

@@ -80,9 +80,10 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
 
   useEffect(() => {
     if (!workspaceSlug || !projectId || !issueId) return;
-    getIssueEstimatePropertyValues(workspaceSlug, projectId, issueId).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceSlug, projectId, issueId]);
+    // force: true -- a user opening a single work item expects current
+    // data, not a value the list coalescer cached earlier this session.
+    getIssueEstimatePropertyValues(workspaceSlug, projectId, issueId, true).catch(() => {});
+  }, [workspaceSlug, projectId, issueId, getIssueEstimatePropertyValues]);
 
   if (!issue) return <></>;
   const createdByDetails = getUserDetails(issue?.created_by);

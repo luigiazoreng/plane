@@ -79,9 +79,11 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
   const issue = getIssueById(issueId);
 
   useEffect(() => {
-    getIssueEstimatePropertyValues(workspaceSlug, projectId, issueId).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceSlug, projectId, issueId]);
+    // force: true -- a user opening a single work item's sidebar expects
+    // current data, not a value the list coalescer cached earlier this
+    // session.
+    getIssueEstimatePropertyValues(workspaceSlug, projectId, issueId, true).catch(() => {});
+  }, [workspaceSlug, projectId, issueId, getIssueEstimatePropertyValues]);
 
   if (!issue) return <></>;
 

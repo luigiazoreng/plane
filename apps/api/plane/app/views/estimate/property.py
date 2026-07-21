@@ -22,6 +22,11 @@ KPI_ROLE_LABELS = {
     EstimatePropertyRole.REPETITIVE: "Repetitive",
 }
 
+# F1: cap on how many issue ids a single bulk-values request can carry --
+# keeps the query and the URL bounded (mirrors ESTIMATE_POINT_COUNT_MIN/MAX's
+# style in estimate/base.py).
+ISSUE_ESTIMATE_PROPERTY_VALUES_BULK_CAP = 200
+
 
 class EstimatePropertyListCreateEndpoint(BaseViewSet):
     """List every estimate property for a project (active + inactive, ordered by
@@ -170,6 +175,52 @@ class IssueEstimatePropertyValueListEndpoint(BaseAPIView):
         )
         serializer = IssueEstimatePropertyValueSerializer(values, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class IssueEstimatePropertyValueBulkListEndpoint(BaseAPIView):
+    """F1: bulk-list estimate property values for many issues of the SAME
+    project in a single request. Project-scoped (not workspace-scoped) --
+    a workspace-wide endpoint would need new cross-project membership
+    filtering, which is out of scope for a fix pass on a feature with a
+    history of IDOR (see estimates-multi-active-gotchas.md). Pairs with
+    `estimate-properties/` (properties, not values) for populating list/
+    kanban/spreadsheet/workspace-draft layouts without 1-request-per-row.
+
+    Response is grouped by issue id: `{issueId: [value, ...]}`. An issue
+    with no values set at all is simply absent from the payload -- that's
+    the normal case, not an error (the caller still marks it "done" so it
+    isn't refetched forever, see project-estimate.store.ts's coalescer)."""
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    def get(self, request, slug, project_id):
+        raw_issue_ids = request.query_params.get("issue_ids")
+        if raw_issue_ids is None:
+            return Response({"error": "issue_ids is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        issue_ids = [item for item in raw_issue_ids.split(",") if item]
+        if len(issue_ids) > ISSUE_ESTIMATE_PROPERTY_VALUES_BULK_CAP:
+            return Response(
+                {
+                    "error": (
+                        f"issue_ids cannot contain more than "
+                        f"{ISSUE_ESTIMATE_PROPERTY_VALUES_BULK_CAP} ids"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not issue_ids:
+            return Response({}, status=status.HTTP_200_OK)
+
+        values = IssueEstimatePropertyValue.objects.filter(
+            workspace__slug=slug, project_id=project_id, issue_id__in=issue_ids
+        )
+        serializer = IssueEstimatePropertyValueSerializer(values, many=True)
+
+        grouped: dict = {}
+        for item in serializer.data:
+            grouped.setdefault(str(item["issue"]), []).append(item)
+
+        return Response(grouped, status=status.HTTP_200_OK)
 
 
 class IssueEstimatePropertyValueEndpoint(BaseAPIView):

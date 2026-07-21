@@ -13,6 +13,7 @@ from plane.app.views import (
     EstimatePropertyDetailEndpoint,
     EstimatePropertyKpiRoleEndpoint,
     IssueEstimatePropertyValueListEndpoint,
+    IssueEstimatePropertyValueBulkListEndpoint,
     IssueEstimatePropertyValueEndpoint,
 )
 
@@ -64,6 +65,14 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/estimate-properties/",
         IssueEstimatePropertyValueListEndpoint.as_view(),
         name="issue-estimate-property-values",
+    ),
+    # F1: bulk-list values for many issues of one project in a single request
+    # (issue_ids= csv query param) -- pairs with estimate-properties/ above,
+    # which already returns bulk *properties* for a project.
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-estimate-properties/",
+        IssueEstimatePropertyValueBulkListEndpoint.as_view(),
+        name="issue-estimate-property-values-bulk",
     ),
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/estimate-properties/<uuid:property_id>/",

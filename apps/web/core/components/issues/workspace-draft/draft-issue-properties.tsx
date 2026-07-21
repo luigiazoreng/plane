@@ -51,6 +51,7 @@ export const DraftIssueProperties = observer(function DraftIssueProperties(props
     estimatePropertyById,
     estimateById,
     issueEstimatePropertyValueFor,
+    ensureProjectEstimateProperties,
     getIssueEstimatePropertyValues,
     updateIssueEstimatePropertyValue,
   } = useProjectEstimates();
@@ -67,9 +68,9 @@ export const DraftIssueProperties = observer(function DraftIssueProperties(props
 
   useEffect(() => {
     if (!workspaceSlug || !issue.project_id || !issue.id) return;
+    ensureProjectEstimateProperties(workspaceSlug.toString(), issue.project_id).catch(() => {});
     getIssueEstimatePropertyValues(workspaceSlug.toString(), issue.project_id, issue.id).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceSlug, issue.project_id, issue.id]);
+  }, [workspaceSlug, issue.project_id, issue.id, ensureProjectEstimateProperties, getIssueEstimatePropertyValues]);
 
   const issueOperations = useMemo(
     () => ({
