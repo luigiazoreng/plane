@@ -29,7 +29,10 @@ COPY requirements.txt ./requirements.txt
 ADD requirements ./requirements
 
 # Install the local development settings
-RUN pip install -r requirements/local.txt --compile --no-cache-dir
+# test.txt on top of local.txt: this is the dev image, and without pytest here
+# the suite cannot run without a manual pip install after every container
+# recreation.
+RUN pip install -r requirements/local.txt -r requirements/test.txt --compile --no-cache-dir
 
 
 COPY . .

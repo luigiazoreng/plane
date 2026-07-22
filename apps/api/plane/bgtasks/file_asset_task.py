@@ -24,3 +24,25 @@ def delete_unuploaded_file_asset():
         Q(created_at__lt=timezone.now() - timedelta(days=int(os.environ.get("UNUPLOADED_ASSET_DELETE_DAYS", "7"))))
         & Q(is_uploaded=False)
     ).delete()
+
+
+@shared_task
+def delete_unbound_helpdesk_assets():
+    """Delete helpdesk attachments that were uploaded but never sent.
+
+    A user who picks a file and then abandons the reply leaves an asset that
+    finished uploading but was never claimed by a comment. delete_unuploaded_file_asset
+    does not catch these -- it only looks at is_uploaded=False -- so without
+    this they accumulate in the bucket forever.
+
+    The window is deliberately longer than attachments.CLAIM_WINDOW so that an
+    asset is never collected while it is still claimable.
+    """
+    FileAsset.objects.filter(
+        entity_type__in=[
+            FileAsset.EntityTypeContext.HELPDESK_COMMENT_ATTACHMENT,
+            FileAsset.EntityTypeContext.HELPDESK_REQUEST_ATTACHMENT,
+        ],
+        entity_identifier__isnull=True,
+        created_at__lt=timezone.now() - timedelta(days=int(os.environ.get("UNBOUND_ASSET_DELETE_DAYS", "2"))),
+    ).delete()

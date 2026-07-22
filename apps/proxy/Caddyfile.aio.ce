@@ -10,6 +10,13 @@
 }
 
 (plane_proxy) {
+	# See Caddyfile.ce: the inbound email webhook needs a higher ceiling than
+	# the per-file limit, or the provider redelivers on every 413.
+	@helpdesk_inbound path /api/helpdesk/public/inbound/*
+	request_body @helpdesk_inbound {
+		max_size {$HELPDESK_INBOUND_MAX_BODY_SIZE:30MB}
+	}
+
 	request_body {
 		max_size {$FILE_SIZE_LIMIT}
 	}

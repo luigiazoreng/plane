@@ -4,6 +4,7 @@
 
 # Python imports
 import logging
+import re
 import time
 
 # Django imports
@@ -19,6 +20,17 @@ from plane.utils.exception_logger import log_exception
 from plane.bgtasks.logger_task import process_logs
 
 api_logger = logging.getLogger("plane.api.request")
+
+# Query-string parameters whose value must never reach the logs. The helpdesk
+# inbound webhook accepts its shared secret as ?token= (SendGrid's Inbound
+# Parse cannot add custom headers), and get_full_path() includes the query
+# string, so an unredacted log line would leak the secret on every request.
+SENSITIVE_QUERY_PARAMS_RE = re.compile(r"(?i)\b(token|secret|password|api_key)=[^&]*")
+
+
+def redact_query_params(full_path: str) -> str:
+    """Replace the value of sensitive query parameters with ***."""
+    return SENSITIVE_QUERY_PARAMS_RE.sub(lambda m: f"{m.group(1)}=***", full_path)
 
 
 class RequestLoggerMiddleware:
@@ -59,7 +71,7 @@ class RequestLoggerMiddleware:
 
         # Log the request information
         api_logger.info(
-            f"{request.method} {request.get_full_path()} {response.status_code}",
+            f"{request.method} {redact_query_params(request.get_full_path())} {response.status_code}",
             extra={
                 "path": request.path,
                 "method": request.method,

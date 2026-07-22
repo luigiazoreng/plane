@@ -1,5 +1,6 @@
 # Django imports
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -48,11 +49,43 @@ class HelpdeskPortal(WorkspaceBaseModel):
     auto_assignment_config = models.JSONField(default=dict, blank=True)
     sla_first_response_hours = models.IntegerField(null=True, blank=True)
     sla_resolution_hours = models.IntegerField(null=True, blank=True)
+    no_reply_email_address = models.EmailField(max_length=255, null=True, blank=True)
+    default_agent_email_address = models.EmailField(max_length=255, null=True, blank=True)
+    smtp_host = models.CharField(max_length=255, null=True, blank=True)
+    smtp_port = models.IntegerField(null=True, blank=True)
+    smtp_username = models.CharField(max_length=255, null=True, blank=True)
+    smtp_password = models.CharField(max_length=255, null=True, blank=True)
+    smtp_use_tls = models.BooleanField(default=False)
+    smtp_use_ssl = models.BooleanField(default=False)
+    # Per-portal attachment ceiling, in bytes. Null means "use the instance
+    # limit". It can only ever lower that limit, never raise it: the instance
+    # FILE_SIZE_LIMIT is also enforced by the reverse proxy and by the
+    # presigned upload conditions, so a higher value here would not actually
+    # let a larger file through -- it would just fail further along.
+    max_attachment_size = models.BigIntegerField(null=True, blank=True)
+
+    def effective_max_attachment_size(self):
+        """Resolve the attachment ceiling that actually applies to this portal."""
+        from django.conf import settings
+
+        if not self.max_attachment_size:
+            return settings.FILE_SIZE_LIMIT
+        return min(self.max_attachment_size, settings.FILE_SIZE_LIMIT)
 
     class Meta:
         verbose_name = "Helpdesk Portal"
         verbose_name_plural = "Helpdesk Portals"
         db_table = "helpdesk_portals"
+        constraints = [
+            # Django's SMTP backend raises ValueError when both are set, turning
+            # every outbound email of the portal into FAILED. The serializer
+            # already rejects the combination; this closes the ORM-level and
+            # raw-update paths that bypass it.
+            models.CheckConstraint(
+                check=~(Q(smtp_use_tls=True) & Q(smtp_use_ssl=True)),
+                name="helpdesk_portal_smtp_tls_ssl_exclusive",
+            )
+        ]
 
     def __str__(self):
         return self.public_slug
@@ -212,10 +245,71 @@ class HelpdeskRequestComment(WorkspaceBaseModel):
     content = models.TextField()
     is_internal = models.BooleanField(default=False)
 
+    class EmailDeliveryStatus(models.TextChoices):
+        NOT_SENT = "not_sent", "Not Sent"
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    class SenderVerification(models.TextChoices):
+        """Authenticity of the From: address of an inbound email.
+
+        Values mirror the constants in
+        ``plane.app.helpdesk.sender_authenticity``; that module stays free of
+        Django imports, so the literals are duplicated on purpose and
+        ``test_states_match_the_model_choices`` keeps them from drifting.
+
+        Never exposed by the public comment serializer: telling the sender
+        whether the spoof was detected hands the attacker a detection oracle.
+        """
+
+        PASS = "pass", "Pass"
+        FAIL = "fail", "Fail"
+        UNVERIFIED = "unverified", "Unverified"
+        NOT_APPLICABLE = "not_applicable", "Not Applicable"
+
+    sender_verification = models.CharField(
+        max_length=20,
+        choices=SenderVerification.choices,
+        default=SenderVerification.NOT_APPLICABLE,
+    )
+
+    delivery_channels = models.JSONField(default=list, blank=True)
+    email_status = models.CharField(
+        max_length=20,
+        choices=EmailDeliveryStatus.choices,
+        default=EmailDeliveryStatus.NOT_SENT,
+    )
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    email_message_id = models.CharField(max_length=255, null=True, blank=True)
+    email_error = models.TextField(null=True, blank=True)
+
     class Meta:
         verbose_name = "Helpdesk Request Comment"
         verbose_name_plural = "Helpdesk Request Comments"
         db_table = "helpdesk_request_comments"
+        constraints = [
+            # Deliberately a partial UniqueConstraint and not unique=True on the
+            # field: a database-level unique index also sees soft-deleted rows
+            # (SoftDeletionManager filters in the ORM only), so a deleted
+            # comment would make a legitimate resend of the same Message-ID
+            # raise IntegrityError -> 500 -> endless provider retries.
+            #
+            # The condition is intentionally limited to these two clauses. An
+            # extra ~Q(email_message_id="") would not be provable from
+            # `email_message_id = $1` once psycopg3 (server-side binding,
+            # prepare_threshold=5) switches the statement to a generic plan --
+            # the planner could no longer show the query implies the index
+            # condition, and the lookup would silently degrade to a seq scan
+            # under exactly the repetition that characterises production.
+            # Excluding "" is redundant anyway: the inbound view normalises ""
+            # to None before writing.
+            models.UniqueConstraint(
+                fields=["email_message_id"],
+                condition=Q(deleted_at__isnull=True) & Q(email_message_id__isnull=False),
+                name="helpdesk_comment_unique_email_message_id",
+            )
+        ]
 
 
 class HelpdeskRequestIssue(WorkspaceBaseModel):

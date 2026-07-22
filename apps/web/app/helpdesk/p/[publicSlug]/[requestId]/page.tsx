@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router";
 import { observer } from "mobx-react";
 import { ArrowLeft, Send, Lock } from "lucide-react";
@@ -12,6 +12,12 @@ import { PublicHelpdeskService } from "@plane/services";
 import type { IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskPortal } from "@plane/types";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
+import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
+import {
+  CommentAttachments,
+  PendingAttachmentChips,
+} from "@/components/helpdesk/attachments/attachment-chips";
+import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
 
 const publicHelpdeskService = new PublicHelpdeskService();
 
@@ -59,6 +65,27 @@ const HelpdeskPublicRequestPage = observer(() => {
     }
   }, [publicSlug, requestId]);
 
+  const attachmentTransport = useMemo(
+    () => ({
+      getCredentials: (data: { name: string; type: string; size: number }) =>
+        publicHelpdeskService.getAssetUploadCredentials(
+          publicSlug || "",
+          data,
+          publicHelpdeskStore.customerToken || undefined
+        ),
+      markUploaded: (assetId: string) =>
+        publicHelpdeskService.markAssetUploaded(
+          publicSlug || "",
+          assetId,
+          publicHelpdeskStore.customerToken || undefined
+        ),
+      // No remove: the public endpoint deliberately exposes no delete, so an
+      // abandoned upload is collected by the daily unbound-asset sweep instead.
+    }),
+    [publicSlug]
+  );
+  const attachments = useAttachmentUpload(attachmentTransport);
+
   const handleAddComment = async () => {
     if (!newComment.trim() || !publicSlug || !requestId) return;
     setSubmitting(true);
@@ -68,11 +95,13 @@ const HelpdeskPublicRequestPage = observer(() => {
         requestId,
         {
           content: newComment,
+          asset_ids: attachments.assetIds,
         },
         publicHelpdeskStore.customerToken || undefined
       );
       setComments((prev) => [...prev, response]);
       setNewComment("");
+      attachments.clear();
     } catch (_err) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to post comment." });
     } finally {
@@ -171,21 +200,38 @@ const HelpdeskPublicRequestPage = observer(() => {
           </p>
         ) : (
           <div className="space-y-4">
-            {publicComments.map((comment) => (
-              <div key={comment.id} className={`flex ${!comment.actor ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`shadow-sm max-w-[85%] rounded-lg border p-4 ${!comment.actor ? "bg-primary/5 border-primary/20" : "border-subtle bg-surface-1"}`}
-                >
-                  <div className="mb-2 flex items-baseline justify-between gap-4">
-                    <span className="text-sm font-semibold text-primary">
-                      {!comment.actor ? "You" : "Support Team"}
-                    </span>
-                    <span className="text-xs text-tertiary">{new Date(comment.created_at).toLocaleString()}</span>
+            {publicComments.map((comment) => {
+              // Authorship drives four separate decisions here -- side, colour,
+              // label and surface -- and all of them used to derive from the
+              // single boolean `!comment.actor`. That made a comment with
+              // neither an actor nor a customer render as the customer's own
+              // message: in a chat layout, position and colour assert "this is
+              // yours" far more strongly than any caption, so correcting only
+              // the label would have produced an inconsistency rather than a
+              // fix. Three states, every decision derived from them.
+              const authorKind = comment.actor ? "agent" : comment.customer ? "customer" : "unattributed";
+              const isOwnMessage = authorKind === "customer";
+              // Neutral, not an accusation: an unattributed message is most
+              // often benign (a reply posted without a valid portal token),
+              // and treating it identically to a spoofed one is deliberate --
+              // it denies an attacker any feedback about detection.
+              const authorLabel =
+                authorKind === "customer" ? "You" : authorKind === "agent" ? "Support Team" : "Participant";
+              return (
+                <div key={comment.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`shadow-sm max-w-[85%] rounded-lg border p-4 ${isOwnMessage ? "bg-primary/5 border-primary/20" : "border-subtle bg-surface-1"}`}
+                  >
+                    <div className="mb-2 flex items-baseline justify-between gap-4">
+                      <span className="text-sm font-semibold text-primary">{authorLabel}</span>
+                      <span className="text-xs text-tertiary">{new Date(comment.created_at).toLocaleString()}</span>
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap text-secondary">{comment.content}</div>
+                    <CommentAttachments attachments={comment.attachments} />
                   </div>
-                  <div className="text-sm whitespace-pre-wrap text-secondary">{comment.content}</div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -200,8 +246,12 @@ const HelpdeskPublicRequestPage = observer(() => {
               placeholder="Type your reply here..."
               className="text-sm min-h-[120px] w-full resize-none bg-transparent p-4 text-primary outline-none"
             />
+            <PendingAttachmentChips attachments={attachments.pending} onRemove={attachments.remove} />
             <div className="flex items-center justify-between px-4 pb-3">
-              <span className="text-xs text-tertiary">We usually reply within 24 hours.</span>
+              <div className="flex items-center gap-2">
+                <AttachmentPicker onSelect={attachments.upload} disabled={submitting} />
+                <span className="text-xs text-tertiary">We usually reply within 24 hours.</span>
+              </div>
               <button
                 onClick={handleAddComment}
                 disabled={submitting || !newComment.trim()}

@@ -29,6 +29,9 @@ import { HelpdeskService } from "@plane/services";
 import type { CoreRootStore } from "./root.store";
 
 export interface IHelpdeskStore {
+  // The service instance, exposed for calls that are pure passthrough and do
+  // not belong in observable state -- attachment uploads and email logs.
+  helpdeskService: HelpdeskService;
   // observables
   statuses: Record<string, IHelpdeskStatus[]>; // workspaceSlug -> statuses (ordered by sequence)
   portals: Record<string, IHelpdeskPortal[]>; // workspaceSlug -> portals
@@ -197,7 +200,7 @@ export class HelpdeskStore implements IHelpdeskStore {
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
 
-  helpdeskService;
+  helpdeskService: HelpdeskService;
   rootStore: CoreRootStore;
 
   constructor(_rootStore: CoreRootStore) {

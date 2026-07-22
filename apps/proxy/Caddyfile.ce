@@ -10,6 +10,15 @@
 }
 
 (plane_proxy) {
+	# The inbound email webhook carries the whole message -- bodies and every
+	# attachment -- in one request, so FILE_SIZE_LIMIT (a per-file limit) would
+	# reject legitimate mail here. A 413 makes the provider redeliver, so this
+	# has to match the ceiling the endpoint itself enforces.
+	@helpdesk_inbound path /api/helpdesk/public/inbound/*
+	request_body @helpdesk_inbound {
+		max_size {$HELPDESK_INBOUND_MAX_BODY_SIZE:30MB}
+	}
+
 	request_body {
 		max_size {$FILE_SIZE_LIMIT}
 	}

@@ -1,3 +1,6 @@
+# Django imports
+from django.conf import settings
+
 # Third party imports
 from rest_framework import serializers
 
@@ -17,6 +20,7 @@ from plane.db.models import (
 )
 from plane.app.serializers.base import BaseSerializer
 from plane.app.serializers.user import UserLiteSerializer
+from plane.app.helpdesk.attachments import COMMENT_ENTITY, REQUEST_ENTITY, assets_for
 from plane.app.helpdesk.auto_assignment import normalize_helpdesk_auto_assignment_config
 
 READ_ONLY_BASE = ["workspace", "created_at", "updated_at", "created_by", "updated_by", "deleted_at"]
@@ -76,12 +80,48 @@ class HelpdeskPortalSerializer(BaseSerializer):
             value = attrs.get(field_name, getattr(instance, field_name, None))
             if value is not None and int(value) <= 0:
                 raise serializers.ValidationError({field_name: "SLA must be a positive integer or null."})
+
+        # Django's SMTP backend raises ValueError when both are set, which would
+        # turn every outbound email of this portal into FAILED.
+        smtp_use_tls = attrs.get("smtp_use_tls", getattr(instance, "smtp_use_tls", False))
+        smtp_use_ssl = attrs.get("smtp_use_ssl", getattr(instance, "smtp_use_ssl", False))
+        if smtp_use_tls and smtp_use_ssl:
+            raise serializers.ValidationError(
+                {
+                    "smtp_use_tls": "TLS and SSL are mutually exclusive; enable only one.",
+                    "smtp_use_ssl": "TLS and SSL are mutually exclusive; enable only one.",
+                }
+            )
+
+        max_attachment_size = attrs.get(
+            "max_attachment_size", getattr(instance, "max_attachment_size", None)
+        )
+        if max_attachment_size is not None:
+            if int(max_attachment_size) <= 0:
+                raise serializers.ValidationError(
+                    {"max_attachment_size": "Attachment size must be a positive number of bytes or null."}
+                )
+            # Reject rather than silently clamp: an admin who sets 50MB on a
+            # 5MB instance would otherwise see the value saved and believe it
+            # took effect, while the proxy kept rejecting the uploads.
+            if int(max_attachment_size) > settings.FILE_SIZE_LIMIT:
+                raise serializers.ValidationError(
+                    {
+                        "max_attachment_size": (
+                            "Cannot exceed the instance limit of "
+                            f"{settings.FILE_SIZE_LIMIT} bytes."
+                        )
+                    }
+                )
         return attrs
 
     class Meta:
         model = HelpdeskPortal
         fields = "__all__"
         read_only_fields = READ_ONLY_BASE
+        extra_kwargs = {
+            "smtp_password": {"write_only": True}
+        }
 
 
 class HelpdeskFormFieldSerializer(BaseSerializer):
@@ -179,6 +219,16 @@ class HelpdeskRequestSerializer(BaseSerializer):
         allow_empty=True,
         write_only=True,
     )
+    # Files submitted with the original form, as opposed to those on replies.
+    attachments = serializers.SerializerMethodField()
+
+    def get_attachments(self, obj):
+        grouped = self.context.get("request_attachments_by_entity")
+        if grouped is not None:
+            assets = grouped.get(str(obj.id), [])
+        else:
+            assets = assets_for(REQUEST_ENTITY, [obj.id]).get(str(obj.id), [])
+        return HelpdeskAttachmentSerializer(assets, many=True, context=self.context).data
 
     class Meta:
         model = HelpdeskRequest
@@ -242,11 +292,131 @@ class HelpdeskRequestSerializer(BaseSerializer):
         return data
 
 
+class HelpdeskAttachmentSerializer(serializers.Serializer):
+    """Read-only view of a FileAsset attached to a helpdesk comment or request.
+
+    Not a ModelSerializer: the useful fields live inside the `attributes` JSON
+    blob, and the download URL depends on which surface is asking. Agents get
+    the workspace-scoped route, portal customers the public one -- the caller
+    signals which by putting `public_slug` in the serializer context.
+
+    The URL is built here rather than read from FileAsset.asset_url because
+    that property dereferences self.workspace, costing a query per attachment.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    name = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    size = serializers.FloatField(read_only=True)
+    asset_url = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(read_only=True)
+
+    def get_name(self, obj):
+        return (obj.attributes or {}).get("name", "")
+
+    def get_type(self, obj):
+        return (obj.attributes or {}).get("type", "")
+
+    def get_asset_url(self, obj):
+        public_slug = self.context.get("public_slug")
+        if public_slug:
+            return f"/api/helpdesk/public/portals/{public_slug}/assets/{obj.id}/"
+        workspace_slug = self.context.get("workspace_slug")
+        if workspace_slug:
+            return f"/api/workspaces/{workspace_slug}/helpdesk/assets/{obj.id}/"
+        return None
+
+
+class HelpdeskCustomerLiteSerializer(BaseSerializer):
+    """Customer identity for display alongside a comment.
+
+    Deliberately excludes `password` and `is_active` -- this is serialised into
+    the agent conversation view and, through PublicHelpdeskCommentEndpoint, into
+    the customer-facing portal as well.
+    """
+
+    class Meta:
+        model = HelpdeskCustomer
+        fields = ["id", "name", "email"]
+        read_only_fields = fields
+
+
 class HelpdeskRequestCommentSerializer(BaseSerializer):
+    # Who wrote the comment, for avatar and name rendering. UserLiteSerializer
+    # carries no email, so exposing it on the public portal endpoint does not
+    # leak agent addresses.
+    actor_detail = UserLiteSerializer(read_only=True, source="actor")
+    customer_detail = HelpdeskCustomerLiteSerializer(read_only=True, source="customer")
+    attachments = serializers.SerializerMethodField()
+
+    def get_attachments(self, obj):
+        # List views pre-load every comment's assets into the context in one
+        # query; the per-instance fallback only runs for single-object reads.
+        grouped = self.context.get("attachments_by_entity")
+        if grouped is not None:
+            assets = grouped.get(str(obj.id), [])
+        else:
+            assets = assets_for(COMMENT_ENTITY, [obj.id]).get(str(obj.id), [])
+        return HelpdeskAttachmentSerializer(assets, many=True, context=self.context).data
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = getattr(self, "instance", None)
+
+        # Reject the forbidden pair only when the payload is what introduces or
+        # reaffirms it. A naive fallback to the instance for both fields would
+        # make every legacy row -- rows that carry the RC-2 bug itself -- fail
+        # any PATCH, including one that only edits `content`, leaving them
+        # permanently uneditable. Those rows are normalised by migration 0155.
+        payload_touches_pair = "is_internal" in attrs or "delivery_channels" in attrs
+        if instance is not None and not payload_touches_pair:
+            return attrs
+
+        is_internal = attrs.get("is_internal", getattr(instance, "is_internal", False))
+        delivery_channels = attrs.get(
+            "delivery_channels", getattr(instance, "delivery_channels", []) or []
+        )
+
+        if is_internal and "email" in delivery_channels:
+            raise serializers.ValidationError(
+                {
+                    "is_internal": "An internal note cannot be delivered by email.",
+                    "delivery_channels": "Remove 'email' to keep this note internal.",
+                }
+            )
+        return attrs
+
     class Meta:
         model = HelpdeskRequestComment
+        # `exclude`, not `fields = "__all__"`: this same serializer answers
+        # both the Email logs (admin) and PublicHelpdeskCommentEndpoint
+        # (customer-facing), so "__all__" pushes every new model field to the
+        # portal automatically. `sender_verification` reaching the customer
+        # would tell the attacker -- a participant of the ticket -- whether
+        # his spoof was detected. The default is the safe one; exposing it
+        # takes the deliberate act of using the Admin subclass below.
+        exclude = ["sender_verification"]
+        read_only_fields = READ_ONLY_BASE + [
+            "request",
+            "actor",
+            "customer",
+            "email_status",
+            "email_sent_at",
+            "email_message_id",
+        ]
+
+
+class HelpdeskRequestCommentAdminSerializer(HelpdeskRequestCommentSerializer):
+    """Admin-only view of a comment, carrying `sender_verification`.
+
+    Used exclusively by HelpdeskPortalEmailLogsEndpoint, which is already
+    gated on the Helpdesk ADMIN role. Exposing the verdict is a deliberate
+    act; the default is the safe one.
+    """
+
+    class Meta(HelpdeskRequestCommentSerializer.Meta):
+        exclude = None
         fields = "__all__"
-        read_only_fields = READ_ONLY_BASE + ["request", "actor", "customer"]
 
 
 class HelpdeskRequestIssueSerializer(BaseSerializer):
