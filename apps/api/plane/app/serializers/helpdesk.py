@@ -76,6 +76,18 @@ class HelpdeskPortalSerializer(BaseSerializer):
             value = attrs.get(field_name, getattr(instance, field_name, None))
             if value is not None and int(value) <= 0:
                 raise serializers.ValidationError({field_name: "SLA must be a positive integer or null."})
+
+        # Django's SMTP backend raises ValueError when both are set, which would
+        # turn every outbound email of this portal into FAILED.
+        smtp_use_tls = attrs.get("smtp_use_tls", getattr(instance, "smtp_use_tls", False))
+        smtp_use_ssl = attrs.get("smtp_use_ssl", getattr(instance, "smtp_use_ssl", False))
+        if smtp_use_tls and smtp_use_ssl:
+            raise serializers.ValidationError(
+                {
+                    "smtp_use_tls": "TLS and SSL are mutually exclusive; enable only one.",
+                    "smtp_use_ssl": "TLS and SSL are mutually exclusive; enable only one.",
+                }
+            )
         return attrs
 
     class Meta:
@@ -245,7 +257,54 @@ class HelpdeskRequestSerializer(BaseSerializer):
         return data
 
 
+class HelpdeskCustomerLiteSerializer(BaseSerializer):
+    """Customer identity for display alongside a comment.
+
+    Deliberately excludes `password` and `is_active` -- this is serialised into
+    the agent conversation view and, through PublicHelpdeskCommentEndpoint, into
+    the customer-facing portal as well.
+    """
+
+    class Meta:
+        model = HelpdeskCustomer
+        fields = ["id", "name", "email"]
+        read_only_fields = fields
+
+
 class HelpdeskRequestCommentSerializer(BaseSerializer):
+    # Who wrote the comment, for avatar and name rendering. UserLiteSerializer
+    # carries no email, so exposing it on the public portal endpoint does not
+    # leak agent addresses.
+    actor_detail = UserLiteSerializer(read_only=True, source="actor")
+    customer_detail = HelpdeskCustomerLiteSerializer(read_only=True, source="customer")
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = getattr(self, "instance", None)
+
+        # Reject the forbidden pair only when the payload is what introduces or
+        # reaffirms it. A naive fallback to the instance for both fields would
+        # make every legacy row -- rows that carry the RC-2 bug itself -- fail
+        # any PATCH, including one that only edits `content`, leaving them
+        # permanently uneditable. Those rows are normalised by migration 0155.
+        payload_touches_pair = "is_internal" in attrs or "delivery_channels" in attrs
+        if instance is not None and not payload_touches_pair:
+            return attrs
+
+        is_internal = attrs.get("is_internal", getattr(instance, "is_internal", False))
+        delivery_channels = attrs.get(
+            "delivery_channels", getattr(instance, "delivery_channels", []) or []
+        )
+
+        if is_internal and "email" in delivery_channels:
+            raise serializers.ValidationError(
+                {
+                    "is_internal": "An internal note cannot be delivered by email.",
+                    "delivery_channels": "Remove 'email' to keep this note internal.",
+                }
+            )
+        return attrs
+
     class Meta:
         model = HelpdeskRequestComment
         fields = "__all__"

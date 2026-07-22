@@ -20,6 +20,37 @@ from plane.app.helpdesk.sse_broker import publish
 
 logger = logging.getLogger("plane.worker")
 
+
+def normalize_tls_ssl(use_tls, use_ssl, port):
+    """Ensure TLS and SSL are never both enabled.
+
+    Django's SMTP backend raises ValueError when both are set, which the task's
+    generic except turns into email_status=FAILED -- every message of that
+    portal fails, and the admin sees only the raw exception text.
+
+    The port is parsed with int() on purpose: when the portal has no smtp_host
+    the values come from the instance configuration, where EMAIL_PORT is a
+    *string*. A plain ``port == 465`` test would silently never match.
+    """
+    if not (use_tls == "1" and use_ssl == "1"):
+        return use_tls, use_ssl
+
+    try:
+        resolved_port = int(port)
+    except (ValueError, TypeError):
+        resolved_port = 587
+
+    if resolved_port == 465:
+        # 465 is implicit SSL
+        logger.warning(
+            "Both TLS and SSL were enabled; using SSL for port %s", resolved_port
+        )
+        return "0", "1"
+
+    logger.warning("Both TLS and SSL were enabled; using TLS for port %s", resolved_port)
+    return "1", "0"
+
+
 @shared_task
 def send_helpdesk_comment_email(comment_id):
     try:
@@ -29,6 +60,17 @@ def send_helpdesk_comment_email(comment_id):
         
         request = comment.request
         portal = request.portal
+
+        # An internal note must never leave the workspace. This guard is the
+        # last line of defence and covers any caller -- including a manual
+        # re-enqueue -- not just the ViewSet path.
+        if comment.is_internal:
+            comment.email_status = HelpdeskRequestComment.EmailDeliveryStatus.NOT_SENT
+            comment.email_error = "Internal note is not delivered by email."
+            comment.save(update_fields=["email_status", "email_error"])
+            publish(portal.workspace.slug, {"type": "comment.updated", "request_id": str(request.id)})
+            logger.warning(f"Skipped email for internal helpdesk comment {comment.id}")
+            return
 
         # Find recipient
         recipient_email = request.contact_email
@@ -86,6 +128,13 @@ def send_helpdesk_comment_email(comment_id):
             EMAIL_HOST_PASSWORD = portal.smtp_password or ""
             EMAIL_USE_TLS = "1" if portal.smtp_use_tls else "0"
             EMAIL_USE_SSL = "1" if portal.smtp_use_ssl else "0"
+
+        # Positioned after the portal override on purpose: when the portal has
+        # no smtp_host the values come from the instance configuration, which
+        # escapes both the serializer validation and the portal CheckConstraint.
+        EMAIL_USE_TLS, EMAIL_USE_SSL = normalize_tls_ssl(
+            EMAIL_USE_TLS, EMAIL_USE_SSL, EMAIL_PORT
+        )
 
         connection = get_connection(
             host=EMAIL_HOST,

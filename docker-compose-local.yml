@@ -75,6 +75,13 @@ services:
     command: ./bin/docker-entrypoint-api-local.sh
     env_file:
       - ./apps/api/.env
+    environment:
+      # plane.settings.local defaults to the console backend, which ignores the
+      # host/port handed to get_connection() and prints instead of sending. The
+      # helpdesk portal SMTP config is then silently discarded and nothing ever
+      # reaches the mailpit service defined below. Production (common.py) already
+      # uses the SMTP backend, so this only restores parity for local dev.
+      EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
     depends_on:
       - plane-db
       - plane-redis
@@ -96,6 +103,10 @@ services:
     command: ./bin/docker-entrypoint-worker.sh
     env_file:
       - ./apps/api/.env
+    environment:
+      # The worker is what actually sends helpdesk email, so it needs the same
+      # backend as the api container. See the note there.
+      EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
     depends_on:
       - api
       - plane-db

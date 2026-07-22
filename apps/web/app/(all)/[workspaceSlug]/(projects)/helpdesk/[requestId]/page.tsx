@@ -97,19 +97,12 @@ const WorkspaceRequestDetailPage = observer(() => {
   const [isForwarding, setIsForwarding] = useState(false);
   const previousAcceptedIssueIdsRef = useRef<string[]>([]);
 
-  const [deliveryChannels, setDeliveryChannels] = useState<string[]>(() => {
-    try {
-      const stored = sessionStorage.getItem("helpdesk_delivery_channels");
-      return stored ? JSON.parse(stored) : ["portal"];
-    } catch {
-      return ["portal"];
-    }
-  });
-
-  const updateDeliveryChannels = (channels: string[]) => {
-    setDeliveryChannels(channels);
-    sessionStorage.setItem("helpdesk_delivery_channels", JSON.stringify(channels));
-  };
+  // A public reply always reaches the customer through both channels; the only
+  // distinction an agent makes is public vs. internal, via the toggle below.
+  // An internal note stays on the portal and is never delivered by email --
+  // sending it would be the RC-2 leak the API now rejects outright.
+  const PUBLIC_REPLY_CHANNELS = ["portal", "email"];
+  const INTERNAL_NOTE_CHANNELS = ["portal"];
 
   useEffect(() => {
     if (!workspaceSlug || !requestId) return;
@@ -207,7 +200,7 @@ const WorkspaceRequestDetailPage = observer(() => {
       await helpdeskStore.createRequestComment(wSlug, rId, {
         content: newComment.trim(),
         is_internal: isInternalNote,
-        delivery_channels: isInternalNote ? ["portal"] : deliveryChannels,
+        delivery_channels: isInternalNote ? INTERNAL_NOTE_CHANNELS : PUBLIC_REPLY_CHANNELS,
       });
       setNewComment("");
       setToast({
@@ -411,17 +404,30 @@ const WorkspaceRequestDetailPage = observer(() => {
                   comments.map((comment) => {
                     const isAgent = !!comment.actor;
                     const avatarClass = isAgent ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-300";
+                    // actor_detail/customer_detail may be absent on comments
+                    // cached before the API started sending them, so both the
+                    // name and the avatar fall back to the previous behaviour.
+                    const authorName = isAgent
+                      ? (comment.actor_detail?.display_name ?? "Agent")
+                      : (comment.customer_detail?.name ?? "Customer");
+                    const avatarUrl = isAgent ? comment.actor_detail?.avatar_url : null;
                     return (
                       <div key={comment.id} className={`flex gap-3 ${isAgent ? "flex-row-reverse" : "flex-row"}`}>
                         <div
-                          className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${comment.is_internal ? "text-blue-400" : avatarClass}`}
+                          className={`mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full ${comment.is_internal ? "text-blue-400" : avatarClass}`}
                           style={comment.is_internal ? { backgroundColor: "rgba(59,130,246,0.15)" } : undefined}
                         >
-                          {isAgent ? <UserRound className="size-3.5" /> : <MessageSquareText className="size-3.5" />}
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt={authorName} className="size-full object-cover" />
+                          ) : isAgent ? (
+                            <UserRound className="size-3.5" />
+                          ) : (
+                            <MessageSquareText className="size-3.5" />
+                          )}
                         </div>
                         <div className={`flex max-w-[80%] min-w-0 flex-col ${isAgent ? "items-end" : "items-start"}`}>
                           <div className={`mb-1.5 flex items-center gap-2 ${isAgent ? "flex-row-reverse" : ""}`}>
-                            <span className="text-sm text-text-100 font-medium">{isAgent ? "Agent" : "Customer"}</span>
+                            <span className="text-sm text-text-100 font-medium">{authorName}</span>
                             {comment.is_internal && (
                               <Badge variant="neutral" size="sm">
                                 Internal note
@@ -495,11 +501,18 @@ const WorkspaceRequestDetailPage = observer(() => {
                     }}
                   />
                   <div className="flex items-center justify-between gap-3 px-3 pb-2.5">
+                    {/* A bordered chip in both states: the control previously had
+                        no background or border when off, so nothing signalled it
+                        was clickable. aria-pressed carries the state to screen
+                        readers, which the bare colour change did not. */}
                     <button
                       type="button"
                       onClick={() => setIsInternalNote((v) => !v)}
-                      className={`text-xs flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors ${
-                        isInternalNote ? "text-amber-500" : "text-text-400 hover:text-text-200 hover:bg-surface-1"
+                      aria-pressed={isInternalNote}
+                      className={`text-xs flex items-center gap-2 rounded-md border px-2 py-1 transition-colors ${
+                        isInternalNote
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
+                          : "text-text-300 hover:text-text-100 border-subtle bg-surface-2 hover:bg-layer-1"
                       }`}
                     >
                       <Lock className="size-3.5" />
@@ -508,28 +521,6 @@ const WorkspaceRequestDetailPage = observer(() => {
                     </button>
                     <div className="flex items-center gap-2">
                       <p className="text-text-400 hidden text-11 sm:block">Ctrl/Cmd + Enter</p>
-                      {!isInternalNote && (
-                        <select
-                          className="text-xs text-text-200 h-7 rounded-md border border-subtle bg-surface-2 px-2 py-1 outline-none"
-                          value={
-                            deliveryChannels.includes("email")
-                              ? deliveryChannels.includes("portal")
-                                ? "both"
-                                : "email"
-                              : "portal"
-                          }
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "portal") updateDeliveryChannels(["portal"]);
-                            else if (val === "email") updateDeliveryChannels(["email"]);
-                            else updateDeliveryChannels(["portal", "email"]);
-                          }}
-                        >
-                          <option value="portal">Send via Portal</option>
-                          <option value="email">Send via Email</option>
-                          <option value="both">Send via Portal + Email</option>
-                        </select>
-                      )}
                       <Button
                         variant="primary"
                         size="sm"

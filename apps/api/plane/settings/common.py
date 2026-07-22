@@ -123,6 +123,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "30/minute",
         "asset_id": "5/minute",
+        # Inbound email webhook: SendGrid delivers legitimate bursts well above
+        # the anonymous default, and a 429 there just triggers a retry.
+        "helpdesk_inbound": "600/minute",
     },
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
@@ -328,6 +331,13 @@ CELERY_IMPORTS = (
     # issue version tasks
     "plane.bgtasks.issue_version_sync",
     "plane.bgtasks.issue_description_version_sync",
+    # helpdesk tasks
+    # comment.py imports send_helpdesk_comment_email inside perform_create, so
+    # only the API process ever loads the module. Without this entry the worker
+    # never registers the task, discards the message as unregistered, and the
+    # comment stays PENDING forever -- it never reaches FAILED either, so the
+    # UI shows no error. Eager-mode tests cannot catch this.
+    "plane.bgtasks.helpdesk_email_task",
 )
 
 FILE_SIZE_LIMIT = int(os.environ.get("FILE_SIZE_LIMIT", 5242880))

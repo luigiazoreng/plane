@@ -24,6 +24,9 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
                 workspace__slug=self.kwargs.get("slug"),
                 request_id=self.kwargs.get("request_pk"),
             )
+            # actor_detail/customer_detail are nested serializers; without this
+            # the list view issues one query per comment.
+            .select_related("actor", "customer")
         )
 
     def list(self, request, *args, **kwargs):
@@ -62,10 +65,14 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
 
         hd_request = HelpdeskRequest.objects.get(id=self.kwargs.get("request_pk"))
         
-        # Determine email_status before saving
+        # Determine email_status before saving. An internal note is never
+        # delivered by email, so it must not even be marked PENDING.
         delivery_channels = serializer.validated_data.get("delivery_channels", [])
+        is_internal = serializer.validated_data.get("is_internal", False)
+        should_send_email = "email" in delivery_channels and not is_internal
+
         email_status = HelpdeskRequestComment.EmailDeliveryStatus.NOT_SENT
-        if "email" in delivery_channels:
+        if should_send_email:
             email_status = HelpdeskRequestComment.EmailDeliveryStatus.PENDING
 
         comment = serializer.save(
@@ -80,7 +87,7 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
             )
         publish(self.kwargs.get("slug", ""), {"type": "comment.created", "request_id": str(hd_request.id)})
 
-        if "email" in delivery_channels:
+        if should_send_email:
             send_helpdesk_comment_email.delay(comment.id)
 
 
@@ -108,7 +115,7 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
             request_id=request_pk,
             request__portal=portal,
             is_internal=False,
-        ).order_by("created_at")
+        ).select_related("actor", "customer").order_by("created_at")
         serializer = HelpdeskRequestCommentSerializer(comments, many=True)
         return Response(serializer.data)
 

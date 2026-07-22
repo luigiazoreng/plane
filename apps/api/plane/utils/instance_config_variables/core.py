@@ -193,6 +193,12 @@ smtp_config_variables = [
         "category": "SMTP",
         "is_encrypted": False,
     },
+    {
+        "key": "HELPDESK_INBOUND_WEBHOOK_SECRET",
+        "value": os.environ.get("HELPDESK_INBOUND_WEBHOOK_SECRET", ""),
+        "category": "SMTP",
+        "is_encrypted": True,
+    },
 ]
 
 llm_config_variables = [

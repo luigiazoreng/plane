@@ -164,11 +164,30 @@ export interface IHelpdeskDisplayFilters {
   order_by: THelpdeskOrderBy;
 }
 
+export interface IHelpdeskCommentActor {
+  id: string;
+  first_name: string;
+  last_name: string;
+  display_name: string;
+  avatar: string | null;
+  avatar_url: string | null;
+  is_bot: boolean;
+}
+
+export interface IHelpdeskCommentCustomer {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface IHelpdeskRequestComment {
   id: string;
   request: string;
   actor?: string | null;
   customer?: string | null;
+  /** Populated by the API for display; null for the counterpart role. */
+  actor_detail?: IHelpdeskCommentActor | null;
+  customer_detail?: IHelpdeskCommentCustomer | null;
   content: string;
   is_internal: boolean;
   delivery_channels?: string[];

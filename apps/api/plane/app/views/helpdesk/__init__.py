@@ -6,7 +6,11 @@ from .auth import (
     PublicHelpdeskCustomerForgotPasswordEndpoint,
     PublicHelpdeskCustomerResetPasswordEndpoint,
 )
-from .portal import HelpdeskPortalViewSet, PublicHelpdeskPortalEndpoint
+from .portal import (
+    HelpdeskPortalViewSet,
+    PublicHelpdeskPortalEndpoint,
+    HelpdeskPortalEmailLogsEndpoint,
+)
 from .form import (
     HelpdeskFormFieldViewSet,
     HelpdeskFormViewSet,
