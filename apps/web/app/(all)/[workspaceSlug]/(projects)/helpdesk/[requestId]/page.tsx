@@ -64,10 +64,7 @@ import {
   X,
 } from "lucide-react";
 import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
-import {
-  CommentAttachments,
-  PendingAttachmentChips,
-} from "@/components/helpdesk/attachments/attachment-chips";
+import { CommentAttachments, PendingAttachmentChips } from "@/components/helpdesk/attachments/attachment-chips";
 import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
 import { ExistingIssuesListModal } from "@/components/core/modals/existing-issues-list-modal";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
@@ -116,8 +113,7 @@ const WorkspaceRequestDetailPage = observer(() => {
         helpdeskStore.helpdeskService.getAssetUploadCredentials(workspaceSlug?.toString() || "", data),
       markUploaded: (assetId: string) =>
         helpdeskStore.helpdeskService.markAssetUploaded(workspaceSlug?.toString() || "", assetId),
-      remove: (assetId: string) =>
-        helpdeskStore.helpdeskService.deleteAsset(workspaceSlug?.toString() || "", assetId),
+      remove: (assetId: string) => helpdeskStore.helpdeskService.deleteAsset(workspaceSlug?.toString() || "", assetId),
     }),
     [workspaceSlug, helpdeskStore]
   );
@@ -543,25 +539,27 @@ const WorkspaceRequestDetailPage = observer(() => {
                   />
                   <PendingAttachmentChips attachments={attachments.pending} onRemove={attachments.remove} />
                   <div className="flex items-center justify-between gap-3 px-3 pb-2.5">
-                    {/* A bordered chip in both states: the control previously had
-                        no background or border when off, so nothing signalled it
-                        was clickable. aria-pressed carries the state to screen
-                        readers, which the bare colour change did not. */}
-                    <button
-                      type="button"
-                      onClick={() => setIsInternalNote((v) => !v)}
-                      aria-pressed={isInternalNote}
-                      className={`text-xs flex items-center gap-2 rounded-md border px-2 py-1 transition-colors ${
-                        isInternalNote
-                          ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
-                          : "text-text-300 hover:text-text-100 border-subtle bg-surface-2 hover:bg-layer-1"
-                      }`}
-                    >
-                      <Lock className="size-3.5" />
-                      Internal note
-                      <Switch value={isInternalNote} onChange={() => setIsInternalNote((v) => !v)} />
-                    </button>
-                    <AttachmentPicker onSelect={attachments.upload} disabled={submittingComment} />
+                    <div className="flex items-center gap-3">
+                      {/* A bordered chip in both states: the control previously had
+                          no background or border when off, so nothing signalled it
+                          was clickable. aria-pressed carries the state to screen
+                          readers, which the bare colour change did not. */}
+                      <button
+                        type="button"
+                        onClick={() => setIsInternalNote((v) => !v)}
+                        aria-pressed={isInternalNote}
+                        className={`text-xs flex items-center gap-2 rounded-md border px-2 py-1 transition-colors ${
+                          isInternalNote
+                            ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
+                            : "text-text-300 hover:text-text-100 border-subtle bg-surface-2 hover:bg-layer-1"
+                        }`}
+                      >
+                        <Lock className="size-3.5" />
+                        Internal note
+                        <Switch value={isInternalNote} onChange={() => setIsInternalNote((v) => !v)} />
+                      </button>
+                      <AttachmentPicker onSelect={attachments.upload} disabled={submittingComment} />
+                    </div>
                     <div className="flex items-center gap-2">
                       <p className="text-text-400 hidden text-11 sm:block">Ctrl/Cmd + Enter</p>
                       <Button
