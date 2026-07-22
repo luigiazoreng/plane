@@ -4,13 +4,22 @@ from unittest import mock
 
 # Third-party imports
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 # Module imports
-from plane.db.models import HelpdeskRequest, HelpdeskRequestComment, Workspace, HelpdeskPortal, HelpdeskMember
+from plane.app.helpdesk.attachments import COMMENT_ENTITY
+from plane.db.models import (
+    FileAsset,
+    HelpdeskRequest,
+    HelpdeskRequestComment,
+    Workspace,
+    HelpdeskPortal,
+    HelpdeskMember,
+)
 from plane.tests.factories import UserFactory, WorkspaceFactory
 
 
@@ -421,7 +430,16 @@ class TestInboundEmailParsing(APITestCase):
         self.assertIn("Reply in HTML", new_comment.content)
 
     def test_agent_reply(self):
-        """Test that an authorized agent can reply and is linked as the actor."""
+        """B2 (SR-002): agente legítimo, com DKIM alinhado, continua sendo o actor.
+
+        Este teste afirmava o comportamento vulnerável: até o SR-002 ele passava
+        **sem** nenhum sinal de autenticidade, o que é exatamente o bug — a
+        string do campo `from` era promovida a usuário real do workspace. O
+        acréscimo do campo `dkim` aqui **é** a correção, não um ajuste de teste.
+
+        Serve também de guarda contra um fix agressivo demais, que quebrasse a
+        atribuição de todo agente: o caminho legítimo tem de continuar inteiro.
+        """
         agent_user = UserFactory.create(email="agent@plane.so", username="agent")
         HelpdeskMember.objects.create(
             workspace=self.workspace,
@@ -429,20 +447,26 @@ class TestInboundEmailParsing(APITestCase):
             role=15, # Agent role
             is_active=True
         )
-        
+
         payload = {
             "headers": f"Message-ID: <agent123@email.com>\nIn-Reply-To: {self.original_message_id}",
             "from": "agent@plane.so",
             "text": "Agent reply via email.",
+            "dkim": "{@plane.so : pass}",
         }
-        
+
         response = self._post(payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
+
         new_comment = HelpdeskRequestComment.objects.latest("created_at")
         self.assertEqual(new_comment.content, "Agent reply via email.")
         self.assertEqual(new_comment.actor, agent_user)
         self.assertIsNone(new_comment.customer)
+        self.assertEqual(new_comment.sender_verification, "pass")
+
+        # O SLA só é marcado por um agente comprovadamente autêntico.
+        self.helpdesk_request.refresh_from_db()
+        self.assertIsNotNone(self.helpdesk_request.first_responded_at)
 
     def test_references_header_threading(self):
         """Test that correlation works even if only References header contains the original ID."""
@@ -515,3 +539,239 @@ class TestInboundEmailParsing(APITestCase):
         self.assertEqual(new_comment.content, "External user reply.")
         self.assertEqual(new_comment.request, contact_request)
 
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "helpdesk-authenticity-tests",
+        }
+    }
+)
+class TestInboundSenderAuthenticity(APITestCase):
+    """Grupo B do fix-plan do SR-002: identidade do remetente do inbound.
+
+    O segredo compartilhado autentica o *transporte*, não o remetente — o
+    próprio SendGrid o anexa ao encaminhar um email que qualquer um mandou para
+    o endereço público do Inbound Parse. Daí a validação **assimétrica**:
+    agente sem autenticidade comprovada perde `actor` e anexos; cliente nunca
+    é bloqueado, verificado ou não.
+    """
+
+    def _post(self, payload, secret=INBOUND_SECRET, **extra):
+        if secret is not None:
+            extra["HTTP_X_HELPDESK_INBOUND_SECRET"] = secret
+        return self.client.post(self.url, payload, format="multipart", **extra)
+
+    def setUp(self):
+        cache.clear()
+        patcher = mock.patch(
+            "plane.app.helpdesk.inbound_security.get_inbound_secret",
+            return_value=INBOUND_SECRET,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.workspace = WorkspaceFactory.create()
+        self.portal = HelpdeskPortal.objects.create(
+            workspace=self.workspace, public_slug="portal-authenticity"
+        )
+        self.helpdesk_request = HelpdeskRequest.objects.create(
+            workspace=self.workspace,
+            portal=self.portal,
+            title="Help me",
+            description="I need help",
+            contact_email="customer@example.com",
+        )
+        self.parent_message_id = f"<{uuid.uuid4()}@plane.so>"
+        HelpdeskRequestComment.objects.create(
+            workspace=self.workspace,
+            request=self.helpdesk_request,
+            content="Original message",
+            email_status="sent",
+            email_message_id=self.parent_message_id,
+        )
+        self.agent = UserFactory.create(email="agent@plane.so", username="agent-auth")
+        HelpdeskMember.objects.create(
+            workspace=self.workspace, member=self.agent, role=15, is_active=True
+        )
+        self.url = reverse("public-helpdesk-inbound")
+
+    def _new_comment(self):
+        return (
+            HelpdeskRequestComment.objects.filter(request=self.helpdesk_request)
+            .exclude(email_message_id=self.parent_message_id)
+            .get()
+        )
+
+    # --- B1: o teste do bug ----------------------------------------------
+
+    def test_b1_forged_agent_without_dkim_gets_no_actor(self):
+        """Sem prova de autenticidade, o From: forjado não vira usuário real.
+
+        RED antes do fix: o comentário era criado com actor = agente real,
+        indistinguível de um genuíno.
+        """
+        payload = {
+            "headers": f"Message-ID: <forged1@email.com>\nIn-Reply-To: {self.parent_message_id}",
+            "from": "agent@plane.so",
+            "text": "Pode transferir para a conta abaixo.",
+        }
+
+        response = self._post(payload)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        comment = self._new_comment()
+        self.assertIsNone(comment.actor)
+        self.assertEqual(comment.sender_verification, "unverified")
+        # O texto sobrevive: o cliente ainda vê a mensagem, sem procedência.
+        self.assertEqual(comment.content, "Pode transferir para a conta abaixo.")
+
+    def test_b1_forged_agent_does_not_falsify_the_sla(self):
+        """Encadeado: first_responded_at só é escrito quando há actor."""
+        self._post(
+            {
+                "headers": f"Message-ID: <forged2@email.com>\nIn-Reply-To: {self.parent_message_id}",
+                "from": "agent@plane.so",
+                "text": "Já respondi.",
+            }
+        )
+
+        self.helpdesk_request.refresh_from_db()
+        self.assertIsNone(self.helpdesk_request.first_responded_at)
+
+    def test_b1_misaligned_dkim_does_not_grant_attribution(self):
+        """O atacante assina o próprio domínio e forja o From: do agente."""
+        response = self._post(
+            {
+                "headers": f"Message-ID: <forged3@email.com>\nIn-Reply-To: {self.parent_message_id}",
+                "from": "agent@plane.so",
+                "text": "Confie em mim.",
+                "dkim": "{@atacante.com : pass}",
+            }
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        comment = self._new_comment()
+        self.assertIsNone(comment.actor)
+        self.assertEqual(comment.sender_verification, "fail")
+
+    # --- B3: anexo de agente não verificado é descartado, texto sobrevive -
+
+    def test_b3_unverified_agent_attachment_is_never_stored(self):
+        """D1/D1-a: o loop é pulado inteiro, não filtrado depois.
+
+        A asserção é sobre a *chamada*: se o veredito fosse consultado só
+        depois do loop, os arquivos já teriam ido para o bucket e ficariam
+        órfãos até o sweep diário.
+        """
+        with mock.patch(
+            "plane.app.views.helpdesk.inbound.store_inbound_attachment"
+        ) as store:
+            response = self._post(
+                {
+                    "headers": f"Message-ID: <forged4@email.com>\nIn-Reply-To: {self.parent_message_id}",
+                    "from": "agent@plane.so",
+                    "text": "Segue o boleto atualizado.",
+                    "attachment1": SimpleUploadedFile(
+                        "boleto.exe", b"hostile", content_type="application/octet-stream"
+                    ),
+                }
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        store.assert_not_called()
+
+        comment = self._new_comment()
+        self.assertIsNone(comment.actor)
+        self.assertEqual(comment.content, "Segue o boleto atualizado.")
+        self.assertEqual(
+            FileAsset.objects.filter(
+                entity_type=COMMENT_ENTITY, entity_identifier=str(comment.id)
+            ).count(),
+            0,
+        )
+
+    # --- B4: borda anexo-only ---------------------------------------------
+
+    def test_b4_unverified_agent_with_only_attachments_is_discarded(self):
+        """D1-b: sem texto não há comentário — e o detail não é `empty_body`.
+
+        O detail próprio é o que torna a borda alertável por contagem; ela não
+        produz linha nos Email logs por construção (ver o comentário no view).
+        """
+        with mock.patch(
+            "plane.app.views.helpdesk.inbound.store_inbound_attachment"
+        ) as store:
+            response = self._post(
+                {
+                    "headers": f"Message-ID: <forged5@email.com>\nIn-Reply-To: {self.parent_message_id}",
+                    "from": "agent@plane.so",
+                    "text": "",
+                    "attachment1": SimpleUploadedFile(
+                        "payload.exe", b"hostile", content_type="application/octet-stream"
+                    ),
+                }
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data.get("detail"), "unverified_agent_attachments_only"
+        )
+        store.assert_not_called()
+        self.assertEqual(
+            HelpdeskRequestComment.objects.filter(request=self.helpdesk_request).count(),
+            1,
+        )
+
+    # --- B5: a assimetria — o cliente nunca é afetado ---------------------
+
+    def test_b5_customer_is_never_blocked_and_keeps_attachments(self):
+        """Impede que um fix futuro derrape para "bloquear tudo que falha DKIM".
+
+        O cliente não controla a infraestrutura de email dele; exigir DKIM
+        dele transformaria uma correção de segurança numa perda de mensagens.
+        """
+        with mock.patch("plane.app.helpdesk.attachments.S3Storage") as storage_cls:
+            storage_cls.return_value.upload_file.return_value = True
+            storage_cls.return_value.get_object_metadata.return_value = {}
+            response = self._post(
+                {
+                    "headers": f"Message-ID: <cust1@email.com>\nIn-Reply-To: {self.parent_message_id}",
+                    "from": "customer@example.com",
+                    "text": "Segue o print do erro.",
+                    "attachment1": SimpleUploadedFile(
+                        "erro.png", b"binary", content_type="image/png"
+                    ),
+                }
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        comment = self._new_comment()
+        self.assertIsNone(comment.actor)
+        # O veredito é registrado, mas não tem efeito nenhum na autorização.
+        self.assertEqual(comment.sender_verification, "unverified")
+        self.assertEqual(
+            FileAsset.objects.filter(
+                entity_type=COMMENT_ENTITY, entity_identifier=str(comment.id)
+            ).count(),
+            1,
+        )
+
+    # --- B6: degradação — nunca 500 ---------------------------------------
+
+    def test_b6_garbage_authenticity_fields_never_produce_500(self):
+        """Um 500 faria o SendGrid re-entregar em loop, a mesma razão do _discard."""
+        for i, garbage in enumerate(["???", "{@ : }", "{{{", "pass", ""]):
+            with self.subTest(dkim=garbage):
+                response = self._post(
+                    {
+                        "headers": f"Message-ID: <garb{i}@email.com>\nIn-Reply-To: {self.parent_message_id}",
+                        "from": "customer@example.com",
+                        "text": f"Mensagem {i}.",
+                        "dkim": garbage,
+                        "SPF": garbage,
+                    }
+                )
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)

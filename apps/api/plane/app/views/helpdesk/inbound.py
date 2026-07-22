@@ -5,6 +5,7 @@ import logging
 from typing import Optional
 
 # Django imports
+from django.conf import settings
 from django.db import IntegrityError
 
 # Third party imports
@@ -15,7 +16,18 @@ from rest_framework.permissions import AllowAny
 
 # Module imports
 from plane.db.models import HelpdeskRequestComment, HelpdeskMember, HelpdeskPortal
+from plane.app.helpdesk.attachments import (
+    COMMENT_ENTITY,
+    attachments_fingerprint,
+    bind_assets,
+    store_inbound_attachment,
+    synthesize_content,
+)
 from plane.app.helpdesk.inbound_security import verify_inbound_secret
+from plane.app.helpdesk.sender_authenticity import (
+    PASS,
+    verify_sender_authenticity,
+)
 from plane.throttles.helpdesk import HelpdeskInboundThrottle
 from plane.app.helpdesk.sse_broker import publish
 from plane.utils.email import generate_plain_text_from_html
@@ -98,19 +110,45 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Bound the body before parsing it. This route is exempt from
+        # RequestBodySizeLimitMiddleware -- otherwise a message with attachments
+        # would be buffered whole into memory and rejected at 5MB -- so the size
+        # check lives here instead. Reading CONTENT_LENGTH is safe: it does not
+        # touch the body, so an oversized payload is never parsed at all.
+        content_length = int(request.META.get("CONTENT_LENGTH") or 0)
+        if content_length > settings.HELPDESK_INBOUND_MAX_BODY_SIZE:
+            # 200, not 413: the payload will be exactly as large on every
+            # retry, so a retryable status just produces a redelivery loop.
+            return self._discard("payload_too_large", content_length=content_length)
+
         try:
             # SendGrid sends the payload as multipart/form-data
             data = request.data
-            
+
             headers_str = data.get("headers", "")
             from_str = data.get("from", "")
             text_body = data.get("text", "")
             html_body = data.get("html", "")
-            
+            # SendGrid numbers attachment parts attachment1..attachmentN.
+            uploaded_files = list(request.FILES.values())
+
             if not from_str:
                 return self._discard("missing_sender")
 
             from_email = self._extract_email_address(from_str)
+
+            # Computed once, here, before anything with a side effect runs.
+            # `from_email` is attacker-controlled -- the shared secret proves
+            # the request came from our provider, not who wrote the message --
+            # so this verdict is what decides, further down, whether the claim
+            # in From: may be promoted to a real workspace user.
+            sender_verification = verify_sender_authenticity(
+                from_email=from_email,
+                dkim_field=data.get("dkim"),
+                spf_field=data.get("SPF"),
+                headers_str=headers_str,
+                authserv_id=getattr(settings, "HELPDESK_INBOUND_AUTHSERV_ID", ""),
+            )
 
             in_reply_to = self._extract_header(headers_str, "In-Reply-To")
             references = self._extract_header(headers_str, "References")
@@ -125,7 +163,9 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
             if not text_body and html_body:
                 text_body = generate_plain_text_from_html(html_body)
 
-            if not text_body:
+            # A message that carries only a screenshot is still the customer
+            # telling us something. Only a genuinely empty one is dropped.
+            if not text_body and not uploaded_files:
                 return self._discard("empty_body")
 
 
@@ -160,9 +200,10 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
             # Security: verify sender is authorized to comment on this ticket
             is_authorized = False
             is_internal = False
+            is_agent_branch = False
             actor = None
             customer = None
-            
+
             # 1. Check if it's the customer
             if hd_request.contact_email and hd_request.contact_email.lower() == from_email:
                 is_authorized = True
@@ -181,12 +222,26 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
                 
                 if member:
                     is_authorized = True
-                    actor = member.member
+                    is_agent_branch = True
+                    # Asymmetric on purpose. The customer is never blocked --
+                    # they do not control their mail infrastructure, and
+                    # demanding DKIM of them would turn a security fix into
+                    # lost messages. An agent, whose word carries authority
+                    # inside the ticket, is only promoted to `actor` once the
+                    # From: claim is actually proven.
+                    #
+                    # The condition is `== PASS`, never `!= FAIL`: the latter
+                    # would let `unverified` -- the state an attacker trivially
+                    # produces by sending no signal at all -- grant
+                    # attribution, which is exactly the hole being closed.
+                    if sender_verification == PASS:
+                        actor = member.member
                     # Check if the email was sent to an internal support address?
-                    # For simplicity, if an agent replies via email, we default it to internal=False 
+                    # For simplicity, if an agent replies via email, we default it to internal=False
                     # unless we build a parser for commands like #internal.
                     is_internal = False
-                    
+
+
             if not is_authorized:
                 return self._discard(
                     "unauthorized_sender",
@@ -194,6 +249,44 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
                     hd_request_id=str(hd_request.id),
                 )
 
+            # Authorised is not the same as authentic. An unproven agent stays
+            # authorised -- their text still reaches the ticket, unattributed --
+            # but their files are dropped, because the real delivery vector is
+            # the portal's public asset endpoint: the customer trusts the
+            # *portal*, so a hostile file served from the company's own domain
+            # inside their legitimate ticket keeps its value no matter how the
+            # message bubble is labelled. Text under a neutral label does not.
+            #
+            # This runs after the authorisation branch and before the upload
+            # loop below, which is the only window where both facts are known:
+            # at the point the verdict is computed we do not yet know whether
+            # the sender is an agent, and emptying the list there would hit the
+            # customer too. Emptying it here rather than filtering afterwards
+            # is what keeps the files from ever reaching the bucket, where they
+            # would linger unbound until the daily sweep.
+            if is_agent_branch and sender_verification != PASS:
+                uploaded_files = []
+                if not text_body:
+                    # With nothing but files there is no comment left to make.
+                    # Deliberately not the `empty_body` discard above: this
+                    # detail is what makes the case alertable by count.
+                    #
+                    # Known and accepted gap: no comment means no row in the
+                    # Email logs, so the most graphic form of the attack is
+                    # invisible in the `sender_verification` column. The
+                    # alternative -- a synthetic comment saying the files were
+                    # dropped -- was rejected because `content` *is* in the
+                    # public serializer, so it would hand the attacker, who is
+                    # a participant of the ticket, the very detection oracle
+                    # that keeping the field out of that serializer removes.
+                    # Never read an absence of rows here as an absence of
+                    # attack; the warning below is the signal that matters.
+                    return self._discard(
+                        "unverified_agent_attachments_only",
+                        from_email=from_email,
+                        hd_request_id=str(hd_request.id),
+                        sender_verification=sender_verification,
+                    )
 
             # Clean up the text body to remove previous quotes
             # A simple approach is to just use the raw text, but in reality 
@@ -205,8 +298,17 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
             # one. body_key is taken after the HTML fallback so both branches
             # hash the same text.
             if message_id is None:
+                # With no text there is nothing to hash, so two attachment-only
+                # messages from the same sender in the same second would collide
+                # and the second would be discarded as a duplicate. Fall back to
+                # fingerprinting the files.
+                body_key = text_body.strip()
+                if not body_key and uploaded_files:
+                    body_key = attachments_fingerprint(
+                        [(getattr(f, "name", ""), getattr(f, "size", 0)) for f in uploaded_files]
+                    )
                 message_id = self._build_synthetic_message_id(
-                    parent_comment, from_email, date_header, text_body.strip()
+                    parent_comment, from_email, date_header, body_key
                 )
 
             if HelpdeskRequestComment.objects.filter(email_message_id=message_id).exists():
@@ -216,25 +318,56 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
                     hd_request_id=str(hd_request.id),
                 )
 
+            # Store the files only now that the sender is both authorised for
+            # this ticket and, when they claim to be an agent, proven to be
+            # one. Uploading before that would let anyone holding a valid
+            # webhook secret fill the bucket through a forged sender -- and,
+            # worse, publish a hostile file on the portal under an agent's
+            # apparent authority. `uploaded_files` is already empty for an
+            # unproven agent, so this loop simply does not run for them.
+            stored_assets = []
+            for uploaded_file in uploaded_files:
+                asset = store_inbound_attachment(uploaded_file, workspace_id=hd_request.workspace_id)
+                # None means the file was rejected or the upload failed. One bad
+                # attachment must never cost the customer their whole message.
+                if asset:
+                    stored_assets.append(asset)
+
+            content = text_body or synthesize_content(len(stored_assets))
+
             try:
                 new_comment = HelpdeskRequestComment.objects.create(
                     workspace_id=hd_request.workspace_id,
                     request=hd_request,
                     actor=actor,
                     customer=customer,
-                    content=text_body,
+                    content=content,
                     is_internal=is_internal,
                     delivery_channels=["email"],
                     email_status=HelpdeskRequestComment.EmailDeliveryStatus.SENT,
                     email_message_id=message_id,
+                    # Recorded for every inbound comment, both branches, so an
+                    # operator can tell "we checked and it was refused" from
+                    # "we had nothing to check" -- an attack from a broken
+                    # integration. Kept out of the public serializer.
+                    sender_verification=sender_verification,
                 )
             except IntegrityError:
                 # Two concurrent retries can both clear the exists() check.
+                # The assets just stored are left unbound; the daily
+                # delete_unbound_helpdesk_assets sweep collects them.
                 return self._discard(
                     "duplicate",
                     email_message_id=message_id,
                     hd_request_id=str(hd_request.id),
                 )
+
+            bind_assets(
+                [asset.id for asset in stored_assets],
+                workspace_id=hd_request.workspace_id,
+                entity_type=COMMENT_ENTITY,
+                entity_identifier=new_comment.id,
+            )
 
 
             # Update first response if necessary

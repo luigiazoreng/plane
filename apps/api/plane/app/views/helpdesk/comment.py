@@ -9,6 +9,7 @@ from plane.db.models.helpdesk import HelpdeskRequestComment, HelpdeskRequest, He
 from plane.app.serializers.helpdesk import HelpdeskRequestCommentSerializer
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
+from plane.app.helpdesk.attachments import COMMENT_ENTITY, assets_for, bind_assets
 
 
 class HelpdeskRequestCommentViewSet(BaseViewSet):
@@ -32,7 +33,15 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
     def list(self, request, *args, **kwargs):
         if get_helpdesk_role(request.user, self.kwargs.get("slug")) is None:
             return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-        return super().list(request, *args, **kwargs)
+        queryset = self.get_queryset()
+        # Resolve every comment's attachments in one query rather than letting
+        # the serializer fall back to a lookup per comment.
+        context = self.get_serializer_context()
+        context["attachments_by_entity"] = assets_for(COMMENT_ENTITY, [c.id for c in queryset])
+        return Response(
+            HelpdeskRequestCommentSerializer(queryset, many=True, context=context).data,
+            status=status.HTTP_200_OK,
+        )
 
     def retrieve(self, request, *args, **kwargs):
         if get_helpdesk_role(request.user, self.kwargs.get("slug")) is None:
@@ -81,6 +90,18 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
             actor=self.request.user,
             email_status=email_status,
         )
+
+        # Claim the attachments before anything observes the comment. The SSE
+        # event makes other agents refetch, and the email task reads the comment
+        # in a separate process -- both would see it without its files if this
+        # ran after them.
+        bind_assets(
+            self.request.data.get("asset_ids"),
+            workspace_id=hd_request.workspace_id,
+            entity_type=COMMENT_ENTITY,
+            entity_identifier=comment.id,
+        )
+
         if hd_request.first_responded_at is None and comment.actor is not None:
             HelpdeskRequest.objects.filter(id=hd_request.id).update(
                 first_responded_at=comment.created_at
@@ -89,6 +110,11 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
 
         if should_send_email:
             send_helpdesk_comment_email.delay(comment.id)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["workspace_slug"] = self.kwargs.get("slug")
+        return context
 
 
 class PublicHelpdeskCommentEndpoint(BaseAPIView):
@@ -116,7 +142,16 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
             request__portal=portal,
             is_internal=False,
         ).select_related("actor", "customer").order_by("created_at")
-        serializer = HelpdeskRequestCommentSerializer(comments, many=True)
+        serializer = HelpdeskRequestCommentSerializer(
+            comments,
+            many=True,
+            context={
+                # public_slug routes attachment URLs through the portal
+                # endpoint, which the customer can actually reach.
+                "public_slug": public_slug,
+                "attachments_by_entity": assets_for(COMMENT_ENTITY, [c.id for c in comments]),
+            },
+        )
         return Response(serializer.data)
 
     def post(self, request, public_slug, request_pk):
@@ -146,5 +181,16 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
             content=content,
             is_internal=False,
         )
-        serializer = HelpdeskRequestCommentSerializer(comment)
+
+        # This path bypasses the serializer entirely, so it binds attachments
+        # itself rather than sharing perform_create's hook. Both call the same
+        # helper so the claim rules cannot drift apart.
+        bind_assets(
+            request.data.get("asset_ids"),
+            workspace_id=portal.workspace_id,
+            entity_type=COMMENT_ENTITY,
+            entity_identifier=comment.id,
+        )
+
+        serializer = HelpdeskRequestCommentSerializer(comment, context={"public_slug": public_slug})
         return Response(serializer.data, status=status.HTTP_201_CREATED)

@@ -18,6 +18,7 @@ import type {
   IHelpdeskPaginatedResponse,
   IHelpdeskPortal,
   IHelpdeskRequest,
+  IHelpdeskAssetUploadResponse,
   IHelpdeskRequestComment,
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
@@ -191,6 +192,26 @@ export class HelpdeskService extends APIService {
     data: Partial<IHelpdeskRequestComment>
   ): Promise<IHelpdeskRequestComment> {
     return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/comments/`, data).then((res) => res?.data);
+  }
+
+  // --- Attachments ---
+  // Three steps, matching the issue-attachment flow: ask for credentials, PUT
+  // the bytes straight to storage, then confirm. The asset starts unbound and
+  // is claimed by the comment it is sent with.
+
+  async getAssetUploadCredentials(
+    workspaceSlug: string,
+    data: { name: string; type: string; size: number; entity_type?: string }
+  ): Promise<IHelpdeskAssetUploadResponse> {
+    return this.post(`${workspaceSlug}/helpdesk/assets/`, data).then((res) => res?.data);
+  }
+
+  async markAssetUploaded(workspaceSlug: string, assetId: string): Promise<void> {
+    return this.patch(`${workspaceSlug}/helpdesk/assets/${assetId}/`).then((res) => res?.data);
+  }
+
+  async deleteAsset(workspaceSlug: string, assetId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/assets/${assetId}/`).then((res) => res?.data);
   }
 
   // --- Issue Links ---
@@ -377,5 +398,21 @@ export class PublicHelpdeskService extends APIService {
   ): Promise<IHelpdeskRequestComment> {
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     return this.post(`portals/${publicSlug}/requests/${requestId}/comments/`, data, config).then((res) => res?.data);
+  }
+
+  // --- Attachments ---
+
+  async getAssetUploadCredentials(
+    publicSlug: string,
+    data: { name: string; type: string; size: number; entity_type?: string },
+    token?: string
+  ): Promise<IHelpdeskAssetUploadResponse> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.post(`portals/${publicSlug}/assets/`, data, config).then((res) => res?.data);
+  }
+
+  async markAssetUploaded(publicSlug: string, assetId: string, token?: string): Promise<void> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.patch(`portals/${publicSlug}/assets/${assetId}/`, {}, config).then((res) => res?.data);
   }
 }

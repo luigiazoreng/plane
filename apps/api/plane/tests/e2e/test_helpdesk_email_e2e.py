@@ -252,6 +252,76 @@ class TestHelpdeskEmailE2E(APITestCase):
         # The reply came from the customer, so it must not be attributed to an agent.
         self.assertIsNone(reply.actor)
 
+    def test_attachment_reaches_the_customer_intact(self):
+        """The bytes that leave on the wire must be the bytes that were stored.
+
+        Metadata alone would pass even if the payload were empty, so this
+        compares the downloaded part against what went in.
+        """
+        from plane.app.helpdesk.attachments import COMMENT_ENTITY, bind_assets
+        from plane.db.models import FileAsset
+
+        payload = b"traceback: everything is on fire"
+        asset = FileAsset.objects.create(
+            attributes={"name": "erro.txt", "type": "text/plain", "size": len(payload)},
+            asset=f"{self.workspace.id}/e2e-erro.txt",
+            size=len(payload),
+            workspace=self.workspace,
+            entity_type=COMMENT_ENTITY,
+            is_uploaded=True,
+        )
+
+        response = self._post_comment("Segue o log.")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        comment_id = response.data["id"]
+
+        # The comment already went out without the file, so send a second one
+        # with the asset bound and read the storage through a stub -- the e2e
+        # environment has no guarantee of a reachable bucket.
+        bind_assets(
+            [asset.id],
+            workspace_id=self.workspace.id,
+            entity_type=COMMENT_ENTITY,
+            entity_identifier=comment_id,
+        )
+        mailpit.clear()
+
+        with mock.patch("plane.bgtasks.helpdesk_email_task.S3Storage") as storage_cls:
+            storage_cls.return_value.read_object.return_value = payload
+            from plane.bgtasks.helpdesk_email_task import send_helpdesk_comment_email
+
+            comment = HelpdeskRequestComment.objects.get(id=comment_id)
+            comment.email_status = HelpdeskRequestComment.EmailDeliveryStatus.PENDING
+            comment.email_message_id = None
+            comment.save(update_fields=["email_status", "email_message_id"])
+            send_helpdesk_comment_email(comment_id)
+
+        message = mailpit.only_message()
+        parts = mailpit.attachments(message["ID"])
+        self.assertEqual(len(parts), 1)
+        self.assertEqual(parts[0]["FileName"], "erro.txt")
+        self.assertEqual(mailpit.download_attachment(message["ID"], parts[0]["PartID"]), payload)
+
+    def test_internal_note_attachment_never_leaves(self):
+        """RC-2 extended to files: an internal note's attachment must not ship."""
+        with mock.patch("plane.bgtasks.helpdesk_email_task.S3Storage") as storage_cls:
+            from plane.bgtasks.helpdesk_email_task import send_helpdesk_comment_email
+
+            comment = HelpdeskRequestComment.objects.create(
+                workspace=self.workspace,
+                request=self.helpdesk_request,
+                actor=self.agent,
+                content="Nota interna com anexo.",
+                is_internal=True,
+                delivery_channels=["email"],
+                email_status=HelpdeskRequestComment.EmailDeliveryStatus.PENDING,
+            )
+            send_helpdesk_comment_email(comment.id)
+
+        self.assertEqual(mailpit.count(), 0)
+        # The guard must short-circuit before storage is touched at all.
+        storage_cls.return_value.read_object.assert_not_called()
+
     def test_second_outbound_message_references_the_first(self):
         """Threading headers must chain, or clients render the thread as separate mails."""
         self._post_comment("First reply.")

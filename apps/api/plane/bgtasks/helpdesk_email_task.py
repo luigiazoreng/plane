@@ -10,15 +10,69 @@ from celery import shared_task
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.template.loader import render_to_string
 from django.conf import settings
+from django.utils.html import escape
 
 # Module imports
 from plane.db.models.helpdesk import HelpdeskRequestComment, HelpdeskRequest
 from plane.license.utils.instance_value import get_email_configuration
+from plane.settings.storage import S3Storage
 from plane.utils.email import generate_plain_text_from_html
 from plane.utils.exception_logger import log_exception
+from plane.app.helpdesk.attachments import COMMENT_ENTITY, assets_for
 from plane.app.helpdesk.sse_broker import publish
 
 logger = logging.getLogger("plane.worker")
+
+
+def _collect_attachments(comment):
+    """Read a comment's attachments out of storage for the outgoing email.
+
+    Returns ``(attachments, omitted_count)`` where each attachment is the
+    ``(filename, content, mimetype)`` triple ``EmailMessage.attach`` expects.
+
+    Every file is fetched inside its own try/except, and a failure only skips
+    that file. Letting a storage error escape would hit the task's generic
+    except, mark the whole comment FAILED and cost the customer the message
+    body as well -- a far worse outcome than one missing attachment.
+    """
+    assets = assets_for(COMMENT_ENTITY, [comment.id]).get(str(comment.id), [])
+    if not assets:
+        return [], 0
+
+    # No request object in a worker: S3Storage would otherwise hand back the
+    # browser-facing MinIO endpoint, which is not resolvable from here.
+    storage = S3Storage()
+    attachments = []
+    omitted = 0
+    total_size = 0
+
+    for asset in assets:
+        attributes = asset.attributes or {}
+        size = attributes.get("size") or asset.size or 0
+        if total_size + size > settings.HELPDESK_OUTBOUND_ATTACHMENT_MAX_TOTAL_SIZE:
+            omitted += 1
+            continue
+
+        try:
+            content = storage.read_object(asset.asset.name)
+        except Exception as e:
+            log_exception(e)
+            content = None
+
+        if content is None:
+            omitted += 1
+            continue
+
+        attachments.append(
+            (
+                attributes.get("name") or "attachment",
+                content,
+                attributes.get("type") or "application/octet-stream",
+            )
+        )
+        total_size += size
+
+    return attachments, omitted
 
 
 def normalize_tls_ssl(use_tls, use_ssl, port):
@@ -162,6 +216,15 @@ def send_helpdesk_comment_email(comment_id):
             headers["In-Reply-To"] = last_comment.email_message_id
             headers["References"] = f"{request_msg_id} {last_comment.email_message_id}"
 
+        attachments, omitted = _collect_attachments(comment)
+        if omitted:
+            notice = (
+                f"\n\n[{omitted} anexo(s) não puderam ser enviados por email. "
+                "Acesse o portal para baixá-los.]"
+            )
+            text_content = f"{text_content}{notice}"
+            html_content = f"{html_content}<p><em>{escape(notice.strip())}</em></p>"
+
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_content,
@@ -171,6 +234,8 @@ def send_helpdesk_comment_email(comment_id):
             headers=headers,
         )
         msg.attach_alternative(html_content, "text/html")
+        for filename, content, mimetype in attachments:
+            msg.attach(filename, content, mimetype)
         msg.send()
         
         # Mark as sent

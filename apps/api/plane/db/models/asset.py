@@ -44,6 +44,13 @@ class FileAsset(BaseModel):
         PROJECT_COVER = "PROJECT_COVER"
         DRAFT_ISSUE_ATTACHMENT = "DRAFT_ISSUE_ATTACHMENT"
         DRAFT_ISSUE_DESCRIPTION = "DRAFT_ISSUE_DESCRIPTION"
+        # Helpdesk assets are linked through entity_type/entity_identifier
+        # rather than a dedicated FK: the helpdesk models soft-delete, so an
+        # ON DELETE CASCADE would never fire, and a new column on file_assets
+        # would mean an ALTER on the largest table in the database. workspace
+        # stays a real FK, which is the cascade that actually matters.
+        HELPDESK_COMMENT_ATTACHMENT = "HELPDESK_COMMENT_ATTACHMENT"
+        HELPDESK_REQUEST_ATTACHMENT = "HELPDESK_REQUEST_ATTACHMENT"
 
     attributes = models.JSONField(default=dict)
     asset = models.FileField(upload_to=get_upload_path, max_length=800)
@@ -99,5 +106,16 @@ class FileAsset(BaseModel):
             self.EntityTypeContext.DRAFT_ISSUE_DESCRIPTION,
         ]:
             return f"/api/assets/v2/workspaces/{self.workspace.slug}/projects/{self.project_id}/{self.id}/"
+
+        if self.entity_type in [
+            self.EntityTypeContext.HELPDESK_COMMENT_ATTACHMENT,
+            self.EntityTypeContext.HELPDESK_REQUEST_ATTACHMENT,
+        ]:
+            # Note for callers: like the branches above, this dereferences
+            # self.workspace and costs a query per asset unless the queryset
+            # select_related("workspace"). The helpdesk serializers build this
+            # URL from the slug already in their context instead -- see
+            # HelpdeskAttachmentSerializer.
+            return f"/api/workspaces/{self.workspace.slug}/helpdesk/assets/{self.id}/"
 
         return None

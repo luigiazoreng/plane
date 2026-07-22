@@ -50,6 +50,7 @@ import {
   previewTicketIdPattern,
 } from "@/helpers/helpdesk/form-core";
 import { useMember } from "@/hooks/store/use-member";
+import { useFileSize } from "@/plane-web/hooks/use-file-size";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { HelpdeskFormRenderer } from "@/components/helpdesk/form-renderer";
 
@@ -94,6 +95,17 @@ const validateFormForActivation = (fields: IHelpdeskFormField[]): string[] => {
   return errors;
 };
 
+/**
+ * The model stores bytes; the field is in MB because that is how an admin
+ * thinks about attachment limits. Null (empty input) means "inherit the
+ * instance limit".
+ */
+function attachmentSizeInputValue(portal: IHelpdeskPortal, draft: Partial<IHelpdeskPortal>): string {
+  const bytes = draft.max_attachment_size !== undefined ? draft.max_attachment_size : portal.max_attachment_size;
+  if (!bytes) return "";
+  return String(Math.round((bytes / (1024 * 1024)) * 10) / 10);
+}
+
 const HelpdeskSettingsPage = observer(() => {
   const { workspaceSlug } = useParams();
   const navigate = useNavigate();
@@ -103,6 +115,12 @@ const HelpdeskSettingsPage = observer(() => {
   } = useMember();
 
   const wSlug = workspaceSlug?.toString() || "";
+
+  // The instance ceiling a portal cannot exceed. Shown as the placeholder and
+  // enforced again server-side -- the proxy and the presigned upload conditions
+  // apply it regardless of what is saved here.
+  const { maxFileSize } = useFileSize();
+  const instanceMaxAttachmentMb = Math.round(maxFileSize / (1024 * 1024));
 
   // ---- Status state ----
   const [newStatusName, setNewStatusName] = useState("");
@@ -1212,6 +1230,34 @@ const HelpdeskSettingsPage = observer(() => {
                                 }
                               />
                             </div>
+
+                            <div className="mt-6 border-t border-subtle pt-4">
+                              <h4 className="text-13 font-medium text-primary">Attachments</h4>
+                              <label className="mt-3 block max-w-xs">
+                                <span className="text-12 text-tertiary">Maximum file size (MB)</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={instanceMaxAttachmentMb}
+                                  value={attachmentSizeInputValue(portal, draft)}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    // Empty means "inherit the instance limit",
+                                    // which is what null encodes on the model.
+                                    handleDraftChange(
+                                      "max_attachment_size",
+                                      raw === "" ? null : Math.round(Number(raw) * 1024 * 1024)
+                                    );
+                                  }}
+                                  placeholder={`${instanceMaxAttachmentMb} (padrão da instância)`}
+                                  className="mt-1 w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                />
+                                <span className="text-11 text-tertiary mt-1 block">
+                                  Deixe vazio para usar o limite da instância ({instanceMaxAttachmentMb} MB).
+                                  Não é possível ultrapassá-lo — o proxy e o storage também o aplicam.
+                                </span>
+                              </label>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1263,6 +1309,7 @@ const HelpdeskSettingsPage = observer(() => {
                                   <th className="px-4 py-3 font-medium">Status</th>
                                   <th className="px-4 py-3 font-medium">Message</th>
                                   <th className="px-4 py-3 font-medium">Recipient</th>
+                                  <th className="px-4 py-3 font-medium">Sender</th>
                                   <th className="px-4 py-3 font-medium">Time</th>
                                   <th className="px-4 py-3 font-medium">Error (if any)</th>
                                 </tr>
@@ -1286,6 +1333,32 @@ const HelpdeskSettingsPage = observer(() => {
                                     </td>
                                     <td className="px-4 py-3">
                                       {log.customer ? "Customer" : "Unknown"}
+                                    </td>
+                                    {/* Authenticity of an inbound sender.
+                                        "Unverified" and "Failed" are kept
+                                        apart on purpose: the first means we
+                                        had nothing to check (often a broken
+                                        integration), the second that we
+                                        checked and it was refused (often an
+                                        attack). They call for opposite
+                                        responses. A run of "Unverified"
+                                        across every agent reply is the
+                                        signature of a payload format change,
+                                        not of an attack. */}
+                                    <td className="px-4 py-3">
+                                      {log.sender_verification === "pass" && (
+                                        <Badge variant="success" size="sm">Verified</Badge>
+                                      )}
+                                      {log.sender_verification === "fail" && (
+                                        <Badge variant="danger" size="sm">Failed</Badge>
+                                      )}
+                                      {log.sender_verification === "unverified" && (
+                                        <Badge variant="warning" size="sm">Unverified</Badge>
+                                      )}
+                                      {(!log.sender_verification ||
+                                        log.sender_verification === "not_applicable") && (
+                                        <span className="text-tertiary">—</span>
+                                      )}
                                     </td>
                                     <td className="px-4 py-3 text-tertiary">
                                       {new Date(log.created_at).toLocaleString()}

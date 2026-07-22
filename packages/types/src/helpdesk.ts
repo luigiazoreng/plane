@@ -34,6 +34,8 @@ export interface IHelpdeskPortal {
   smtp_password?: string | null; // Optional, might be write-only on backend
   smtp_use_tls: boolean;
   smtp_use_ssl: boolean;
+  /** Attachment ceiling in bytes. Null means the instance limit applies. */
+  max_attachment_size: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -164,6 +166,30 @@ export interface IHelpdeskDisplayFilters {
   order_by: THelpdeskOrderBy;
 }
 
+export interface IHelpdeskAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  /** API path that 302s to a presigned download; prefix with getFileURL(). */
+  asset_url: string | null;
+  created_at: string;
+}
+
+/** Response from the helpdesk asset upload endpoints. */
+export interface IHelpdeskAssetUploadResponse {
+  asset_id: string;
+  upload_data: {
+    url: string;
+    fields: Record<string, string>;
+  };
+  attributes: {
+    name: string;
+    type: string;
+    size: number;
+  };
+}
+
 export interface IHelpdeskCommentActor {
   id: string;
   first_name: string;
@@ -188,6 +214,10 @@ export interface IHelpdeskRequestComment {
   /** Populated by the API for display; null for the counterpart role. */
   actor_detail?: IHelpdeskCommentActor | null;
   customer_detail?: IHelpdeskCommentCustomer | null;
+  /** Files delivered with this message. Read-only. */
+  attachments?: IHelpdeskAttachment[];
+  /** Write-only: ids of already-uploaded assets to attach on create. */
+  asset_ids?: string[];
   content: string;
   is_internal: boolean;
   delivery_channels?: string[];
@@ -195,6 +225,13 @@ export interface IHelpdeskRequestComment {
   email_sent_at?: string | null;
   email_message_id?: string | null;
   email_error?: string | null;
+  /**
+   * Authenticity of the sender of an inbound email. Optional because the
+   * public comment serializer deliberately withholds it: telling the sender
+   * whether a spoof was detected would hand the attacker a detection oracle.
+   * Only the admin-only email logs endpoint populates it.
+   */
+  sender_verification?: "pass" | "fail" | "unverified" | "not_applicable";
   created_at: string;
   updated_at: string;
 }

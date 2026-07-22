@@ -21,3 +21,19 @@ class HelpdeskInboundThrottle(AnonRateThrottle):
     """
 
     scope = "helpdesk_inbound"
+
+
+class HelpdeskPublicAssetThrottle(AnonRateThrottle):
+    """Rate limit for attachment uploads from the public customer portal.
+
+    Portal customers are not Plane users, so this endpoint cannot sit behind
+    the normal authenticated asset flow -- on an open portal it accepts uploads
+    from anyone with the URL. Without a dedicated bucket it is free storage for
+    the internet.
+
+    Lower than the inbound rate on purpose: a human picking files in a browser
+    has no legitimate reason to exceed this, whereas a mail provider batching
+    deliveries does.
+    """
+
+    scope = "helpdesk_public_asset"

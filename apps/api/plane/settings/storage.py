@@ -197,6 +197,21 @@ class S3Storage(S3Boto3Storage):
             log_exception(e)
             return False
 
+    def read_object(self, object_name: str):
+        """Read an S3 object into memory, or None when it cannot be fetched.
+
+        The counterpart to upload_file, for the cases that need the bytes
+        server-side rather than a presigned URL for the browser -- attaching a
+        stored file to an outgoing email, for instance. Callers are expected to
+        bound how much they read: this loads the whole object into memory.
+        """
+        try:
+            response = self.s3_client.get_object(Bucket=self.aws_storage_bucket_name, Key=object_name)
+            return response["Body"].read()
+        except ClientError as e:
+            log_exception(e)
+            return None
+
     def delete_files(self, object_names):
         """Delete an S3 object"""
         try:

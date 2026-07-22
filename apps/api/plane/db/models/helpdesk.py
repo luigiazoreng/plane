@@ -57,6 +57,20 @@ class HelpdeskPortal(WorkspaceBaseModel):
     smtp_password = models.CharField(max_length=255, null=True, blank=True)
     smtp_use_tls = models.BooleanField(default=False)
     smtp_use_ssl = models.BooleanField(default=False)
+    # Per-portal attachment ceiling, in bytes. Null means "use the instance
+    # limit". It can only ever lower that limit, never raise it: the instance
+    # FILE_SIZE_LIMIT is also enforced by the reverse proxy and by the
+    # presigned upload conditions, so a higher value here would not actually
+    # let a larger file through -- it would just fail further along.
+    max_attachment_size = models.BigIntegerField(null=True, blank=True)
+
+    def effective_max_attachment_size(self):
+        """Resolve the attachment ceiling that actually applies to this portal."""
+        from django.conf import settings
+
+        if not self.max_attachment_size:
+            return settings.FILE_SIZE_LIMIT
+        return min(self.max_attachment_size, settings.FILE_SIZE_LIMIT)
 
     class Meta:
         verbose_name = "Helpdesk Portal"
@@ -236,6 +250,29 @@ class HelpdeskRequestComment(WorkspaceBaseModel):
         PENDING = "pending", "Pending"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
+
+    class SenderVerification(models.TextChoices):
+        """Authenticity of the From: address of an inbound email.
+
+        Values mirror the constants in
+        ``plane.app.helpdesk.sender_authenticity``; that module stays free of
+        Django imports, so the literals are duplicated on purpose and
+        ``test_states_match_the_model_choices`` keeps them from drifting.
+
+        Never exposed by the public comment serializer: telling the sender
+        whether the spoof was detected hands the attacker a detection oracle.
+        """
+
+        PASS = "pass", "Pass"
+        FAIL = "fail", "Fail"
+        UNVERIFIED = "unverified", "Unverified"
+        NOT_APPLICABLE = "not_applicable", "Not Applicable"
+
+    sender_verification = models.CharField(
+        max_length=20,
+        choices=SenderVerification.choices,
+        default=SenderVerification.NOT_APPLICABLE,
+    )
 
     delivery_channels = models.JSONField(default=list, blank=True)
     email_status = models.CharField(

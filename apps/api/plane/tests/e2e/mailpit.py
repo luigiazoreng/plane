@@ -85,6 +85,23 @@ def header(message_id, name):
     return None
 
 
+def attachments(message_id):
+    """Return the message's attachment parts.
+
+    Each entry carries ``PartID``, ``FileName``, ``ContentType`` and ``Size``.
+    Use download_attachment() to compare the actual bytes -- the metadata alone
+    would still pass if the payload were empty or truncated.
+    """
+    return get_message(message_id).get("Attachments") or []
+
+
+def download_attachment(message_id, part_id):
+    """Return the raw bytes of one attachment part."""
+    response = requests.get(f"{API_URL}/api/v1/message/{message_id}/part/{part_id}", timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.content
+
+
 def only_message():
     """Return the single stored message, asserting there is exactly one.
 

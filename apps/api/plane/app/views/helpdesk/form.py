@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from plane.app.serializers.helpdesk import HelpdeskFormFieldSerializer, HelpdeskFormSerializer, HelpdeskRequestSerializer
 from plane.app.views.base import BaseAPIView, BaseViewSet
+from plane.app.helpdesk.attachments import REQUEST_ENTITY, bind_assets
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from plane.app.helpdesk.form_core import build_default_helpdesk_system_fields, validate_helpdesk_form_submission, generate_ticket_display_id
 from plane.app.helpdesk.sse_broker import publish as sse_publish
@@ -339,7 +340,16 @@ class PublicHelpdeskFormSubmitEndpoint(BaseAPIView):
             form_responses=result["responses"],
             display_id=display_id,
         )
+        # Claim attachments before the SSE event, so an agent opening the ticket
+        # off that notification already sees the files.
+        bind_assets(
+            request.data.get("asset_ids"),
+            workspace_id=portal.workspace_id,
+            entity_type=REQUEST_ENTITY,
+            entity_identifier=helpdesk_request.id,
+        )
+
         assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
         sse_publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
-        serializer = HelpdeskRequestSerializer(helpdesk_request)
+        serializer = HelpdeskRequestSerializer(helpdesk_request, context={"public_slug": public_slug})
         return Response(serializer.data, status=status.HTTP_201_CREATED)

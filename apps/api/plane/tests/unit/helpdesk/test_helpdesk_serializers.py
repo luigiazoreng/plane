@@ -4,6 +4,7 @@ from django.test import TestCase
 # Module imports
 from plane.app.serializers.helpdesk import (
     HelpdeskPortalSerializer,
+    HelpdeskRequestCommentAdminSerializer,
     HelpdeskRequestCommentSerializer,
 )
 from plane.db.models import HelpdeskPortal, HelpdeskRequest, HelpdeskRequestComment
@@ -141,3 +142,60 @@ class TestHelpdeskCommentInternalNoteValidation(TestCase):
             comment, data={"delivery_channels": ["email"]}, partial=True
         )
         self.assertFalse(serializer.is_valid())
+
+
+class TestSenderVerificationExposure(TestCase):
+    """Grupo C do fix-plan do SR-002: o veredito não pode vazar ao cliente.
+
+    O serializer base atende tanto os Email logs (admin) quanto o
+    PublicHelpdeskCommentEndpoint (customer-facing). Com `fields = "__all__"`
+    qualquer campo novo do model chega ao portal público automaticamente —
+    entregando ao atacante, que é participante do ticket, o feedback de se o
+    spoof foi detectado. Este é o oráculo que mais importa: é consultável por
+    API de forma barata e repetível, ao contrário da leitura de uma bolha.
+    """
+
+    def setUp(self):
+        self.workspace = WorkspaceFactory.create()
+        self.portal = HelpdeskPortal.objects.create(
+            workspace=self.workspace, public_slug="portal-verification"
+        )
+        self.request = HelpdeskRequest.objects.create(
+            workspace=self.workspace,
+            portal=self.portal,
+            title="Ticket",
+            contact_email="customer@example.com",
+        )
+        self.comment = HelpdeskRequestComment.objects.create(
+            workspace=self.workspace,
+            request=self.request,
+            content="Reply",
+            sender_verification=HelpdeskRequestComment.SenderVerification.UNVERIFIED,
+        )
+
+    def test_c1_public_serializer_hides_sender_verification(self):
+        data = HelpdeskRequestCommentSerializer(self.comment).data
+        self.assertNotIn("sender_verification", data)
+
+    def test_c1_public_serializer_still_carries_the_fields_the_ui_needs(self):
+        """Guarda do R4: trocar "__all__" por exclude não pode omitir mais nada."""
+        data = HelpdeskRequestCommentSerializer(self.comment).data
+        for field in (
+            "id",
+            "content",
+            "actor",
+            "customer",
+            "actor_detail",
+            "customer_detail",
+            "attachments",
+            "is_internal",
+            "delivery_channels",
+            "email_status",
+            "created_at",
+        ):
+            with self.subTest(field=field):
+                self.assertIn(field, data)
+
+    def test_c2_admin_serializer_exposes_sender_verification(self):
+        data = HelpdeskRequestCommentAdminSerializer(self.comment).data
+        self.assertEqual(data["sender_verification"], "unverified")

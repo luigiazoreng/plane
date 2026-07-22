@@ -27,3 +27,4 @@ from .analytics import HelpdeskAnalyticsEndpoint
 from .sse import HelpdeskSSEView, HelpdeskSSETokenView
 from .member import HelpdeskMemberViewSet
 from .customer import HelpdeskCustomerViewSet
+from .asset import HelpdeskAssetEndpoint, PublicHelpdeskAssetEndpoint

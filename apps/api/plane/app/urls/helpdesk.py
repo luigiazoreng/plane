@@ -27,6 +27,8 @@ from plane.app.views.helpdesk import (
     HelpdeskAnalyticsEndpoint,
     HelpdeskMemberViewSet,
     HelpdeskCustomerViewSet,
+    HelpdeskAssetEndpoint,
+    PublicHelpdeskAssetEndpoint,
 )
 from plane.app.views.helpdesk.inbound import PublicHelpdeskInboundEmailEndpoint
 
@@ -89,6 +91,17 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/email-logs/",
         HelpdeskPortalEmailLogsEndpoint.as_view(),
         name="helpdesk-portal-email-logs",
+    ),
+    # --- Attachments (agent) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/assets/",
+        HelpdeskAssetEndpoint.as_view(),
+        name="helpdesk-asset",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/assets/<uuid:asset_id>/",
+        HelpdeskAssetEndpoint.as_view(),
+        name="helpdesk-asset-detail",
     ),
     path(
         "workspaces/<str:slug>/helpdesk/forms/",
@@ -289,6 +302,18 @@ urlpatterns = [
         "helpdesk/public/portals/<str:public_slug>/requests/<uuid:request_pk>/comments/",
         PublicHelpdeskCommentEndpoint.as_view(),
         name="public-helpdesk-comment",
+    ),
+
+    # --- Attachments (public portal) ---
+    path(
+        "helpdesk/public/portals/<str:public_slug>/assets/",
+        PublicHelpdeskAssetEndpoint.as_view(),
+        name="public-helpdesk-asset",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/assets/<uuid:asset_id>/",
+        PublicHelpdeskAssetEndpoint.as_view(),
+        name="public-helpdesk-asset-detail",
     ),
 
     # --- Inbound Email Webhook ---

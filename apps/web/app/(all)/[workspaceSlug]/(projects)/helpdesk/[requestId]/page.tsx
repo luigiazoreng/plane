@@ -63,6 +63,12 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
+import {
+  CommentAttachments,
+  PendingAttachmentChips,
+} from "@/components/helpdesk/attachments/attachment-chips";
+import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
 import { ExistingIssuesListModal } from "@/components/core/modals/existing-issues-list-modal";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
@@ -103,6 +109,19 @@ const WorkspaceRequestDetailPage = observer(() => {
   // sending it would be the RC-2 leak the API now rejects outright.
   const PUBLIC_REPLY_CHANNELS = ["portal", "email"];
   const INTERNAL_NOTE_CHANNELS = ["portal"];
+
+  const attachmentTransport = useMemo(
+    () => ({
+      getCredentials: (data: { name: string; type: string; size: number }) =>
+        helpdeskStore.helpdeskService.getAssetUploadCredentials(workspaceSlug?.toString() || "", data),
+      markUploaded: (assetId: string) =>
+        helpdeskStore.helpdeskService.markAssetUploaded(workspaceSlug?.toString() || "", assetId),
+      remove: (assetId: string) =>
+        helpdeskStore.helpdeskService.deleteAsset(workspaceSlug?.toString() || "", assetId),
+    }),
+    [workspaceSlug, helpdeskStore]
+  );
+  const attachments = useAttachmentUpload(attachmentTransport);
 
   useEffect(() => {
     if (!workspaceSlug || !requestId) return;
@@ -201,8 +220,10 @@ const WorkspaceRequestDetailPage = observer(() => {
         content: newComment.trim(),
         is_internal: isInternalNote,
         delivery_channels: isInternalNote ? INTERNAL_NOTE_CHANNELS : PUBLIC_REPLY_CHANNELS,
+        asset_ids: attachments.assetIds,
       });
       setNewComment("");
+      attachments.clear();
       setToast({
         type: TOAST_TYPE.SUCCESS,
         title: "Success",
@@ -402,14 +423,29 @@ const WorkspaceRequestDetailPage = observer(() => {
                   </div>
                 ) : (
                   comments.map((comment) => {
-                    const isAgent = !!comment.actor;
+                    // Three states, not a boolean. `!!comment.actor` sent every
+                    // unattributed comment down the customer branch, so an
+                    // inbound message whose sender could not be proven was
+                    // shown to the agent as though the *customer* had written
+                    // it -- the same misattribution as the forged-agent bug,
+                    // pointed the other way. Alignment, surface, icon and name
+                    // all derive from this instead.
+                    const authorKind = comment.actor ? "agent" : comment.customer ? "customer" : "unattributed";
+                    const isAgent = authorKind === "agent";
                     const avatarClass = isAgent ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-300";
                     // actor_detail/customer_detail may be absent on comments
                     // cached before the API started sending them, so both the
                     // name and the avatar fall back to the previous behaviour.
-                    const authorName = isAgent
-                      ? (comment.actor_detail?.display_name ?? "Agent")
-                      : (comment.customer_detail?.name ?? "Customer");
+                    // "Participant" is factual and passes no judgement: whoever
+                    // wrote it is a participant of the ticket, which is true in
+                    // the benign case too. It deliberately does not distinguish
+                    // a spoof from a false positive.
+                    const authorName =
+                      authorKind === "agent"
+                        ? (comment.actor_detail?.display_name ?? "Agent")
+                        : authorKind === "customer"
+                          ? (comment.customer_detail?.name ?? "Customer")
+                          : "Participant";
                     const avatarUrl = isAgent ? comment.actor_detail?.avatar_url : null;
                     return (
                       <div key={comment.id} className={`flex gap-3 ${isAgent ? "flex-row-reverse" : "flex-row"}`}>
@@ -419,10 +455,14 @@ const WorkspaceRequestDetailPage = observer(() => {
                         >
                           {avatarUrl ? (
                             <img src={avatarUrl} alt={authorName} className="size-full object-cover" />
-                          ) : isAgent ? (
+                          ) : authorKind === "agent" ? (
                             <UserRound className="size-3.5" />
-                          ) : (
+                          ) : authorKind === "customer" ? (
                             <MessageSquareText className="size-3.5" />
+                          ) : (
+                            // Generic, from the same family as the customer
+                            // icon: it must not read as a warning badge.
+                            <MessageCircleMore className="size-3.5" />
                           )}
                         </div>
                         <div className={`flex max-w-[80%] min-w-0 flex-col ${isAgent ? "items-end" : "items-start"}`}>
@@ -470,6 +510,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                             }
                           >
                             <p className="whitespace-pre-wrap">{comment.content}</p>
+                            <CommentAttachments attachments={comment.attachments} />
                           </div>
                         </div>
                       </div>
@@ -500,6 +541,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                       }
                     }}
                   />
+                  <PendingAttachmentChips attachments={attachments.pending} onRemove={attachments.remove} />
                   <div className="flex items-center justify-between gap-3 px-3 pb-2.5">
                     {/* A bordered chip in both states: the control previously had
                         no background or border when off, so nothing signalled it
@@ -519,6 +561,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                       Internal note
                       <Switch value={isInternalNote} onChange={() => setIsInternalNote((v) => !v)} />
                     </button>
+                    <AttachmentPicker onSelect={attachments.upload} disabled={submittingComment} />
                     <div className="flex items-center gap-2">
                       <p className="text-text-400 hidden text-11 sm:block">Ctrl/Cmd + Enter</p>
                       <Button

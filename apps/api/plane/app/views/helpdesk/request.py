@@ -15,6 +15,7 @@ from plane.db.models.helpdesk import (
     HelpdeskStatus,
 )
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
+from plane.app.helpdesk.attachments import REQUEST_ENTITY, bind_assets
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from .form import get_customer_from_token
 from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, generate_ticket_display_id
@@ -301,9 +302,18 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                 if display_id:
                     HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(display_id=display_id)
                     helpdesk_request.display_id = display_id
+                bind_assets(
+                    request.data.get("asset_ids"),
+                    workspace_id=portal.workspace_id,
+                    entity_type=REQUEST_ENTITY,
+                    entity_identifier=helpdesk_request.id,
+                )
                 assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
                 publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
-                return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
+                return Response(
+                    HelpdeskRequestSerializer(helpdesk_request, context={"public_slug": public_slug}).data,
+                    status=status.HTTP_201_CREATED,
+                )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = HelpdeskRequestSerializer(data=request.data)
@@ -313,7 +323,16 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                 workspace=portal.workspace,
                 customer=customer,
             )
+            bind_assets(
+                request.data.get("asset_ids"),
+                workspace_id=portal.workspace_id,
+                entity_type=REQUEST_ENTITY,
+                entity_identifier=helpdesk_request.id,
+            )
             assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
             publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
-            return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
+            return Response(
+                HelpdeskRequestSerializer(helpdesk_request, context={"public_slug": public_slug}).data,
+                status=status.HTTP_201_CREATED,
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
