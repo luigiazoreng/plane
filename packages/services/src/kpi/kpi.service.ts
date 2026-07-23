@@ -11,8 +11,10 @@ import type {
   IKpiIssuePriority,
   IKpiIssueListResponse,
   IKpiMemberAggregateResponse,
+  IKpiOverviewResponse,
   IKpiPreviewResponse,
   IKpiTaskInput,
+  TKpiPeriod,
 } from "@plane/types";
 import { APIService } from "../api.service";
 
@@ -55,6 +57,17 @@ export class KpiService extends APIService {
 
   async getWorkspaceMemberAggregates(workspaceSlug: string): Promise<IKpiMemberAggregateResponse> {
     return this.get(`${workspaceSlug}/kpi/members/`).then((res) => res?.data);
+  }
+
+  /**
+   * Consolidated workspace panel: unified KPI + per-project + per-member.
+   * Pass either `period` or an explicit `start`/`end` range (YYYY-MM-DD).
+   */
+  async getWorkspaceOverview(
+    workspaceSlug: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiOverviewResponse> {
+    return this.get(`${workspaceSlug}/kpi/overview/`, { params }).then((res) => res?.data);
   }
 
   async getIssueAttributes(workspaceSlug: string, projectId: string, issueId: string): Promise<IKpiIssueAttribute> {

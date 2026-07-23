@@ -9,10 +9,9 @@ import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { AlertCircle, Award, CheckCircle2, Clock, Layers, Settings, TrendingUp } from "lucide-react";
+import { Settings } from "lucide-react";
 import { EUserPermissionsLevel } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
-import type { IKpiAggregates } from "@plane/types";
 import { EUserProjectRoles } from "@plane/types";
 import { Spinner } from "@plane/ui";
 import { cn } from "@plane/utils";
@@ -24,6 +23,7 @@ import { DetailedEmptyState } from "@/components/empty-state/detailed-empty-stat
 import { KpiCurveChart } from "@/components/kpi/curve-chart";
 import { KpiMemberBarChart } from "@/components/kpi/member-bar-chart";
 import { KpiMemberList } from "@/components/kpi/member-list";
+import { KpiStatBar } from "@/components/kpi/stat-bar";
 import { PageHead } from "@/components/core/page-title";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
@@ -31,63 +31,6 @@ import { useKpi } from "@/hooks/store/use-kpi";
 import { useProject } from "@/hooks/store/use-project";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useAppRouter } from "@/hooks/use-app-router";
-
-const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString());
-
-// ── Stat bar ─────────────────────────────────────────────────────────────────
-// Flat, bordered strip that mirrors the spreadsheet header chrome: no rounded
-// cards, no shadows — just dividers and semantic tokens.
-
-type StatTone = "neutral" | "accent" | "success" | "warning" | "danger";
-
-const TONE_TEXT: Record<StatTone, string> = {
-  neutral: "text-primary",
-  accent: "text-accent-primary",
-  success: "text-success-primary",
-  warning: "text-warning-primary",
-  danger: "text-danger-primary",
-};
-
-function Stat({
-  icon: Icon,
-  value,
-  label,
-  tone = "neutral",
-}: {
-  icon: typeof Layers;
-  value: string;
-  label: string;
-  tone?: StatTone;
-}) {
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-3 px-page-x py-4">
-      <Icon className={cn("size-4 shrink-0", tone === "neutral" ? "text-tertiary" : TONE_TEXT[tone])} />
-      <div className="min-w-0">
-        <p className={cn("text-20 leading-none font-semibold tabular-nums", TONE_TEXT[tone])}>{value}</p>
-        <p className="mt-1.5 truncate text-12 text-tertiary">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-function StatBar({ agg }: { agg: IKpiAggregates | undefined }) {
-  const onTime = agg ? agg.counts.on_time + agg.counts.early : null;
-  const effNum = agg?.efficiency != null ? agg.efficiency * 100 : null;
-  const effStr = effNum != null ? `${effNum.toFixed(1)}%` : "—";
-  const isLate = agg != null && agg.counts.late > 0;
-  const effHigh = effNum != null && effNum >= 100;
-
-  return (
-    <div className="flex flex-wrap divide-x divide-subtle border-b border-subtle bg-surface-1">
-      <Stat icon={Layers} value={fmt(agg?.sum_vp)} label="Raw points" />
-      <Stat icon={Award} value={fmt(agg?.sum_vf)} label="Final score" tone="accent" />
-      <Stat icon={TrendingUp} value={effStr} label="Efficiency" tone={effHigh ? "success" : "warning"} />
-      <Stat icon={CheckCircle2} value={onTime !== null ? String(onTime) : "—"} label="On time / Early" tone="success" />
-      <Stat icon={AlertCircle} value={fmt(agg?.counts.late)} label="Late" tone={isLate ? "danger" : "neutral"} />
-      <Stat icon={Clock} value={fmt(agg?.counts.pending)} label="Pending" />
-    </div>
-  );
-}
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -183,7 +126,7 @@ function ProjectKpiPage() {
     <>
       <PageHead title="KPI" />
       <div className="flex h-full w-full flex-col overflow-hidden bg-surface-1">
-        <StatBar agg={agg} />
+        <KpiStatBar agg={agg} />
 
         {/* Section header */}
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-subtle px-page-x">

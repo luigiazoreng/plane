@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import type { ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import Script from "next/script";
 import { Links, Meta, Outlet, Scripts } from "react-router";
 import type { LinksFunction } from "react-router";
@@ -133,10 +133,15 @@ export default function Root() {
 }
 
 export function HydrateFallback() {
+  const [mounted, setMounted] = useState(false);
   const { resolvedTheme } = useTheme();
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // if we are on the server or the theme is not resolved, return an empty div
-  if (typeof window === "undefined" || resolvedTheme === undefined) return <div />;
+  if (!mounted || resolvedTheme === undefined) return <div />;
 
   return (
     <div className="relative flex h-screen w-full items-center justify-center bg-canvas">

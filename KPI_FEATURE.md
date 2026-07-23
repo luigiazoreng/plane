@@ -92,6 +92,33 @@ O motor **não** cria uma entidade de tarefa própria. Ele pontua os `Issue` já
 - **Settings do KPI (`kpi/settings/page.tsx`, `KpiConfigEditor`) não mudou** — continua sendo a única tela do lead para ajustar o motor de cálculo.
 - Sem migração de banco — nenhuma mudança de modelo, só um endpoint de agregação novo e realocação de UI.
 
+### D8 — KPI unificado do workspace é ponderado por nº de itens, não soma de Vf
+
+> Decisão tomada em 2026-07-23. Define como a tela de workspace consolida os KPIs dos projetos.
+
+- **`Vf` não é comparável entre projetos.** `tables.difficulty` é keyed por *EstimatePoint id* — cada
+  projeto define a própria escala de pontos — e `priority.points`/`b`/`k`/`penalty_mode` também podem
+  divergir por `KpiConfig` de projeto. Somar `Vf` deixaria o projeto com a tabela mais "inflada"
+  dominar o número consolidado, e a distorção seria invisível.
+- **Eficiência (`Vf/Vp`) é adimensional** e é a base do número único:
+
+  ```
+  eff_p = Σ Vf_p / Σ Vp_p        # só itens entregues (d != None)
+  KPI   = Σ (eff_p × n_p) / Σ n_p    # n_p = itens pontuados do projeto p
+  ```
+
+- Projeto sem item pontuado (ou `Σ Vp = 0`) aparece na tabela com `efficiency: null` e fica **fora**
+  da média (`projects_in_average` < `project_count`).
+- `contribution` = `eff_p × n_p / Σ n_p` decompõe o KPI: a soma das contribuições **é** o KPI.
+- `sum_vp_raw`/`sum_vf_raw` continuam expostos, mas rotulados como escalas mistas na UI — nunca são
+  a base do número.
+- **Config**: cada projeto é calculado com a própria config (`resolve_contract`), então o número da
+  linha bate exatamente com o da tela daquele projeto.
+- **Escopo**: só projetos com `kpi_view=true`, não arquivados, dos quais o requester é
+  `ProjectMember` ativo.
+- **Período**: `?period=30d|90d|180d|365d|all` (default `90d`) ou `?start=&end=`. Um item entra pela
+  `completed_at` quando entregue, ou pela `target_date` quando ainda aberto.
+
 ### D3 — Motor de cálculo puro e isolado
 
 A camada de cálculo (`plane/kpi/engine.py`) é uma função pura `calcular(task_fields, config) -> {Vp, d, p, Vf}` sem acesso a banco. Isso permite:
@@ -278,6 +305,8 @@ Padrão idêntico ao Helpdesk: URLs em `apps/api/plane/app/urls/kpi.py`, registr
 | GET/PUT | `workspaces/<slug>/projects/<id>/kpi/config/`                                | Config do projeto (cria/edita; herda do workspace se ausente).                           |
 | GET     | `workspaces/<slug>/projects/<id>/kpi/issues/`                                | Lista issues do projeto com `Vp`, `d`, `p`, `Vf` calculados + agregados de projeto.      |
 | GET     | `workspaces/<slug>/projects/<id>/kpi/members/`                               | Agregação por membro (Vp/Vf divididos igualmente entre assignees) + `unassigned_count`.  |
+| GET     | `workspaces/<slug>/kpi/members/`                                             | Idem, entre os projetos com KPI ativo do workspace que o requester integra.              |
+| GET     | `workspaces/<slug>/kpi/overview/`                                            | Painel consolidado: `unified` (KPI único) + `projects` + `members`. Aceita `period`/`start`/`end` (ver D8). |
 | GET/PUT | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/attributes/`          | Lê/define atributos KPI laterais e `type_override` da issue.                             |
 | PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/estimate/`            | Compatibilidade: define `difficulty_estimate_point`, sem alterar `Issue.estimate_point`. |
 | PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/repetitive-estimate/` | Define `repetitive_estimate_point`.                                                      |
@@ -370,6 +399,23 @@ Reaproveitar os padrões do Helpdesk (sidebar, rotas, store, service, types).
 - [x] Frontend: `KpiService.getWorkspaceMemberAggregates` e `KpiStore.workspaceMemberAggregates`.
 - [x] Frontend: Rota `/:workspaceSlug/kpi` configurada em `core.ts` e `WorkspaceKpiPage` adaptada a partir da página de nível de projeto, usando layout de workspace.
 - [x] Frontend: Link na barra lateral (sidebar) do workspace sob a seção Analytics, com ícone `Gauge`.
+
+### Fase 7.1 — Workspace KPI Overview: KPI unificado entre projetos ✅
+
+> D8 (2026-07-23). A tela de workspace deixa de ser só um ranking de membros e vira o painel
+> consolidado dos **KPIs ativos** (projetos com `kpi_view=true`).
+
+- [x] Backend: `WorkspaceKpiOverviewEndpoint` — `GET .../kpi/overview/`, uma única passada sobre os
+      issues alimentando três blocos (`projects`, `members`, `unified`).
+- [x] Backend: `resolve_contracts_bulk()` em `plane/kpi/contract.py` (1 query para todas as configs).
+- [x] Backend: helpers extraídos (`_accumulate_member_buckets`, `_finalize_member_buckets`,
+      `_active_kpi_projects`, `_resolve_period`, `_period_filter`) — elimina a duplicação entre
+      `KpiMemberAggregateEndpoint` e `WorkspaceKpiMemberAggregateEndpoint`.
+- [x] Frontend: tipos, `KpiService.getWorkspaceOverview`, `KpiStore.workspaceOverview`, componentes
+      (`stat-bar`, `score-bar-chart`, `project-list`, `unified-kpi-hero`, `period-selector`) e a
+      reescrita de `kpi/page.tsx` (workspace).
+- [ ] ⚠️ **`pytest plane/tests/contract/app/test_kpi.py` pendente** — host sem Django e o container
+      foi morto por falta de memória; rodar quando o ambiente subir.
 
 ### Fase 8 — Integração futura com Helpdesk
 
@@ -473,6 +519,36 @@ Config padrão, `k = 0.5`.
 - **Frontend — dashboard:** `kpi/page.tsx` reescrito — `StatBar` mantido, `KpiIssuesTable` removida da tela e substituída por `KpiMemberList` (novo, `core/components/kpi/member-list.tsx`) + `KpiMemberBarChart` (novo, usa `BarChart` de `@plane/propel/charts/bar-chart`) + `KpiCurveChart` com seletor de prioridade em vez de linha selecionada. `StatusBadge`/`STATUS_BADGE` extraído de `issues-table.tsx` para `core/components/kpi/status-badge.tsx` (reaproveitado pelos dois componentes, sem duplicar).
 - **Frontend — work item:** Difficulty/Repetitive viram campos do work item, não da tela de KPI. `IssueModalContext` ganhou `kpiDifficultyEstimatePoint`/`kpiRepetitiveEstimatePoint` + `handleCreateUpdateKpiAttributes` (implementado em `ce/components/issues/issue-modal/provider.tsx`); `default-properties.tsx` renderiza os dois `EstimateDropdown` (gated por `KpiConfig.difficulty_estimate`/`repetitive_estimate`) e pré-carrega o valor atual ao editar um issue existente; `base.tsx` persiste depois de criar/atualizar o issue. `issue-detail/sidebar.tsx` ganhou os mesmos dois campos ao lado do Estimate nativo, lendo/escrevendo via `KpiStore` (`issueAttributes`, `updateIssueDifficultyEstimate`/`updateIssueRepetitiveEstimate`, já existentes).
 - **Gates:** `pnpm --filter=web check:types` — mesmos 40 erros pré-existentes (não relacionados, `toSorted`/ES2023) antes e depois da mudança, zero erros novos. `oxlint` nos arquivos tocados — 0 erros, únicos warnings são padrões pré-existentes (`jsx-no-constructed-context-values` no provider, `no-shadow` em `base.tsx`, confirmados via `git stash` que já existiam antes desta mudança). Backend validado via `py_compile` (Django não instalado no host — suíte pytest pendente de ambiente, mesma limitação já documentada nas fases anteriores).
+
+### 2026-07-23 — Workspace KPI Overview (D8)
+
+- **Backend:** `WorkspaceKpiOverviewEndpoint` (`app/views/kpi/issue.py`) — `GET .../kpi/overview/`,
+  uma passada sobre os issues alimentando `projects`, `members` e `unified`.
+  `resolve_contracts_bulk()` (`plane/kpi/contract.py`) resolve todas as configs do workspace numa
+  query só. Helpers novos: `_accumulate_member_buckets`/`_finalize_member_buckets` (fim da duplicação
+  entre os dois endpoints de membro), `_active_kpi_projects`, `_resolve_period`, `_period_filter`.
+  Sem migração.
+- **Dois bugs pré-existentes corrigidos:**
+  1. `WorkspaceKpiMemberAggregateEndpoint` agregava `Issue.issue_objects.filter(workspace=...)` sem
+     filtro — incluía projetos com KPI **desabilitado** e projetos dos quais o requester **não é
+     membro**. Agora passa por `_active_kpi_projects`. ⚠️ Muda também a saída da tool MCP
+     `get_workspace_kpi_members` (que consome esse endpoint).
+  2. `workspaceMemberAggregates` estava declarado no `KpiStore` mas **fora** do `makeObservable` —
+     a tela só re-renderizava por acidente, via o `useState(loading)` local. Registrado.
+- **Frontend:** tipos (`IKpiOverviewResponse`, `IKpiUnifiedSummary`, `IKpiWorkspaceProjectRow`,
+  `TKpiPeriod`), `KpiService.getWorkspaceOverview`, `KpiStore.workspaceOverview`.
+  `core/components/kpi/`: `stat-bar.tsx` (extraído da página de projeto, reusado pelas duas telas),
+  `CountChips` movido para `status-badge.tsx`, `score-bar-chart.tsx` genérico (`member-bar-chart`
+  virou wrapper), e os novos `project-list.tsx`, `unified-kpi-hero.tsx`, `period-selector.tsx`.
+  `kpi/page.tsx` (workspace) reescrita: hero do KPI único → StatBar (rotulado escalas mistas) →
+  tabela de projetos linkando para cada painel → gráfico de eficiência por projeto → ranking de
+  membros.
+- **Gates:** `pnpm --filter web check:types` — 42 erros pré-existentes (`toSorted`/ES2023) antes e
+  depois, **0 novos** (comparação por `git stash`). `oxlint` nos arquivos KPI (web + packages) —
+  **0/0**. `py_compile` do backend OK.
+- **Pendente:** `pytest plane/tests/contract/app/test_kpi.py` (11 testes novos em
+  `TestKpiWorkspaceOverview` + 2 de regressão de escopo) — o host ficou sem memória e o container da
+  API foi morto (exit 137) antes da suíte rodar.
 
 ## Critérios de Aceitação
 

@@ -1,3 +1,7 @@
+from datetime import date, timedelta
+
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -10,9 +14,10 @@ from plane.db.models import (
     Issue,
     IssueEstimatePropertyValue,
     KpiIssueAttribute,
+    Project,
     Workspace,
 )
-from plane.kpi.contract import resolve_contract
+from plane.kpi.contract import resolve_contract, resolve_contracts_bulk
 from plane.kpi.engine import calcular, sample_curve
 
 
@@ -123,6 +128,130 @@ def _status_of(completed_at, d):
     return "on_time"
 
 
+def _empty_counts():
+    return {"on_time": 0, "early": 0, "late": 0, "pending": 0}
+
+
+def _accumulate_member_buckets(issue, calc, row_status, buckets):
+    """Add an issue's Vp/Vf to each of its assignees' buckets, split equally.
+
+    A work item with N assignees gives each of them Vp/N and Vf/N, so the sum of
+    every member's score matches the project-wide total. Returns False when the
+    issue has no assignee (the caller counts those separately) -- a mixed
+    "Unassigned" row would distort a ranking of real people.
+    """
+    assignees = list(issue.assignees.all())
+    if not assignees:
+        return False
+
+    n = len(assignees)
+    vp_share = calc["Vp"] / n
+    vf_share = (calc["Vf"] / n) if calc["Vf"] is not None else None
+
+    for user in assignees:
+        bucket = buckets.setdefault(
+            str(user.id),
+            {
+                "user_id": str(user.id),
+                "display_name": user.display_name,
+                "avatar_url": user.avatar_url,
+                "sum_vp": 0.0,
+                "sum_vf": 0.0,
+                "counts": _empty_counts(),
+            },
+        )
+        bucket["sum_vp"] += vp_share
+        if vf_share is not None:
+            bucket["sum_vf"] += vf_share
+        bucket["counts"][row_status] += 1
+    return True
+
+
+def _finalize_member_buckets(buckets, decimals):
+    """Round the accumulated buckets, derive efficiency and rank by final score."""
+    results = []
+    for bucket in buckets.values():
+        bucket["sum_vp"] = round(bucket["sum_vp"], decimals)
+        bucket["sum_vf"] = round(bucket["sum_vf"], decimals)
+        bucket["efficiency"] = round(bucket["sum_vf"] / bucket["sum_vp"], 4) if bucket["sum_vp"] else None
+        results.append(bucket)
+
+    results.sort(key=lambda r: r["sum_vf"], reverse=True)
+    return results
+
+
+def _active_kpi_projects(workspace, user):
+    """Projects of the workspace whose KPI panel is enabled AND the user belongs to.
+
+    Every filter matters: ``kpi_view`` is the per-project feature toggle (the
+    "active KPIs" the workspace panel consolidates); the membership filter keeps
+    a workspace-wide endpoint from leaking scores of projects the requester
+    cannot open; and archived projects are dropped so finished work stops moving
+    the current number. All three mirror the guards other workspace-level
+    endpoints apply (see plane.app.views.workspace).
+    """
+    return (
+        Project.objects.filter(
+            workspace=workspace,
+            kpi_view=True,
+            archived_at__isnull=True,
+            project_projectmember__member=user,
+            project_projectmember__is_active=True,
+        )
+        .distinct()
+        .order_by("name")
+    )
+
+
+# Period presets for the workspace panel, in days. "all" disables the filter.
+PERIOD_DAYS = {"30d": 30, "90d": 90, "180d": 180, "365d": 365}
+DEFAULT_PERIOD = "90d"
+
+
+def _resolve_period(request):
+    """Resolve the requested reporting window.
+
+    Accepts either ``?period=30d|90d|180d|365d|all`` or an explicit
+    ``?start=YYYY-MM-DD&end=YYYY-MM-DD``. Returns
+    ``(key, start_date_or_None, end_date_or_None)``; both dates are None for
+    the "all" window.
+    """
+    start_param = request.GET.get("start")
+    end_param = request.GET.get("end")
+    if start_param and end_param:
+        try:
+            start = date.fromisoformat(start_param)
+            end = date.fromisoformat(end_param)
+        except ValueError:
+            return None, None, None
+        if start > end:
+            return None, None, None
+        return "custom", start, end
+
+    period = request.GET.get("period", DEFAULT_PERIOD)
+    if period == "all":
+        return "all", None, None
+    if period not in PERIOD_DAYS:
+        return None, None, None
+
+    end = timezone.now().date()
+    return period, end - timedelta(days=PERIOD_DAYS[period]), end
+
+
+def _period_filter(start, end):
+    """Q object selecting the issues that belong to the reporting window.
+
+    A delivered item is placed by ``completed_at``; an open one has no delivery
+    date, so it is placed by its due date instead. That keeps pending work whose
+    deadline falls in the window while dropping items delivered long ago.
+    """
+    if start is None or end is None:
+        return Q()
+    return Q(completed_at__date__gte=start, completed_at__date__lte=end) | Q(
+        completed_at__isnull=True, target_date__gte=start, target_date__lte=end
+    )
+
+
 class KpiIssueListEndpoint(BaseAPIView):
     """List a project's work items with computed Vp/d/p/Vf plus aggregates."""
 
@@ -226,54 +355,33 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
 
-            assignees = list(issue.assignees.all())
-            if not assignees:
+            if not _accumulate_member_buckets(issue, calc, row_status, buckets):
                 unassigned_count += 1
-                continue
-
-            n = len(assignees)
-            vp_share = calc["Vp"] / n
-            vf_share = (calc["Vf"] / n) if calc["Vf"] is not None else None
-
-            for user in assignees:
-                bucket = buckets.setdefault(
-                    str(user.id),
-                    {
-                        "user_id": str(user.id),
-                        "display_name": user.display_name,
-                        "avatar_url": user.avatar_url,
-                        "sum_vp": 0.0,
-                        "sum_vf": 0.0,
-                        "counts": {"on_time": 0, "early": 0, "late": 0, "pending": 0},
-                    },
-                )
-                bucket["sum_vp"] += vp_share
-                if vf_share is not None:
-                    bucket["sum_vf"] += vf_share
-                bucket["counts"][row_status] += 1
 
         decimals = contract["params"].get("vf_decimals", 2)
-        results = []
-        for bucket in buckets.values():
-            bucket["sum_vp"] = round(bucket["sum_vp"], decimals)
-            bucket["sum_vf"] = round(bucket["sum_vf"], decimals)
-            bucket["efficiency"] = round(bucket["sum_vf"] / bucket["sum_vp"], 4) if bucket["sum_vp"] else None
-            results.append(bucket)
-
-        results.sort(key=lambda r: r["sum_vf"], reverse=True)
-
-        return Response({"results": results, "unassigned_count": unassigned_count})
+        return Response(
+            {
+                "results": _finalize_member_buckets(buckets, decimals),
+                "unassigned_count": unassigned_count,
+            }
+        )
 
 
 class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
-    """Per-member breakdown of Vp/Vf across ALL projects in a workspace."""
+    """Per-member breakdown of Vp/Vf across the workspace's active KPI projects.
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    Scoped to projects with ``kpi_view`` enabled that the requester is a member
+    of, so the ranking covers exactly the projects whose KPI panel they can open.
+    """
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def get(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
+        project_ids = list(_active_kpi_projects(workspace, request.user).values_list("id", flat=True))
+        contracts = resolve_contracts_bulk(workspace, project_ids)
 
         issues = list(
-            Issue.issue_objects.filter(workspace=workspace)
+            Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
             .select_related("type", "state", "kpi_attribute", "estimate_point")
             .prefetch_related("assignees")
         )
@@ -281,61 +389,173 @@ class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
 
         buckets = {}
         unassigned_count = 0
-        contracts_by_project = {}
-
-        def get_contract(project_id):
-            if project_id not in contracts_by_project:
-                contract, _ = resolve_contract(workspace, project_id)
-                contracts_by_project[project_id] = contract
-            return contracts_by_project[project_id]
 
         for issue in issues:
             attribute = getattr(issue, "kpi_attribute", None)
             difficulty_point, repetitive_point = resolver.points_for(issue)
             task = _build_task(issue, attribute, difficulty_point, repetitive_point)
-            contract = get_contract(issue.project_id)
+            contract, _ = contracts[issue.project_id]
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
 
-            assignees = list(issue.assignees.all())
-            if not assignees:
+            if not _accumulate_member_buckets(issue, calc, row_status, buckets):
                 unassigned_count += 1
-                continue
-
-            n = len(assignees)
-            vp_share = calc["Vp"] / n
-            vf_share = (calc["Vf"] / n) if calc["Vf"] is not None else None
-
-            for user in assignees:
-                bucket = buckets.setdefault(
-                    str(user.id),
-                    {
-                        "user_id": str(user.id),
-                        "display_name": user.display_name,
-                        "avatar_url": user.avatar_url,
-                        "sum_vp": 0.0,
-                        "sum_vf": 0.0,
-                        "counts": {"on_time": 0, "early": 0, "late": 0, "pending": 0},
-                    },
-                )
-                bucket["sum_vp"] += vp_share
-                if vf_share is not None:
-                    bucket["sum_vf"] += vf_share
-                bucket["counts"][row_status] += 1
 
         ws_contract, _ = resolve_contract(workspace, None)
         decimals = ws_contract["params"].get("vf_decimals", 2)
-        
-        results = []
-        for bucket in buckets.values():
-            bucket["sum_vp"] = round(bucket["sum_vp"], decimals)
-            bucket["sum_vf"] = round(bucket["sum_vf"], decimals)
-            bucket["efficiency"] = round(bucket["sum_vf"] / bucket["sum_vp"], 4) if bucket["sum_vp"] else None
-            results.append(bucket)
+        return Response(
+            {
+                "results": _finalize_member_buckets(buckets, decimals),
+                "unassigned_count": unassigned_count,
+            }
+        )
 
-        results.sort(key=lambda r: r["sum_vf"], reverse=True)
 
-        return Response({"results": results, "unassigned_count": unassigned_count})
+class WorkspaceKpiOverviewEndpoint(BaseAPIView):
+    """Consolidated KPI panel for the whole workspace.
+
+    Vf is NOT comparable across projects: ``tables.difficulty`` is keyed by each
+    project's own EstimatePoint ids, and priority points / ``b`` / ``k`` /
+    ``penalty_mode`` may diverge per project. Summing Vf would silently let the
+    project with the largest point tables dominate the number.
+
+    Efficiency (Vf/Vp) is dimensionless, so the unified KPI is the mean of each
+    project's efficiency weighted by how many scored work items it contributed::
+
+        eff_p = sum(Vf_p) / sum(Vp_p)        # scored items only
+        KPI   = sum(eff_p * n_p) / sum(n_p)
+
+    Projects with no scored item (or a zero Vp total) have no defined efficiency
+    and are listed with ``efficiency: null`` while staying out of the average.
+
+    One pass over the issues feeds all three blocks -- per project, per member
+    and the unified summary -- so the panel costs a single scan.
+
+    Note the deliberate asymmetry inherited from the project-level endpoints:
+    ``projects``/``unified`` count only delivered items in their Vp/Vf totals
+    (matching ``KpiIssueListEndpoint``), while ``members`` also credits the Vp
+    of open work (matching ``KpiMemberAggregateEndpoint``). So a member's Vp may
+    exceed the Vp of the projects they work on -- that is the existing contract
+    of each block, kept intact here.
+    """
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
+    def get(self, request, slug):
+        workspace = Workspace.objects.get(slug=slug)
+
+        period_key, start, end = _resolve_period(request)
+        if period_key is None:
+            return Response(
+                {"error": "Invalid period. Use period=30d|90d|180d|365d|all or start=&end= as YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        projects = list(_active_kpi_projects(workspace, request.user))
+        project_ids = [project.id for project in projects]
+        contracts = resolve_contracts_bulk(workspace, project_ids)
+
+        issues = list(
+            Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
+            .filter(_period_filter(start, end))
+            .select_related("type", "state", "kpi_attribute", "estimate_point")
+            .prefetch_related("assignees")
+        )
+        resolver = KpiPropertyResolver(issues)
+
+        stats = {
+            pid: {"sum_vp": 0.0, "sum_vf": 0.0, "scored_items": 0, "counts": _empty_counts()} for pid in project_ids
+        }
+        buckets = {}
+        unassigned_count = 0
+        total_counts = _empty_counts()
+
+        for issue in issues:
+            attribute = getattr(issue, "kpi_attribute", None)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
+            contract, _ = contracts[issue.project_id]
+            calc = calcular(task, contract)
+            row_status = _status_of(issue.completed_at, calc["d"])
+
+            stat = stats[issue.project_id]
+            stat["counts"][row_status] += 1
+            total_counts[row_status] += 1
+            # Only delivered items carry a multiplier; pending ones would drag
+            # efficiency toward zero for work that simply is not due yet.
+            if calc["d"] is not None:
+                stat["sum_vp"] += calc["Vp"]
+                stat["sum_vf"] += calc["Vf"] if calc["Vf"] is not None else 0.0
+                stat["scored_items"] += 1
+
+            if not _accumulate_member_buckets(issue, calc, row_status, buckets):
+                unassigned_count += 1
+
+        ws_contract, _ = resolve_contract(workspace, None)
+        decimals = ws_contract["params"].get("vf_decimals", 2)
+
+        total_scored = sum(stat["scored_items"] for stat in stats.values())
+
+        project_rows = []
+        weighted_efficiency_sum = 0.0
+        projects_in_average = 0
+        for project in projects:
+            stat = stats[project.id]
+            contract, cfg = contracts[project.id]
+            efficiency = round(stat["sum_vf"] / stat["sum_vp"], 4) if stat["sum_vp"] else None
+
+            if efficiency is not None:
+                weighted_efficiency_sum += efficiency * stat["scored_items"]
+                projects_in_average += 1
+
+            project_rows.append(
+                {
+                    "project_id": str(project.id),
+                    "name": project.name,
+                    "identifier": project.identifier,
+                    "logo_props": project.logo_props,
+                    "sum_vp": round(stat["sum_vp"], decimals),
+                    "sum_vf": round(stat["sum_vf"], decimals),
+                    "efficiency": efficiency,
+                    "scored_items": stat["scored_items"],
+                    "counts": stat["counts"],
+                    "contribution": (
+                        round(efficiency * stat["scored_items"] / total_scored, 4)
+                        if efficiency is not None and total_scored
+                        else None
+                    ),
+                    "penalty_mode": contract["params"]["penalty_mode"],
+                    "k": contract["params"]["k"],
+                    "inherited_config": cfg is None or cfg.project_id is None,
+                }
+            )
+
+        project_rows.sort(key=lambda row: (row["efficiency"] is None, -(row["efficiency"] or 0)))
+
+        unified = {
+            "kpi": round(weighted_efficiency_sum / total_scored, 4) if total_scored else None,
+            "method": "item_weighted_efficiency",
+            "scored_items": total_scored,
+            "project_count": len(projects),
+            "projects_in_average": projects_in_average,
+            # Mixed-scale totals: informative, but never the basis of `kpi`.
+            "sum_vp_raw": round(sum(stat["sum_vp"] for stat in stats.values()), decimals),
+            "sum_vf_raw": round(sum(stat["sum_vf"] for stat in stats.values()), decimals),
+            "counts": total_counts,
+        }
+
+        return Response(
+            {
+                "period": {
+                    "key": period_key,
+                    "start": start.isoformat() if start else None,
+                    "end": end.isoformat() if end else None,
+                },
+                "unified": unified,
+                "projects": project_rows,
+                "members": _finalize_member_buckets(buckets, decimals),
+                "unassigned_count": unassigned_count,
+            }
+        )
 
 
 class KpiIssueAttributeEndpoint(BaseAPIView):

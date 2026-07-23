@@ -5,10 +5,10 @@
  */
 
 import { Users } from "lucide-react";
-import type { IKpiMemberAggregate, TKpiIssueStatus } from "@plane/types";
+import type { IKpiMemberAggregate } from "@plane/types";
 import { Avatar } from "@plane/ui";
 import { cn, getFileURL } from "@plane/utils";
-import { STATUS_BADGE } from "./status-badge";
+import { CountChips } from "./status-badge";
 
 type Props = {
   results: IKpiMemberAggregate[];
@@ -19,28 +19,6 @@ const fmt = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
 
 const HEAD = "h-11 bg-layer-1 px-page-x text-11 font-medium text-tertiary";
-
-const STATUS_ORDER: TKpiIssueStatus[] = ["late", "pending", "early", "on_time"];
-
-const CountChips = ({ counts }: { counts: Record<TKpiIssueStatus, number> }) => {
-  const visible = STATUS_ORDER.filter((key) => counts[key] > 0);
-  if (visible.length === 0) return <span className="text-tertiary">—</span>;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {visible.map((key) => {
-        const s = STATUS_BADGE[key];
-        return (
-          <span
-            key={key}
-            className={cn("inline-flex items-center rounded px-2 py-0.5 text-11 font-medium", s.className)}
-          >
-            {counts[key]} {s.label}
-          </span>
-        );
-      })}
-    </div>
-  );
-};
 
 export const KpiMemberList = (props: Props) => {
   const { results, unassignedCount } = props;
