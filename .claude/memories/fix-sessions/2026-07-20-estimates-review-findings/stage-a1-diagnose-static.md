@@ -1,0 +1,11 @@
+# Stage A1: Diagnose Static
+- Bug: 8 achados da revisão da feature de estimates (N+1 em listas, estimates invisíveis em workspace-views, reatribuição de estimate point, UI stale no settings, 3 menores, 1 decisão de permissão)
+- Root cause: 8/8 confirmados no código; 3 refinados. F1+F2 compartilham raiz arquitetural — valores de estimate property foram desenhados para contexto de work item único (fetch per-issue sem dedupe + projectId do route param) e reusados sem adaptação em contexto de lista multi-projeto. F3 é indentação (updates dentro do `for`), com bug de dados no caso "zero issues na coluna legada". F4-F7 são locais. F8 é decisão de comportamento (paridade upstream).
+- Serviços afetados: apps/api (Django), apps/web (React/MobX)
+- Validação: 8 confirmados, 0 refutados, 3 refinados (F1 subestimado — 3 call sites de lista, não 2; F3 perf descrita incorretamente; F5 tem 2 causas backend)
+- Blast radius: getIssueEstimatePropertyValues = 8 call sites (3 lista / 5 issue única); computeds de property = 8 pares, só all-properties.tsx afetado pelo F2; endpoint por-issue tem 1 consumidor (superfície pequena, bulk é aditivo)
+- Cobertura de teste F3: ZERO — nenhum teste passa pelo branch `new_estimate_id`. TDD RED limpo disponível.
+- ⚠️ BLOQUEIO: pytest backend NÃO executável (sem django, sem pytest, sem pip/uv/poetry, sem venv, sem container da API). Plan precisa resolver ambiente antes de confiar em TDD backend.
+- UX Diagnose: NÃO (findings já localizados; reprodução vale mais pós-fix)
+- VPS Diagnose: NÃO (nenhuma hipótese depende de dado de prod; migration de reparo deve ser idempotente)
+- Próximo: Stage B — Plan

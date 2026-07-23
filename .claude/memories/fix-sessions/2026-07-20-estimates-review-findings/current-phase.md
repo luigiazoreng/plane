@@ -1,0 +1,31 @@
+# Current Phase Navigator
+- Last completed: Stage E — Sanity Check
+- NEXT: Nenhum — pipeline de fix concluído (0 findings desde Stage D, Stage E CLEAN)
+- Stage: E
+- Status: DONE
+- findings.md entries so far: 0
+## Files reviewed/modified
+- sanity/notes.md
+- sanity/01-seguranca.handoff.md (+ resultado: CLEAN)
+- sanity/02-deploy.handoff.md (+ resultado: CLEAN)
+- sanity/03-padronizacao.handoff.md (+ resultado: CLEAN)
+- sanity/04-contratos.handoff.md (+ resultado: CLEAN)
+- sanity/05-testes.handoff.md (+ resultado: CLEAN)
+- apps/api/plane/app/urls/estimate.py (verificado, sem findings)
+- apps/api/plane/app/views/__init__.py (verificado, sem findings)
+- apps/api/plane/app/views/estimate/base.py (verificado, sem findings)
+- apps/api/plane/app/views/estimate/property.py (verificado, sem findings)
+- apps/api/plane/tests/contract/app/test_estimate_property_values.py (verificado, sem findings)
+- apps/api/plane/tests/contract/app/test_estimates_app.py (verificado, sem findings)
+- apps/web/core/services/estimate-property.service.ts (verificado, sem findings)
+- apps/web/core/store/estimates/project-estimate.store.ts (verificado, sem findings)
+- apps/web/core/components/estimates/properties/root.tsx (verificado, sem findings)
+- apps/web/core/components/estimates/root.tsx (verificado, sem findings)
+- apps/web/core/components/issues/issue-layouts/properties/all-properties.tsx (verificado, sem findings)
+- apps/web/core/components/issues/issue-layouts/spreadsheet/columns/estimate-column.tsx (verificado, sem findings)
+- apps/web/core/components/issues/workspace-draft/draft-issue-properties.tsx (verificado, sem findings)
+- apps/web/core/components/issues/peek-overview/properties.tsx (verificado, sem findings)
+- apps/web/core/components/issues/issue-detail/sidebar.tsx (verificado, sem findings)
+- apps/web/core/components/issues/issue-modal/components/default-properties.tsx (verificado, sem findings)
+- apps/web/core/components/power-k/ui/pages/context-based/work-item/root.tsx (verificado, sem findings)
+- .claude/memories/repo/issues-not-fixed.md (verificado, não modificado nesta sessão)
