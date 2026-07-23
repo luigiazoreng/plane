@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { ArrowLeft } from "lucide-react";
+import { cn } from "@plane/utils";
 import { EUserPermissionsLevel } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 import { EUserProjectRoles } from "@plane/types";
@@ -23,10 +24,12 @@ import lightEmptyState from "@/app/assets/empty-state/disabled-feature/views-lig
 import { DetailedEmptyState } from "@/components/empty-state/detailed-empty-state-root";
 import { PageHead } from "@/components/core/page-title";
 import { KpiConfigEditor } from "@/components/kpi/config-editor";
+import { KpiSettingsDocs } from "@/components/kpi/settings-docs";
 import { SettingsHeading } from "@/components/settings/heading";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useKpi } from "@/hooks/store/use-kpi";
+import { useLabel } from "@/hooks/store/use-label";
 import { useProject } from "@/hooks/store/use-project";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useAppRouter } from "@/hooks/use-app-router";
@@ -45,12 +48,14 @@ function ProjectKpiSettingsPage() {
   } = useProjectEstimates();
   const { currentProjectDetails } = useProject();
   const { allowPermissions } = useUserPermissions();
+  const { projectLabels, fetchProjectLabels } = useLabel();
   const router = useAppRouter();
   const { resolvedTheme } = useTheme();
   const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<"config" | "docs">("config");
 
   const config = projectConfig[projectId];
 
@@ -104,11 +109,12 @@ function ProjectKpiSettingsPage() {
     setLoading(true);
     getProjectEstimates(workspaceSlug, projectId).catch(() => {});
     getProjectEstimateProperties(workspaceSlug, projectId).catch(() => {});
+    fetchProjectLabels(workspaceSlug, projectId).catch(() => {});
     fetchProjectConfig(workspaceSlug, projectId).finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, projectId, fetchProjectConfig, getProjectEstimates, getProjectEstimateProperties]);
+  }, [workspaceSlug, projectId, fetchProjectConfig, getProjectEstimates, getProjectEstimateProperties, fetchProjectLabels]);
 
   const handleDifficultyEstimateChange = async (estimateId: string | null) => {
     try {
@@ -192,13 +198,38 @@ function ProjectKpiSettingsPage() {
             <ArrowLeft className="size-3.5" />
             Back to KPI
           </Link>
-          <SettingsHeading
-            title="KPI configuration"
-            description="Edit the point tables, priority factors and global parameters. Changes apply immediately to scoring."
-          />
+          <div className="flex items-end justify-between gap-4">
+            <SettingsHeading
+              title="KPI configuration"
+              description="Edit the point tables, priority factors and global parameters. Changes apply immediately to scoring."
+            />
+            <div className="flex items-center gap-1 bg-layer-1 p-1 rounded-md border border-subtle">
+              <button
+                type="button"
+                onClick={() => setActiveTab("config")}
+                className={cn(
+                  "px-3 py-1 text-12 font-medium rounded-sm transition-colors",
+                  activeTab === "config" ? "bg-surface-1 text-primary shadow-sm" : "text-tertiary hover:text-secondary"
+                )}
+              >
+                Configuration
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("docs")}
+                className={cn(
+                  "px-3 py-1 text-12 font-medium rounded-sm transition-colors",
+                  activeTab === "docs" ? "bg-surface-1 text-primary shadow-sm" : "text-tertiary hover:text-secondary"
+                )}
+              >
+                Documentation
+              </button>
+            </div>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          <KpiConfigEditor
+          {activeTab === "config" ? (
+            <KpiConfigEditor
             config={config}
             canEdit={canEdit}
             saving={saving}
@@ -206,11 +237,15 @@ function ProjectKpiSettingsPage() {
             onReset={handleReset}
             estimateOptions={estimateOptions}
             estimateValuesById={estimateValuesById}
+            projectLabels={projectLabels ?? []}
             difficultyEstimateId={difficultyEstimateId}
             repetitiveEstimateId={repetitiveEstimateId}
             onDifficultyEstimateChange={handleDifficultyEstimateChange}
             onRepetitiveEstimateChange={handleRepetitiveEstimateChange}
           />
+          ) : (
+            <KpiSettingsDocs />
+          )}
         </div>
       </div>
     </>

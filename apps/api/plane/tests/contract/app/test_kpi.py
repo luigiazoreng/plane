@@ -4,10 +4,11 @@
 
 """Contract tests for the KPI module (config, attributes, issue scoring, preview)."""
 
-from datetime import date, datetime, timezone as dt_timezone
+from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 
 from plane.db.models import (
@@ -360,7 +361,7 @@ class TestKpiMemberAggregates:
     def test_split_equally_between_two_assignees(self, session_client, workspace, project, state, create_user):
         # priority=high, no difficulty/repetitive configured -> Vp = 27 (Importance
         # only). d=2 late -> p=0.5 -> Vf=13.5. Two assignees -> 13.5/6.75 each.
-        second_user = User.objects.create(email="second@plane.so", first_name="Second", last_name="User")
+        second_user = User.objects.create(username="second", email="second@plane.so", first_name="Second", last_name="User")
         issue = _make_issue(
             project, workspace, state, create_user,
             priority="high",
@@ -440,14 +441,14 @@ class TestKpiPreview:
 @pytest.mark.django_db
 class TestWorkspaceKpiMemberAggregates:
     def test_aggregates_across_all_projects_in_workspace(self, session_client, workspace, create_user):
-        # Create two projects
+        # Create two projects with the KPI panel enabled
         project1 = Project.objects.create(
-            name="Project 1", identifier="P1", workspace=workspace, created_by=create_user
+            name="Project 1", identifier="P1", workspace=workspace, created_by=create_user, kpi_view=True
         )
         ProjectMember.objects.create(project=project1, member=create_user, role=20, is_active=True)
-        
+
         project2 = Project.objects.create(
-            name="Project 2", identifier="P2", workspace=workspace, created_by=create_user
+            name="Project 2", identifier="P2", workspace=workspace, created_by=create_user, kpi_view=True
         )
         ProjectMember.objects.create(project=project2, member=create_user, role=20, is_active=True)
 
@@ -459,7 +460,7 @@ class TestWorkspaceKpiMemberAggregates:
         )
 
         # Create user
-        second_user = User.objects.create(email="second2@plane.so", first_name="Second", last_name="User")
+        second_user = User.objects.create(username="second2", email="second2@plane.so", first_name="Second", last_name="User")
 
         # Project 1 issue (priority=high -> Vp=27. late by 2 days -> p=0.5 -> Vf=13.5)
         issue1 = _make_issue(
@@ -501,3 +502,304 @@ class TestWorkspaceKpiMemberAggregates:
         assert second_user_row["sum_vf"] == pytest.approx(15)
         assert second_user_row["counts"]["late"] == 0
         assert second_user_row["counts"]["on_time"] == 1
+
+    def test_project_with_kpi_disabled_is_excluded(self, session_client, workspace, create_user):
+        """A project whose KPI panel is off must not feed the workspace ranking."""
+        project = Project.objects.create(
+            name="Disabled", identifier="DIS", workspace=workspace, created_by=create_user, kpi_view=False
+        )
+        ProjectMember.objects.create(project=project, member=create_user, role=20, is_active=True)
+        state = State.objects.create(
+            name="Todo", color="#000", group="unstarted", project=project, workspace=workspace, created_by=create_user
+        )
+        issue = _make_issue(
+            project, workspace, state, create_user,
+            priority="high",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 15, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        IssueAssignee.objects.create(issue=issue, assignee=create_user, project=project, workspace=workspace)
+
+        url = reverse("workspace-kpi-member-aggregates", kwargs={"slug": workspace.slug})
+        body = session_client.get(url).json()
+        assert body["results"] == []
+        assert body["unassigned_count"] == 0
+
+    def test_project_the_requester_does_not_belong_to_is_excluded(self, session_client, workspace, create_user):
+        """KPI-enabled but without membership -> its scores stay invisible."""
+        outsider = User.objects.create(username="outsider", email="outsider@plane.so", first_name="Out", last_name="Sider")
+        project = Project.objects.create(
+            name="Foreign", identifier="FOR", workspace=workspace, created_by=outsider, kpi_view=True
+        )
+        ProjectMember.objects.create(project=project, member=outsider, role=20, is_active=True)
+        state = State.objects.create(
+            name="Todo", color="#000", group="unstarted", project=project, workspace=workspace, created_by=outsider
+        )
+        issue = _make_issue(
+            project, workspace, state, outsider,
+            priority="high",
+            target_date=date(2026, 1, 15),
+            completed_at=datetime(2026, 1, 15, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        IssueAssignee.objects.create(issue=issue, assignee=outsider, project=project, workspace=workspace)
+
+        url = reverse("workspace-kpi-member-aggregates", kwargs={"slug": workspace.slug})
+        body = session_client.get(url).json()
+        assert body["results"] == []
+
+
+def _kpi_project(workspace, user, name, identifier, kpi_view=True):
+    project = Project.objects.create(
+        name=name, identifier=identifier, workspace=workspace, created_by=user, kpi_view=kpi_view
+    )
+    ProjectMember.objects.create(project=project, member=user, role=20, is_active=True)
+    state = State.objects.create(
+        name="Todo", color="#000", group="unstarted", project=project, workspace=workspace, created_by=user
+    )
+    return project, state
+
+
+def _delivered(days_ago, late_by=0):
+    """(target_date, completed_at) for an item delivered ``days_ago``, ``late_by`` days late.
+
+    Noon UTC keeps the ``__date`` lookup and the engine's day math on the
+    intended calendar day regardless of the configured timezone.
+    """
+    delivered_on = timezone.now().date() - timedelta(days=days_ago)
+    return delivered_on - timedelta(days=late_by), datetime.combine(
+        delivered_on, time(12, 0), tzinfo=dt_timezone.utc
+    )
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+class TestKpiWorkspaceOverview:
+    """The consolidated workspace panel: unified KPI + per-project + per-member."""
+
+    def _url(self, workspace):
+        return reverse("workspace-kpi-overview", kwargs={"slug": workspace.slug})
+
+    def test_unified_kpi_is_weighted_by_scored_item_count(self, session_client, workspace, create_user):
+        """KPI = Σ(eff_p × n_p) / Σ n_p -- NOT the raw ΣVf/ΣVp.
+
+        Project A: 3 urgent items (30 pts, b=0.30) -> 2 on time (Vf 30 each) and
+        1 late by 1 day (p=0.70 -> Vf 21). ΣVp=90, ΣVf=81 -> eff 0.9, n=3.
+        Project B: 1 high item (27 pts, b=0.25) late by 2 days (p=0.50 -> Vf
+        13.5). ΣVp=27, ΣVf=13.5 -> eff 0.5, n=1.
+
+        Weighted: (0.9·3 + 0.5·1) / 4 = 0.80.
+        Raw ΣVf/ΣVp would be 94.5/117 = 0.8077 -- the assertion below fails if
+        the endpoint ever falls back to summing mixed-scale points.
+        """
+        project_a, state_a = _kpi_project(workspace, create_user, "Alpha", "ALP")
+        project_b, state_b = _kpi_project(workspace, create_user, "Bravo", "BRA")
+
+        for late_by in (0, 0, 1):
+            target, completed = _delivered(days_ago=10, late_by=late_by)
+            _make_issue(
+                project_a, workspace, state_a, create_user,
+                priority="urgent", target_date=target, completed_at=completed,
+            )
+
+        target, completed = _delivered(days_ago=10, late_by=2)
+        _make_issue(
+            project_b, workspace, state_b, create_user,
+            priority="high", target_date=target, completed_at=completed,
+        )
+
+        response = session_client.get(self._url(workspace))
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+
+        rows = {row["identifier"]: row for row in body["projects"]}
+        assert rows["ALP"]["sum_vp"] == pytest.approx(90)
+        assert rows["ALP"]["sum_vf"] == pytest.approx(81)
+        assert rows["ALP"]["efficiency"] == pytest.approx(0.9)
+        assert rows["ALP"]["scored_items"] == 3
+        assert rows["BRA"]["efficiency"] == pytest.approx(0.5)
+        assert rows["BRA"]["scored_items"] == 1
+
+        unified = body["unified"]
+        assert unified["kpi"] == pytest.approx(0.80)
+        assert unified["method"] == "item_weighted_efficiency"
+        assert unified["scored_items"] == 4
+        assert unified["project_count"] == 2
+        assert unified["projects_in_average"] == 2
+        # Raw sums stay available, but must not be what `kpi` is built from.
+        assert unified["sum_vp_raw"] == pytest.approx(117)
+        assert unified["sum_vf_raw"] == pytest.approx(94.5)
+        assert unified["kpi"] != pytest.approx(94.5 / 117)
+
+        # Contributions decompose the unified KPI exactly.
+        assert rows["ALP"]["contribution"] == pytest.approx(0.675)
+        assert rows["BRA"]["contribution"] == pytest.approx(0.125)
+        assert sum(row["contribution"] for row in body["projects"]) == pytest.approx(unified["kpi"])
+
+    def test_project_with_kpi_disabled_is_excluded(self, session_client, workspace, create_user):
+        enabled, state_enabled = _kpi_project(workspace, create_user, "Enabled", "ENA")
+        disabled, state_disabled = _kpi_project(workspace, create_user, "Disabled", "DIS", kpi_view=False)
+
+        for project, state in ((enabled, state_enabled), (disabled, state_disabled)):
+            target, completed = _delivered(days_ago=5)
+            _make_issue(
+                project, workspace, state, create_user,
+                priority="urgent", target_date=target, completed_at=completed,
+            )
+
+        body = session_client.get(self._url(workspace)).json()
+        assert [row["identifier"] for row in body["projects"]] == ["ENA"]
+        assert body["unified"]["project_count"] == 1
+        assert body["unified"]["scored_items"] == 1
+
+    def test_archived_project_is_excluded(self, session_client, workspace, create_user):
+        live, state_live = _kpi_project(workspace, create_user, "Live", "LIV")
+        archived, state_archived = _kpi_project(workspace, create_user, "Archived", "ARC")
+        Project.objects.filter(id=archived.id).update(archived_at=timezone.now())
+
+        for project, state in ((live, state_live), (archived, state_archived)):
+            target, completed = _delivered(days_ago=5)
+            _make_issue(
+                project, workspace, state, create_user,
+                priority="urgent", target_date=target, completed_at=completed,
+            )
+
+        body = session_client.get(self._url(workspace)).json()
+        assert [row["identifier"] for row in body["projects"]] == ["LIV"]
+        assert body["unified"]["scored_items"] == 1
+
+    def test_project_without_membership_is_excluded(self, session_client, workspace, create_user):
+        outsider = User.objects.create(username="outsider-ov", email="outsider-ov@plane.so", first_name="Out", last_name="Sider")
+        mine, state_mine = _kpi_project(workspace, create_user, "Mine", "MIN")
+        theirs, state_theirs = _kpi_project(workspace, outsider, "Theirs", "THE")
+
+        for project, state, author in ((mine, state_mine, create_user), (theirs, state_theirs, outsider)):
+            target, completed = _delivered(days_ago=5)
+            _make_issue(
+                project, workspace, state, author,
+                priority="urgent", target_date=target, completed_at=completed,
+            )
+
+        body = session_client.get(self._url(workspace)).json()
+        assert [row["identifier"] for row in body["projects"]] == ["MIN"]
+
+    def test_project_without_scored_items_is_listed_but_stays_out_of_the_average(
+        self, session_client, workspace, create_user
+    ):
+        scored, state_scored = _kpi_project(workspace, create_user, "Scored", "SCO")
+        pending, state_pending = _kpi_project(workspace, create_user, "Pending", "PEN")
+
+        target, completed = _delivered(days_ago=5)
+        _make_issue(
+            scored, workspace, state_scored, create_user,
+            priority="urgent", target_date=target, completed_at=completed,
+        )
+        # Open item: due inside the window, never delivered -> no multiplier.
+        _make_issue(
+            pending, workspace, state_pending, create_user,
+            priority="urgent", target_date=timezone.now().date() - timedelta(days=5),
+        )
+
+        body = session_client.get(self._url(workspace)).json()
+        rows = {row["identifier"]: row for row in body["projects"]}
+
+        assert rows["PEN"]["efficiency"] is None
+        assert rows["PEN"]["contribution"] is None
+        assert rows["PEN"]["scored_items"] == 0
+        assert rows["PEN"]["counts"]["pending"] == 1
+
+        assert body["unified"]["project_count"] == 2
+        assert body["unified"]["projects_in_average"] == 1
+        # An undelivered item must not drag the KPI toward zero.
+        assert body["unified"]["kpi"] == pytest.approx(1.0)
+        assert body["unified"]["counts"]["pending"] == 1
+        assert body["unified"]["counts"]["on_time"] == 1
+
+    def test_default_window_drops_older_items_and_period_all_restores_them(
+        self, session_client, workspace, create_user
+    ):
+        project, state = _kpi_project(workspace, create_user, "Alpha", "ALP")
+
+        target_recent, completed_recent = _delivered(days_ago=10)
+        _make_issue(
+            project, workspace, state, create_user,
+            priority="urgent", target_date=target_recent, completed_at=completed_recent,
+        )
+        target_old, completed_old = _delivered(days_ago=200)
+        _make_issue(
+            project, workspace, state, create_user,
+            priority="urgent", target_date=target_old, completed_at=completed_old,
+        )
+
+        default_body = session_client.get(self._url(workspace)).json()
+        assert default_body["period"]["key"] == "90d"
+        assert default_body["unified"]["scored_items"] == 1
+
+        all_body = session_client.get(self._url(workspace), {"period": "all"}).json()
+        assert all_body["period"]["key"] == "all"
+        assert all_body["period"]["start"] is None
+        assert all_body["unified"]["scored_items"] == 2
+
+    def test_explicit_date_range_is_honoured(self, session_client, workspace, create_user):
+        project, state = _kpi_project(workspace, create_user, "Alpha", "ALP")
+        target, completed = _delivered(days_ago=200)
+        _make_issue(
+            project, workspace, state, create_user,
+            priority="urgent", target_date=target, completed_at=completed,
+        )
+
+        delivered_on = timezone.now().date() - timedelta(days=200)
+        response = session_client.get(
+            self._url(workspace),
+            {
+                "start": (delivered_on - timedelta(days=1)).isoformat(),
+                "end": (delivered_on + timedelta(days=1)).isoformat(),
+            },
+        )
+        body = response.json()
+        assert body["period"]["key"] == "custom"
+        assert body["unified"]["scored_items"] == 1
+
+    def test_invalid_period_is_rejected(self, session_client, workspace):
+        response = session_client.get(self._url(workspace), {"period": "7y"})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_inverted_date_range_is_rejected(self, session_client, workspace):
+        response = session_client.get(self._url(workspace), {"start": "2026-05-01", "end": "2026-04-01"})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_members_block_splits_scores_and_counts_unassigned(self, session_client, workspace, create_user):
+        second_user = User.objects.create(username="second-ov", email="second-ov@plane.so", first_name="Second", last_name="User")
+        project, state = _kpi_project(workspace, create_user, "Alpha", "ALP")
+
+        target, completed = _delivered(days_ago=10, late_by=2)
+        shared = _make_issue(
+            project, workspace, state, create_user,
+            priority="high", target_date=target, completed_at=completed,
+        )
+        IssueAssignee.objects.create(issue=shared, assignee=create_user, project=project, workspace=workspace)
+        IssueAssignee.objects.create(issue=shared, assignee=second_user, project=project, workspace=workspace)
+
+        target, completed = _delivered(days_ago=10)
+        _make_issue(
+            project, workspace, state, create_user,
+            priority="urgent", target_date=target, completed_at=completed,
+        )
+
+        body = session_client.get(self._url(workspace)).json()
+        assert body["unassigned_count"] == 1
+        assert len(body["members"]) == 2
+        for row in body["members"]:
+            # high -> Vp 27, late by 2 -> p 0.5 -> Vf 13.5, split in half.
+            assert row["sum_vp"] == pytest.approx(13.5)
+            assert row["sum_vf"] == pytest.approx(6.75)
+            assert row["counts"]["late"] == 1
+
+    def test_empty_workspace_returns_null_kpi_not_an_error(self, session_client, workspace):
+        response = session_client.get(self._url(workspace))
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["projects"] == []
+        assert body["members"] == []
+        assert body["unified"]["kpi"] is None
+        assert body["unified"]["scored_items"] == 0
+        assert body["unified"]["project_count"] == 0
