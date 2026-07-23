@@ -131,11 +131,17 @@ def calcular(task, config):
         # Fall back to the lowest-severity entry if priority is unmapped.
         priority_row = next(iter(tables["priority"].values()), {"points": 0, "b": 0.0})
 
+    type_keys = task.get("type", [])
+    if isinstance(type_keys, list):
+        type_points = sum(tables.get("type", {}).get(k, 0) for k in type_keys)
+    else:
+        type_points = tables.get("type", {}).get(type_keys, 0)
+
     vp = (
         tables.get("difficulty", {}).get(task.get("difficulty"), 0)
         + tables.get("repetitive", {}).get(task.get("repetitive"), 0)
         + priority_row.get("points", 0)  # Importance (I) = native priority points
-        + tables.get("type", {}).get(task.get("type"), 0)
+        + type_points
     )
 
     d = calcular_dias(task.get("delivered_date"), task.get("due_date"), params)

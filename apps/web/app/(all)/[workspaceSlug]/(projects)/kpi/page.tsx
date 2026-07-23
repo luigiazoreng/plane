@@ -17,6 +17,8 @@ import { KpiProjectList } from "@/components/kpi/project-list";
 import { KpiScoreBarChart } from "@/components/kpi/score-bar-chart";
 import { KpiStatBar } from "@/components/kpi/stat-bar";
 import { UnifiedKpiHero } from "@/components/kpi/unified-kpi-hero";
+import { KpiMathHelpModal } from "@/components/kpi/math-help-modal";
+import { HelpCircle } from "lucide-react";
 // hooks
 import { useKpi } from "@/hooks/store/use-kpi";
 
@@ -33,6 +35,7 @@ function WorkspaceKpiPage() {
 
   const [period, setPeriod] = useState<Exclude<TKpiPeriod, "custom">>("90d");
   const [loading, setLoading] = useState(true);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const overview = workspaceOverview[workspaceSlug];
 
@@ -95,7 +98,17 @@ function WorkspaceKpiPage() {
               Consolidated across every project with the KPI panel enabled
             </span>
           </div>
-          <KpiPeriodSelector value={period} onChange={handlePeriodChange} disabled={loading} />
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(true)}
+              className="flex items-center gap-1.5 text-12 font-medium text-tertiary transition-colors hover:text-secondary"
+            >
+              <HelpCircle className="size-3.5" />
+              How it works
+            </button>
+            <KpiPeriodSelector value={period} onChange={handlePeriodChange} disabled={loading} />
+          </div>
         </div>
 
         {overview && <UnifiedKpiHero unified={overview.unified} />}
@@ -127,6 +140,7 @@ function WorkspaceKpiPage() {
           )}
         </div>
       </div>
+      <KpiMathHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
     </>
   );
 }

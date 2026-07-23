@@ -21,12 +21,11 @@ from plane.kpi.contract import resolve_contract, resolve_contracts_bulk
 from plane.kpi.engine import calcular, sample_curve
 
 
-def _issue_type_name(issue, attribute):
+def _issue_labels(issue, attribute):
     if attribute is not None and attribute.type_override:
-        return attribute.type_override
-    if issue.type_id and issue.type is not None:
-        return issue.type.name
-    return None
+        # Fallback to scalar override if it exists (legacy compatibility)
+        return [attribute.type_override]
+    return [str(label.id) for label in issue.labels.all()]
 
 
 class KpiPropertyResolver:
@@ -114,7 +113,7 @@ def _build_task(issue, attribute, difficulty_point, repetitive_point):
         "delivered_date": issue.completed_at,
         "difficulty": _difficulty_lookup_key(issue, difficulty_point),
         "repetitive": _repetitive_lookup_key(attribute, repetitive_point),
-        "type": _issue_type_name(issue, attribute),
+        "type": _issue_labels(issue, attribute),
     }
 
 
@@ -341,7 +340,7 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
             .select_related("type", "state", "kpi_attribute", "estimate_point")
-            .prefetch_related("assignees")
+            .prefetch_related("assignees", "labels")
         )
         resolver = KpiPropertyResolver(issues)
 
@@ -383,7 +382,7 @@ class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
             .select_related("type", "state", "kpi_attribute", "estimate_point")
-            .prefetch_related("assignees")
+            .prefetch_related("assignees", "labels")
         )
         resolver = KpiPropertyResolver(issues)
 
@@ -458,7 +457,7 @@ class WorkspaceKpiOverviewEndpoint(BaseAPIView):
             Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
             .filter(_period_filter(start, end))
             .select_related("type", "state", "kpi_attribute", "estimate_point")
-            .prefetch_related("assignees")
+            .prefetch_related("assignees", "labels")
         )
         resolver = KpiPropertyResolver(issues)
 

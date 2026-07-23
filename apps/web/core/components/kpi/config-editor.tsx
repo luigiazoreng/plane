@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, Plus } from "lucide-react";
 import { Button } from "@plane/propel/button";
-import type { IKpiConfig, IKpiPriorityRow, IKpiTables, TKpiDayCount, TKpiDayRounding } from "@plane/types";
+import type { IKpiConfig, IKpiPriorityRow, IKpiTables, TKpiDayCount, TKpiDayRounding, IIssueLabel } from "@plane/types";
 import { CustomSelect, Input, ToggleSwitch } from "@plane/ui";
 import { cn } from "@plane/utils";
 import { SettingsBoxedControlItem } from "@/components/settings/boxed-control-item";
@@ -22,6 +22,7 @@ type Props = {
   onReset?: () => void;
   estimateOptions?: { id: string; name: string; type?: string }[];
   estimateValuesById?: Record<string, { id: string; value: string }[]>;
+  projectLabels?: IIssueLabel[];
   // Difficulty/Repetitive are EstimateProperty rows (kpi_role-tagged), not
   // KpiConfig fields -- saved immediately on change, independent of the
   // draft+Save flow the rest of this form uses.
@@ -35,72 +36,77 @@ type SimpleTableKey = "type";
 
 const CARD = "rounded-lg border border-subtle bg-layer-2 p-4";
 
-const SimpleTableEditor = (props: {
+const LabelMappingEditor = (props: {
   title: string;
+  description: string;
   table: Record<string, number>;
+  projectLabels: IIssueLabel[];
   disabled: boolean;
   onChange: (table: Record<string, number>) => void;
 }) => {
-  const { title, table, disabled, onChange } = props;
-  const [newLevel, setNewLevel] = useState("");
+  const { title, description, table, projectLabels, disabled, onChange } = props;
 
-  const setPoints = (level: string, points: number) => onChange({ ...table, [level]: points });
-  const removeLevel = (level: string) => {
+  const setPoints = (labelId: string, points: number) => onChange({ ...table, [labelId]: points });
+  const removeKey = (labelId: string) => {
     const next = { ...table };
-    delete next[level];
+    delete next[labelId];
     onChange(next);
   };
-  const addLevel = () => {
-    const key = newLevel.trim();
-    if (!key || table[key] !== undefined) return;
-    onChange({ ...table, [key]: 0 });
-    setNewLevel("");
-  };
+
+  const projectLabelIds = new Set(projectLabels.map((l) => l.id));
+  const orphanKeys = Object.keys(table).filter((k) => !projectLabelIds.has(k));
 
   return (
     <div className={CARD}>
-      <h4 className="mb-3 text-body-sm-medium text-primary">{title}</h4>
-      <div className="space-y-2">
-        {Object.entries(table).map(([level, points]) => (
-          <div key={level} className="flex items-center gap-2">
-            <span className="flex-1 truncate text-13 text-secondary">{level}</span>
-            <Input
-              type="number"
-              inputSize="xs"
-              className="w-20"
-              value={points}
-              disabled={disabled}
-              onChange={(e) => setPoints(level, Number(e.target.value))}
-            />
-            {!disabled && (
-              <button
-                type="button"
-                onClick={() => removeLevel(level)}
-                className="text-tertiary transition-colors hover:text-danger-primary"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      {!disabled && (
-        <div className="mt-3 flex items-center gap-2">
-          <Input
-            inputSize="xs"
-            className="flex-1"
-            placeholder="New level name"
-            value={newLevel}
-            onChange={(e) => setNewLevel(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addLevel()}
-          />
-          <button
-            type="button"
-            onClick={addLevel}
-            className="flex items-center gap-1 text-12 font-medium whitespace-nowrap text-accent-primary"
-          >
-            <Plus className="size-3.5" /> Add
-          </button>
+      <h4 className="mb-1 text-body-sm-medium text-primary">{title}</h4>
+      <p className="mb-3 text-caption-md-regular text-tertiary">{description}</p>
+      
+      {projectLabels.length === 0 && orphanKeys.length === 0 ? (
+        <p className="text-12 text-tertiary italic">
+          No labels exist in this project yet.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {projectLabels.map((label) => (
+            <div key={label.id} className="flex items-center gap-2">
+              <span className="flex-1 truncate text-13 text-secondary flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: label.color ?? "#000" }} />
+                {label.name}
+              </span>
+              <Input
+                type="number"
+                inputSize="xs"
+                className="w-20"
+                value={table[label.id] ?? 0}
+                disabled={disabled}
+                onChange={(e) => setPoints(label.id, Number(e.target.value))}
+              />
+            </div>
+          ))}
+          {orphanKeys.map((labelId) => (
+            <div key={labelId} className="flex items-center gap-2 opacity-70">
+              <span className="flex-1 truncate text-13 text-tertiary">
+                Deleted label/type <span className="text-12 italic">({labelId})</span>
+              </span>
+              <Input
+                type="number"
+                inputSize="xs"
+                className="w-20"
+                value={table[labelId] ?? 0}
+                disabled={disabled}
+                onChange={(e) => setPoints(labelId, Number(e.target.value))}
+              />
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => removeKey(labelId)}
+                  className="text-tertiary transition-colors hover:text-danger-primary"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -285,6 +291,7 @@ export const KpiConfigEditor = (props: Props) => {
     onReset,
     estimateOptions = [],
     estimateValuesById = {},
+    projectLabels = [],
     difficultyEstimateId = null,
     repetitiveEstimateId = null,
     onDifficultyEstimateChange,
@@ -311,8 +318,6 @@ export const KpiConfigEditor = (props: Props) => {
       vf_decimals: draft.vf_decimals,
     });
   };
-
-  const simpleTables: { key: SimpleTableKey; title: string }[] = [{ key: "type", title: "Type (T)" }];
 
   // Live preview: recalculates as the draft (b, k, mode, ...) changes.
   const priorityLevels = Object.keys(draft.tables.priority ?? {});
@@ -495,15 +500,14 @@ export const KpiConfigEditor = (props: Props) => {
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {simpleTables.map((t) => (
-                  <SimpleTableEditor
-                    key={t.key}
-                    title={t.title}
-                    table={draft.tables[t.key] ?? {}}
-                    disabled={!canEdit}
-                    onChange={(table) => patchTable(t.key, table)}
-                  />
-                ))}
+                <LabelMappingEditor
+                  title="Labels (L)"
+                  description="Assign points to specific labels. Work items with multiple labels will sum the points."
+                  table={draft.tables.type ?? {}}
+                  projectLabels={projectLabels}
+                  disabled={!canEdit}
+                  onChange={(table) => patchTable("type", table)}
+                />
               </div>
 
               <PriorityTableEditor
