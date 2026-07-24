@@ -49,7 +49,8 @@ export type IHelpdeskFieldType =
   | "select"
   | "checkbox"
   | "date"
-  | "cascade_select";
+  | "cascade_select"
+  | "attachment";
 
 export interface IHelpdeskFormFieldOption {
   label: string;

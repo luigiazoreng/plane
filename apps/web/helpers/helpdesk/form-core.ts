@@ -4,7 +4,7 @@ import type {
   IHelpdeskFormField,
   IHelpdeskPortal,
 } from "@plane/types";
-import { Calendar, ChevronDown, ListTree, RectangleHorizontal, SquareCheck } from "lucide-react";
+import { Calendar, ChevronDown, ListTree, RectangleHorizontal, SquareCheck, Paperclip } from "lucide-react";
 
 export const HELPDESK_CUSTOM_FIELD_TYPES: {
   type: IHelpdeskFieldType;
@@ -17,6 +17,7 @@ export const HELPDESK_CUSTOM_FIELD_TYPES: {
   { type: "cascade_select", label: "Cascading dropdown", icon: ListTree },
   { type: "checkbox", label: "Checkbox", icon: SquareCheck },
   { type: "date", label: "Date", icon: Calendar },
+  { type: "attachment", label: "Attachment", icon: Paperclip },
 ];
 
 export const getNormalizedHelpdeskAutoAssignmentConfig = (portal: IHelpdeskPortal): IHelpdeskAutoAssignmentConfig => ({

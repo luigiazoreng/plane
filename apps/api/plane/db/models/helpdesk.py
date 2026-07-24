@@ -130,6 +130,7 @@ class HelpdeskFormFieldType(models.TextChoices):
     CHECKBOX = "checkbox", "Checkbox"
     DATE = "date", "Date"
     CASCADE_SELECT = "cascade_select", "Cascading Dropdown"
+    ATTACHMENT = "attachment", "Attachment"
 
 
 class HelpdeskFormField(WorkspaceBaseModel):
