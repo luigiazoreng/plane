@@ -77,7 +77,7 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
         return Response({"success": True, "detail": detail}, status=status.HTTP_200_OK)
 
     def _build_synthetic_message_id(
-        self, parent_comment, from_email: str, date_header: Optional[str], body_key: str
+        self, hd_request, from_email: str, date_header: Optional[str], body_key: str
     ) -> str:
         """Derive an idempotency key for emails that carry no Message-ID.
 
@@ -87,7 +87,7 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
         so repeated short replies ("ok", "thanks") are both kept instead of
         the second one being silently swallowed.
         """
-        parts = [str(parent_comment.id), from_email]
+        parts = [str(hd_request.id), from_email]
         if date_header:
             parts.append(date_header)
         parts.append(body_key)
@@ -191,11 +191,26 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
                     if parent_comment:
                         break
 
-            if not parent_comment:
+            hd_request = None
+            if parent_comment:
+                hd_request = parent_comment.request
+            else:
+                from plane.db.models import HelpdeskRequest
+                all_ids = []
+                if in_reply_to:
+                    all_ids.extend(re.findall(r"<[^>]+>", in_reply_to))
+                if references:
+                    all_ids.extend(re.findall(r"<[^>]+>", references))
+                for msg_id in all_ids:
+                    match = re.search(r"<([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})@", msg_id, re.IGNORECASE)
+                    if match:
+                        request_id = match.group(1)
+                        hd_request = HelpdeskRequest.objects.filter(id=request_id).first()
+                        if hd_request:
+                            break
+
+            if not hd_request:
                 return self._discard("thread_not_found", in_reply_to=in_reply_to)
-
-
-            hd_request = parent_comment.request
             
             # Security: verify sender is authorized to comment on this ticket
             is_authorized = False
@@ -308,7 +323,7 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
                         [(getattr(f, "name", ""), getattr(f, "size", 0)) for f in uploaded_files]
                     )
                 message_id = self._build_synthetic_message_id(
-                    parent_comment, from_email, date_header, body_key
+                    hd_request, from_email, date_header, body_key
                 )
 
             if HelpdeskRequestComment.objects.filter(email_message_id=message_id).exists():
