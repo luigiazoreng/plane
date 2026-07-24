@@ -1,4 +1,5 @@
 # Django imports
+# pyrefly: ignore [missing-import]
 from django.conf import settings
 
 # Third party imports
@@ -93,6 +94,16 @@ class HelpdeskPortalSerializer(BaseSerializer):
                 }
             )
 
+        imap_use_tls = attrs.get("imap_use_tls", getattr(instance, "imap_use_tls", False))
+        imap_use_ssl = attrs.get("imap_use_ssl", getattr(instance, "imap_use_ssl", False))
+        if imap_use_tls and imap_use_ssl:
+            raise serializers.ValidationError(
+                {
+                    "imap_use_tls": "TLS and SSL are mutually exclusive; enable only one.",
+                    "imap_use_ssl": "TLS and SSL are mutually exclusive; enable only one.",
+                }
+            )
+
         max_attachment_size = attrs.get(
             "max_attachment_size", getattr(instance, "max_attachment_size", None)
         )
@@ -120,7 +131,8 @@ class HelpdeskPortalSerializer(BaseSerializer):
         fields = "__all__"
         read_only_fields = READ_ONLY_BASE
         extra_kwargs = {
-            "smtp_password": {"write_only": True}
+            "smtp_password": {"write_only": True},
+            "imap_password": {"write_only": True},
         }
 
 

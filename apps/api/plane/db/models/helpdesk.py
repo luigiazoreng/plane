@@ -57,6 +57,14 @@ class HelpdeskPortal(WorkspaceBaseModel):
     smtp_password = models.CharField(max_length=255, null=True, blank=True)
     smtp_use_tls = models.BooleanField(default=False)
     smtp_use_ssl = models.BooleanField(default=False)
+    is_imap_enabled = models.BooleanField(default=False)
+    imap_host = models.CharField(max_length=255, null=True, blank=True)
+    imap_port = models.IntegerField(null=True, blank=True)
+    imap_username = models.CharField(max_length=255, null=True, blank=True)
+    imap_password = models.CharField(max_length=255, null=True, blank=True)
+    imap_use_tls = models.BooleanField(default=False)
+    imap_use_ssl = models.BooleanField(default=False)
+    imap_archive_folder = models.CharField(max_length=255, null=True, blank=True)
     # Per-portal attachment ceiling, in bytes. Null means "use the instance
     # limit". It can only ever lower that limit, never raise it: the instance
     # FILE_SIZE_LIMIT is also enforced by the reverse proxy and by the

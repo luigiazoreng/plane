@@ -34,6 +34,14 @@ export interface IHelpdeskPortal {
   smtp_password?: string | null; // Optional, might be write-only on backend
   smtp_use_tls: boolean;
   smtp_use_ssl: boolean;
+  is_imap_enabled: boolean;
+  imap_host: string | null;
+  imap_port: number | null;
+  imap_username: string | null;
+  imap_password?: string | null;
+  imap_use_tls: boolean;
+  imap_use_ssl: boolean;
+  imap_archive_folder: string | null;
   /** Attachment ceiling in bytes. Null means the instance limit applies. */
   max_attachment_size: number | null;
   created_at: string;

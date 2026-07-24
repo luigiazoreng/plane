@@ -32,6 +32,10 @@ app.conf.beat_schedule = {
         "task": "plane.bgtasks.email_notification_task.stack_email_notification",
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
     },
+    "poll-imap-inboxes": {
+        "task": "plane.bgtasks.helpdesk_imap_task.poll_imap_inboxes",
+        "schedule": crontab(minute="*/3"),  # Every 3 minutes
+    },
     "run-every-6-hours-for-instance-trace": {
         "task": "plane.license.bgtasks.tracer.instance_traces",
         "schedule": crontab(hour="*/6", minute=0),  # Every 6 hours

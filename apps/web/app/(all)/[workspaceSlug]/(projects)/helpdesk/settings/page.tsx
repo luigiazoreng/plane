@@ -1281,6 +1281,96 @@ const HelpdeskSettingsPage = observer(() => {
                             </div>
 
                             <div className="mt-6 border-t border-subtle pt-4">
+                              <h4 className="mb-4 text-13 font-medium text-primary flex items-center justify-between">
+                                <span>Inbound Email (IMAP) Configuration</span>
+                                <Switch
+                                  value={draft.is_imap_enabled ?? portal.is_imap_enabled ?? false}
+                                  onChange={() => handleDraftChange("is_imap_enabled", !(draft.is_imap_enabled ?? portal.is_imap_enabled))}
+                                />
+                              </h4>
+                              {(draft.is_imap_enabled ?? portal.is_imap_enabled) && (
+                                <>
+                                  <div className="grid gap-4 lg:grid-cols-2">
+                                    <label className="space-y-1">
+                                      <span className="text-12 font-medium text-secondary">IMAP Host</span>
+                                      <input
+                                        type="text"
+                                        value={draft.imap_host ?? portal.imap_host ?? ""}
+                                        onChange={(e) => handleDraftChange("imap_host", e.target.value || null)}
+                                        placeholder="imap.gmail.com"
+                                        className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                      />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <span className="text-12 font-medium text-secondary">IMAP Port</span>
+                                      <input
+                                        type="number"
+                                        value={draft.imap_port ?? portal.imap_port ?? ""}
+                                        onChange={(e) => handleDraftChange("imap_port", e.target.value ? Number(e.target.value) : null)}
+                                        placeholder="993"
+                                        className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                      />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <span className="text-12 font-medium text-secondary">IMAP Username</span>
+                                      <input
+                                        type="text"
+                                        value={draft.imap_username ?? portal.imap_username ?? ""}
+                                        onChange={(e) => handleDraftChange("imap_username", e.target.value || null)}
+                                        placeholder="Username or email"
+                                        className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                      />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <span className="text-12 font-medium text-secondary">IMAP Password</span>
+                                      <input
+                                        type="password"
+                                        value={draft.imap_password ?? portal.imap_password ?? ""}
+                                        onChange={(e) => handleDraftChange("imap_password", e.target.value || null)}
+                                        placeholder="Leave blank to keep existing password"
+                                        className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                      />
+                                    </label>
+                                    <label className="space-y-1">
+                                      <span className="text-12 font-medium text-secondary">Archive Folder (Optional)</span>
+                                      <input
+                                        type="text"
+                                        value={draft.imap_archive_folder ?? portal.imap_archive_folder ?? ""}
+                                        onChange={(e) => handleDraftChange("imap_archive_folder", e.target.value || null)}
+                                        placeholder="e.g. Archive"
+                                        className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                                      />
+                                    </label>
+                                  </div>
+                                  <div className="mt-4 flex gap-8">
+                                    <SettingRow
+                                      label="Use TLS"
+                                      description=""
+                                      className="px-0 py-0"
+                                      control={
+                                        <Switch
+                                          value={draft.imap_use_tls ?? portal.imap_use_tls}
+                                          onChange={() => handleDraftChange("imap_use_tls", !(draft.imap_use_tls ?? portal.imap_use_tls))}
+                                        />
+                                      }
+                                    />
+                                    <SettingRow
+                                      label="Use SSL"
+                                      description=""
+                                      className="px-0 py-0"
+                                      control={
+                                        <Switch
+                                          value={draft.imap_use_ssl ?? portal.imap_use_ssl}
+                                          onChange={() => handleDraftChange("imap_use_ssl", !(draft.imap_use_ssl ?? portal.imap_use_ssl))}
+                                        />
+                                      }
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            <div className="mt-6 border-t border-subtle pt-4">
                               <h4 className="text-13 font-medium text-primary">Attachments</h4>
                               <label className="mt-3 block max-w-xs">
                                 <span className="text-12 text-tertiary">Maximum file size (MB)</span>
