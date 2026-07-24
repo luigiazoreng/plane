@@ -398,7 +398,7 @@ class HelpdeskMember(WorkspaceBaseModel):
 
 class HelpdeskIMAPSyncLog(WorkspaceBaseModel):
     portal = models.ForeignKey(
-        "plane.HelpdeskPortal",
+        "db.HelpdeskPortal",
         on_delete=models.CASCADE,
         related_name="imap_sync_logs",
     )
