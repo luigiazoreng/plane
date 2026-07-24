@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('plane', '0158_helpdesk_form_attachment_field'),
+        ('db', '0158_helpdesk_form_attachment_field'),
     ]
 
     operations = [
