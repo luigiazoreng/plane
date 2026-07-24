@@ -341,6 +341,7 @@ CELERY_IMPORTS = (
     # comment stays PENDING forever -- it never reaches FAILED either, so the
     # UI shows no error. Eager-mode tests cannot catch this.
     "plane.bgtasks.helpdesk_email_task",
+    "plane.bgtasks.helpdesk_imap_task",
 )
 
 FILE_SIZE_LIMIT = int(os.environ.get("FILE_SIZE_LIMIT", 5242880))
