@@ -20,6 +20,7 @@ import type {
   IHelpdeskFormField,
   IHelpdeskMember,
   IHelpdeskPortal,
+  IHelpdeskRequestComment,
   IHelpdeskStatus,
 } from "@plane/types";
 import { cn } from "@plane/utils";
@@ -145,7 +146,8 @@ const HelpdeskSettingsPage = observer(() => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Local draft state for the settings panels — written on every keystroke, flushed on Save
-  const [fieldDraft, setFieldDraft] = useState<Partial<IHelpdeskFormField>>({});
+  const [fieldsDraft, setFieldsDraft] = useState<IHelpdeskFormField[] | null>(null);
+  const [deletedFieldIds, setDeletedFieldIds] = useState<Set<string>>(new Set());
   const [formDraft, setFormDraft] = useState<Partial<IHelpdeskForm>>({});
   const [emailConfigDrafts, setEmailConfigDrafts] = useState<Record<string, Partial<IHelpdeskPortal>>>({});
   const [portalSettingsDrafts, setPortalSettingsDrafts] = useState<Record<string, Partial<IHelpdeskPortal>>>({});
@@ -215,10 +217,11 @@ const HelpdeskSettingsPage = observer(() => {
     selectedFormFields[0] ||
     null;
 
-  // Reset drafts whenever selection changes so stale edits don't bleed over
+  // Reset fields draft whenever the selected form changes
   useEffect(() => {
-    setFieldDraft({});
-  }, [selectedField?.id]);
+    setFieldsDraft(null);
+    setDeletedFieldIds(new Set());
+  }, [selectedForm?.id]);
 
   useEffect(() => {
     setFormDraft({});
@@ -245,12 +248,14 @@ const HelpdeskSettingsPage = observer(() => {
   }, [activeTab, wSlug, portals, helpdeskStore.helpdeskService]);
 
   // Merge store data with local drafts for rendering
-  const draftField: IHelpdeskFormField | null = selectedField
-    ? ({ ...selectedField, ...fieldDraft } as IHelpdeskFormField)
+  const currentFields = fieldsDraft ?? selectedFormFields.map((f) => ({ ...f }));
+  const draftField: IHelpdeskFormField | null = selectedFieldId
+    ? currentFields.find((f) => f.id === selectedFieldId) || null
     : null;
   const draftForm: IHelpdeskForm | null = selectedForm ? ({ ...selectedForm, ...formDraft } as IHelpdeskForm) : null;
 
-  const isDirty = Object.keys(fieldDraft).length > 0 || Object.keys(formDraft).length > 0;
+  const isDirtyFields = fieldsDraft !== null || deletedFieldIds.size > 0;
+  const isDirty = isDirtyFields || Object.keys(formDraft).length > 0;
 
   // ---- Status handlers ----
 
@@ -423,21 +428,22 @@ const HelpdeskSettingsPage = observer(() => {
     }
   };
 
-  const handleAddField = async (fieldType: IHelpdeskFieldType) => {
+  const handleAddField = (fieldType: IHelpdeskFieldType) => {
     if (!selectedForm) return;
-    try {
-      const field = await helpdeskStore.createFormField(wSlug, {
-        form: selectedForm.id,
-        ...createHelpdeskFieldDraft(fieldType, selectedFormFields),
-      });
-      setSelectedFieldId(field.id);
-    } catch (_error) {
-      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to add field" });
-    }
+    const current = fieldsDraft ?? selectedFormFields.map((f) => ({ ...f }));
+    const newField = {
+      id: `temp-${Date.now()}`,
+      form: selectedForm.id,
+      ...createHelpdeskFieldDraft(fieldType, current),
+    } as IHelpdeskFormField;
+    setFieldsDraft([...current, newField]);
+    setSelectedFieldId(newField.id);
   };
 
   const handleFormFieldChange = (patch: Partial<IHelpdeskFormField>) => {
-    setFieldDraft((prev) => ({ ...prev, ...patch }));
+    if (!selectedFieldId) return;
+    const current = fieldsDraft ?? selectedFormFields.map((f) => ({ ...f }));
+    setFieldsDraft(current.map((f) => (f.id === selectedFieldId ? { ...f, ...patch } : f)));
   };
 
   const handleFormSettingsChange = (patch: Partial<IHelpdeskForm>) => {
@@ -449,14 +455,57 @@ const HelpdeskSettingsPage = observer(() => {
     setIsSaving(true);
     try {
       const saves: Promise<unknown>[] = [];
-      if (selectedField && Object.keys(fieldDraft).length > 0) {
-        saves.push(helpdeskStore.updateFormField(wSlug, selectedField.id, fieldDraft));
-      }
       if (selectedForm && Object.keys(formDraft).length > 0) {
         saves.push(helpdeskStore.updateForm(wSlug, selectedForm.id, formDraft));
       }
-      await Promise.all(saves);
-      setFieldDraft({});
+
+      if (isDirtyFields && selectedForm) {
+        // Deletions
+        for (const id of deletedFieldIds) {
+          saves.push(helpdeskStore.deleteFormField(wSlug, selectedForm.id, id));
+        }
+
+        const finalFields = [...(fieldsDraft ?? [])];
+        const createdIdMap = new Map<string, string>(); // tempId -> realId
+
+        for (let i = 0; i < finalFields.length; i++) {
+          const field = finalFields[i];
+          if (field.id.startsWith("temp-")) {
+            const created = await helpdeskStore.createFormField(wSlug, field);
+            createdIdMap.set(field.id, created.id);
+            finalFields[i] = created;
+          } else {
+            const originalField = selectedFormFields.find((f) => f.id === field.id);
+            if (originalField) {
+              const patch: Partial<IHelpdeskFormField> = {};
+              let hasChanges = false;
+              for (const key of Object.keys(field) as (keyof IHelpdeskFormField)[]) {
+                if (JSON.stringify(field[key as keyof IHelpdeskFormField]) !== JSON.stringify(originalField[key as keyof IHelpdeskFormField])) {
+                  (patch as any)[key] = field[key as keyof IHelpdeskFormField];
+                  hasChanges = true;
+                }
+              }
+              if (hasChanges) {
+                saves.push(helpdeskStore.updateFormField(wSlug, field.id, patch));
+              }
+            }
+          }
+        }
+
+        await Promise.all(saves);
+
+        // Reordering
+        const reorderedItems = finalFields.map((f, i) => ({
+          id: f.id,
+          sequence: (i + 1) * 10000,
+        }));
+        await helpdeskStore.reorderFormFields(wSlug, selectedForm.id, reorderedItems);
+      } else {
+        await Promise.all(saves);
+      }
+
+      setFieldsDraft(null);
+      setDeletedFieldIds(new Set());
       setFormDraft({});
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to save changes" });
@@ -1593,14 +1642,14 @@ const HelpdeskSettingsPage = observer(() => {
 
                           <div className="space-y-2 xl:max-h-[760px] xl:overflow-y-auto xl:pr-1">
                             <Sortable
-                              data={selectedFormFields}
+                              data={currentFields}
                               keyExtractor={(field) => field.id}
                               onChange={(items) => {
                                 const reordered = items.map((item, index) => ({
-                                  id: item.id,
+                                  ...item,
                                   sequence: (index + 1) * 10000,
                                 }));
-                                helpdeskStore.reorderFormFields(wSlug, selectedForm.id, reordered);
+                                setFieldsDraft(reordered);
                               }}
                               render={(field) => (
                                 <button
@@ -1958,9 +2007,16 @@ const HelpdeskSettingsPage = observer(() => {
                                 {!draftField.is_system ? (
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      helpdeskStore.deleteFormField(wSlug, selectedField!.id, selectedForm!.id)
-                                    }
+                                    onClick={() => {
+                                      if (selectedField) {
+                                        if (!selectedField.id.startsWith("temp-")) {
+                                          setDeletedFieldIds((prev) => new Set(prev).add(selectedField.id));
+                                        }
+                                        const current = fieldsDraft ?? selectedFormFields.map((f) => ({ ...f }));
+                                        setFieldsDraft(current.filter((f) => f.id !== selectedField.id));
+                                        setSelectedFieldId(null);
+                                      }
+                                    }}
                                     className="text-red-500 text-12"
                                   >
                                     Remove field
@@ -2108,7 +2164,7 @@ const HelpdeskSettingsPage = observer(() => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <HelpdeskFormRenderer fields={selectedFormFields} isPreview />
+              <HelpdeskFormRenderer fields={currentFields} isPreview />
             </div>
             <div className="flex justify-end border-t border-subtle p-4">
               <Button variant="primary" size="base" disabled title="Preview mode — submission disabled">

@@ -7,6 +7,9 @@
 import React from "react";
 import { Input } from "@plane/propel/input";
 import type { IHelpdeskFormField } from "@plane/types";
+import { AttachmentPicker } from "./attachments/attachment-picker";
+import { PendingAttachmentChips } from "./attachments/attachment-chips";
+import { useAttachmentUpload, type TAttachmentTransport } from "./attachments/use-attachment-upload";
 
 function resolveCascadeOptions(
   field: IHelpdeskFormField,
@@ -34,9 +37,10 @@ type FieldRendererProps = {
   /** Full values map — needed for cascade parent resolution */
   values: Record<string, unknown>;
   disabled?: boolean;
+  attachmentTransport?: TAttachmentTransport;
 };
 
-function FieldInput({ field, value, onChange, fieldMap, values, disabled }: FieldRendererProps) {
+function FieldInput({ field, value, onChange, fieldMap, values, disabled, attachmentTransport }: FieldRendererProps) {
   switch (field.field_type) {
     case "system_title":
     case "short_text":
@@ -127,9 +131,72 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled }: Fiel
           disabled={disabled}
         />
       );
+    case "attachment":
+      return (
+        <AttachmentFieldInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          transport={disabled ? undefined : attachmentTransport}
+        />
+      );
     default:
       return null;
   }
+}
+
+function AttachmentFieldInput({
+  field,
+  value,
+  onChange,
+  disabled,
+  transport,
+}: {
+  field: IHelpdeskFormField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+  transport?: TAttachmentTransport;
+}) {
+  const { pending, upload, remove } = useAttachmentUpload(
+    transport || {
+      getCredentials: async () => {
+        throw new Error("No transport available");
+      },
+      markUploaded: async () => {},
+    }
+  );
+
+  // Sync uploaded asset ids to the form state
+  React.useEffect(() => {
+    const assetIds = pending.filter((p) => p.status === "done" && p.assetId).map((p) => p.assetId as string);
+    // Only update if it changed
+    const current = Array.isArray(value) ? value : value ? [value] : [];
+    if (JSON.stringify(current) !== JSON.stringify(assetIds)) {
+      onChange(assetIds);
+    }
+  }, [pending, value, onChange]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <AttachmentPicker
+          onSelect={upload}
+          disabled={disabled || !transport || pending.length >= 5} // Limit to 5 per field
+          title="Anexar arquivo (Max 5)"
+        />
+        <span className="text-sm text-text-400">
+          {!transport
+            ? "Attachments not available in preview"
+            : pending.length >= 5
+              ? "Maximum attachments reached"
+              : "Anexar arquivo"}
+        </span>
+      </div>
+      <PendingAttachmentChips attachments={pending} onRemove={remove} />
+    </div>
+  );
 }
 
 type HelpdeskFormRendererProps = {
@@ -137,6 +204,7 @@ type HelpdeskFormRendererProps = {
   values?: Record<string, unknown>;
   onValueChange?: (key: string, value: unknown) => void;
   isPreview?: boolean;
+  attachmentTransport?: TAttachmentTransport;
 };
 
 export function HelpdeskFormRenderer({
@@ -144,8 +212,9 @@ export function HelpdeskFormRenderer({
   values = {},
   onValueChange,
   isPreview = false,
+  attachmentTransport,
 }: HelpdeskFormRendererProps) {
-  const ordered = fields.slice().toSorted((a, b) => a.sequence - b.sequence);
+  const ordered = fields.slice().sort((a, b) => a.sequence - b.sequence);
   const fieldMap: Record<string, IHelpdeskFormField> = {};
   for (const f of ordered) fieldMap[f.key] = f;
 
@@ -163,6 +232,7 @@ export function HelpdeskFormRenderer({
             fieldMap={fieldMap}
             values={values}
             disabled={isPreview}
+            attachmentTransport={attachmentTransport}
           />
           {field.field_type !== "checkbox" && field.help_text ? (
             <p className="text-xs text-text-400 mt-1">{field.help_text}</p>

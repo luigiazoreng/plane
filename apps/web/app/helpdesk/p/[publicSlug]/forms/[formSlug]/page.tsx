@@ -12,6 +12,9 @@ import { Input } from "@plane/propel/input";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { HelpdeskFormRenderer } from "@/components/helpdesk/form-renderer";
 import { publicHelpdeskStore as publicStore } from "@/store/public-helpdesk.store";
+import { PublicHelpdeskService } from "@plane/services";
+
+const publicHelpdeskService = new PublicHelpdeskService();
 
 const HelpdeskPublicFormPage = observer(() => {
   const { publicSlug, formSlug } = useParams();
@@ -48,6 +51,24 @@ const HelpdeskPublicFormPage = observer(() => {
     load();
   }, [fSlug, navigate, pSlug]);
 
+  const attachmentTransport = useMemo(
+    () => ({
+      getCredentials: (data: { name: string; type: string; size: number }) =>
+        publicHelpdeskService.getAssetUploadCredentials(
+          pSlug,
+          data,
+          publicStore.customerToken || undefined
+        ),
+      markUploaded: (assetId: string) =>
+        publicHelpdeskService.markAssetUploaded(
+          pSlug,
+          assetId,
+          publicStore.customerToken || undefined
+        ),
+    }),
+    [pSlug]
+  );
+
   const form = publicStore.currentForm;
   const orderedFields = useMemo(
     () => (form?.fields_detail || []).slice().sort((a, b) => a.sequence - b.sequence),
@@ -80,8 +101,22 @@ const HelpdeskPublicFormPage = observer(() => {
 
     setSubmitting(true);
     try {
+      // Aggregate all asset IDs from the field values
+      const asset_ids: string[] = [];
+      for (const field of orderedFields) {
+        if (field.field_type === "attachment") {
+          const val = fieldValues[field.key];
+          if (Array.isArray(val)) {
+            asset_ids.push(...val);
+          } else if (typeof val === "string" && val.trim()) {
+            asset_ids.push(val.trim());
+          }
+        }
+      }
+
       const response = await publicStore.submitPublicForm(pSlug, form.slug, {
         ...fieldValues,
+        asset_ids,
         contact_email: publicStore.customerToken ? undefined : contactEmail,
       });
 
@@ -185,7 +220,12 @@ const HelpdeskPublicFormPage = observer(() => {
             </div>
           )}
 
-          <HelpdeskFormRenderer fields={orderedFields} values={fieldValues} onValueChange={handleValueChange} />
+          <HelpdeskFormRenderer
+            fields={orderedFields}
+            values={fieldValues}
+            onValueChange={handleValueChange}
+            attachmentTransport={attachmentTransport}
+          />
 
           <div className="flex items-center justify-end gap-3 border-t border-subtle pt-6">
             <Button
