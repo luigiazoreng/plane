@@ -411,3 +411,13 @@ export interface IHelpdeskPaginatedResponse {
   count: number;
   total_pages: number;
 }
+
+export interface IHelpdeskIMAPSyncLog {
+  id: string;
+  portal: string;
+  status: "success" | "error";
+  emails_fetched: number;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}

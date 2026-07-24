@@ -137,3 +137,35 @@ class HelpdeskPortalEmailLogsEndpoint(BaseAPIView):
         # endpoint is already gated on the Helpdesk ADMIN role above.
         serializer = HelpdeskRequestCommentAdminSerializer(comments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class HelpdeskPortalIMAPLogsEndpoint(BaseAPIView):
+    def get(self, request, slug, pk):
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < ADMIN:
+            return Response({"error": "Only Helpdesk Admins can view IMAP logs."}, status=status.HTTP_403_FORBIDDEN)
+
+        from plane.db.models.helpdesk import HelpdeskIMAPSyncLog
+        from plane.app.serializers.helpdesk import HelpdeskIMAPSyncLogSerializer
+
+        logs = HelpdeskIMAPSyncLog.objects.filter(
+            portal_id=pk,
+            portal__workspace__slug=slug
+        ).order_by("-created_at")[:100]
+
+        serializer = HelpdeskIMAPSyncLogSerializer(logs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class HelpdeskPortalIMAPSyncEndpoint(BaseAPIView):
+    def post(self, request, slug, pk):
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < ADMIN:
+            return Response({"error": "Only Helpdesk Admins can trigger IMAP sync."}, status=status.HTTP_403_FORBIDDEN)
+
+        from plane.bgtasks.helpdesk_imap_task import poll_imap_inboxes
+        
+        try:
+            result = poll_imap_inboxes(portal_id=pk)
+            return Response(result, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

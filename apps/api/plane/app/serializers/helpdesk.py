@@ -18,6 +18,7 @@ from plane.db.models import (
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
     HelpdeskStatus,
+    HelpdeskIMAPSyncLog,
 )
 from plane.app.serializers.base import BaseSerializer
 from plane.app.serializers.user import UserLiteSerializer
@@ -474,3 +475,9 @@ class HelpdeskMemberSerializer(BaseSerializer):
         model = HelpdeskMember
         fields = "__all__"
         read_only_fields = READ_ONLY_BASE + ["workspace"]
+
+class HelpdeskIMAPSyncLogSerializer(BaseSerializer):
+    class Meta:
+        model = HelpdeskIMAPSyncLog
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE + ["workspace", "portal"]

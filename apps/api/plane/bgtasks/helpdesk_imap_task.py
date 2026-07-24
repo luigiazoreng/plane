@@ -29,12 +29,21 @@ def decode_imap_header(header_value):
 
 
 @shared_task
-def poll_imap_inboxes():
-    portals = HelpdeskPortal.objects.filter(is_imap_enabled=True)
+def poll_imap_inboxes(portal_id=None):
+    from plane.db.models import HelpdeskIMAPSyncLog
+    if portal_id:
+        portals = HelpdeskPortal.objects.filter(id=portal_id, is_imap_enabled=True)
+    else:
+        portals = HelpdeskPortal.objects.filter(is_imap_enabled=True)
+        
     for portal in portals:
         if not (portal.imap_host and portal.imap_username and portal.imap_password):
             continue
             
+        emails_fetched = 0
+        status_result = "success"
+        error_msg = ""
+        
         try:
             port = portal.imap_port or (993 if portal.imap_use_ssl else 143)
             if portal.imap_use_ssl:
@@ -58,6 +67,7 @@ def poll_imap_inboxes():
                 if status != "OK":
                     continue
                     
+                emails_fetched += 1
                 raw_email = data[0][1]
                 msg = email.message_from_bytes(raw_email)
                 
@@ -141,3 +151,23 @@ def poll_imap_inboxes():
         except Exception as e:
             log_exception(e)
             logger.error(f"Failed to poll IMAP for portal {portal.id}")
+            status_result = "error"
+            error_msg = str(e)
+            
+        finally:
+            HelpdeskIMAPSyncLog.objects.create(
+                portal=portal,
+                workspace_id=portal.workspace_id,
+                status=status_result,
+                emails_fetched=emails_fetched,
+                error_message=error_msg
+            )
+            
+    if portal_id:
+        # If the loop ran, return the last portal's result.
+        # If no portal matched (e.g. IMAP disabled or missing creds),
+        # return a safe fallback.
+        try:
+            return {"status": status_result, "emails_fetched": emails_fetched, "error_message": error_msg}
+        except NameError:
+            return {"status": "error", "emails_fetched": 0, "error_message": "Portal not found or IMAP not configured."}

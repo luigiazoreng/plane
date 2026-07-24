@@ -23,6 +23,7 @@ import type {
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
   IHelpdeskStatus,
+  IHelpdeskIMAPSyncLog,
 } from "@plane/types";
 
 export class HelpdeskService extends APIService {
@@ -84,6 +85,14 @@ export class HelpdeskService extends APIService {
 
   async getPortalEmailLogs(workspaceSlug: string, portalId: string): Promise<IHelpdeskRequestComment[]> {
     return this.get(`${workspaceSlug}/helpdesk/portals/${portalId}/email-logs/`).then((res) => res?.data);
+  }
+
+  async getPortalIMAPLogs(workspaceSlug: string, portalId: string): Promise<IHelpdeskIMAPSyncLog[]> {
+    return this.get(`${workspaceSlug}/helpdesk/portals/${portalId}/imap-logs/`).then((res) => res?.data);
+  }
+
+  async syncPortalIMAP(workspaceSlug: string, portalId: string): Promise<any> {
+    return this.post(`${workspaceSlug}/helpdesk/portals/${portalId}/imap-sync/`).then((res) => res?.data);
   }
 
   // --- Form Management ---

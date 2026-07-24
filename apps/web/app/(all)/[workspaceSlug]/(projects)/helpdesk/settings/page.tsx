@@ -75,7 +75,7 @@ const COLOR_PALETTE = [
   "#78716C",
 ];
 
-type TSettingsTab = "statuses" | "portal-settings" | "forms" | "members" | "email" | "email-logs";
+type TSettingsTab = "statuses" | "portal-settings" | "forms" | "members" | "email" | "email-logs" | "imap-logs";
 
 const validateFormForActivation = (fields: IHelpdeskFormField[]): string[] => {
   const errors: string[] = [];
@@ -162,6 +162,11 @@ const HelpdeskSettingsPage = observer(() => {
   const [emailLogs, setEmailLogs] = useState<Record<string, IHelpdeskRequestComment[]>>({});
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
+  // ---- IMAP Logs state ----
+  const [imapLogs, setImapLogs] = useState<Record<string, import("@plane/types").IHelpdeskIMAPSyncLog[]>>({});
+  const [isLoadingImapLogs, setIsLoadingImapLogs] = useState(false);
+  const [isSyncingImap, setIsSyncingImap] = useState(false);
+
   useEffect(() => {
     if (!wSlug) return;
     helpdeskStore.fetchStatuses(wSlug);
@@ -244,6 +249,26 @@ const HelpdeskSettingsPage = observer(() => {
         setIsLoadingLogs(false);
       };
       void fetchLogs();
+    }
+  }, [activeTab, wSlug, portals, helpdeskStore.helpdeskService]);
+
+  useEffect(() => {
+    if (activeTab === "imap-logs" && wSlug) {
+      setIsLoadingImapLogs(true);
+      const fetchImapLogs = async () => {
+        const logsByPortal: Record<string, import("@plane/types").IHelpdeskIMAPSyncLog[]> = {};
+        for (const portal of portals) {
+          try {
+            const logs = await helpdeskStore.helpdeskService.getPortalIMAPLogs(wSlug, portal.id);
+            logsByPortal[portal.id] = logs;
+          } catch (e) {
+            console.error("Failed to fetch IMAP logs for portal", portal.id, e);
+          }
+        }
+        setImapLogs(logsByPortal);
+        setIsLoadingImapLogs(false);
+      };
+      void fetchImapLogs();
     }
   }, [activeTab, wSlug, portals, helpdeskStore.helpdeskService]);
 
@@ -613,6 +638,32 @@ const HelpdeskSettingsPage = observer(() => {
     }
   };
 
+  const handleSyncIMAP = async (portalId: string) => {
+    if (!wSlug) return;
+    setIsSyncingImap(true);
+    try {
+      const result = await helpdeskStore.helpdeskService.syncPortalIMAP(wSlug, portalId);
+      setToast({
+        type: result.status === "success" ? TOAST_TYPE.SUCCESS : TOAST_TYPE.ERROR,
+        title: result.status === "success" ? "Sync Successful" : "Sync Failed",
+        message: result.error_message || `Fetched ${result.emails_fetched} email(s)`,
+      });
+      // Optionally reload the imap logs if we are on the imap-logs tab
+      if (activeTab === "imap-logs") {
+        const logs = await helpdeskStore.helpdeskService.getPortalIMAPLogs(wSlug, portalId);
+        setImapLogs((prev) => ({ ...prev, [portalId]: logs }));
+      }
+    } catch (e: any) {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: "Sync Failed",
+        message: e?.message || "An error occurred during IMAP sync.",
+      });
+    } finally {
+      setIsSyncingImap(false);
+    }
+  };
+
   return (
     <div className="flex h-full w-full flex-col">
       <AppHeader
@@ -650,6 +701,11 @@ const HelpdeskSettingsPage = observer(() => {
               label="Email logs"
               isActive={activeTab === "email-logs"}
               onClick={() => setActiveTab("email-logs")}
+            />
+            <SettingsTabButton
+              label="IMAP logs"
+              isActive={activeTab === "imap-logs"}
+              onClick={() => setActiveTab("imap-logs")}
             />
             <SettingsTabButton
               label="Form builder"
@@ -1282,7 +1338,19 @@ const HelpdeskSettingsPage = observer(() => {
 
                             <div className="mt-6 border-t border-subtle pt-4">
                               <h4 className="mb-4 text-13 font-medium text-primary flex items-center justify-between">
-                                <span>Inbound Email (IMAP) Configuration</span>
+                                <span className="flex items-center gap-4">
+                                  Inbound Email (IMAP) Configuration
+                                  {portal.is_imap_enabled && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSyncIMAP(portal.id)}
+                                      disabled={isSyncingImap}
+                                      className="text-12 font-medium text-custom-primary-100 bg-custom-primary-10/10 hover:bg-custom-primary-20/20 px-3 py-1 rounded transition-colors disabled:opacity-50"
+                                    >
+                                      {isSyncingImap ? "Syncing..." : "Sync Now"}
+                                    </button>
+                                  )}
+                                </span>
                                 <Switch
                                   value={draft.is_imap_enabled ?? portal.is_imap_enabled ?? false}
                                   onChange={() => handleDraftChange("is_imap_enabled", !(draft.is_imap_enabled ?? portal.is_imap_enabled))}
@@ -1522,6 +1590,84 @@ const HelpdeskSettingsPage = observer(() => {
               )}
             </section>
           )}
+          {activeTab === "imap-logs" && (
+            <section>
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-primary">IMAP logs</h2>
+                <p className="mt-0.5 text-13 text-tertiary">
+                  View the synchronization history for inbound emails (IMAP) across your portals.
+                </p>
+              </div>
+
+              {isLoadingImapLogs ? (
+                <div className="flex w-full items-center justify-center p-12">
+                  <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-accent-strong" />
+                </div>
+              ) : portals.length > 0 ? (
+                <div className="space-y-6">
+                  {portals.map((portal) => {
+                    const logs = imapLogs[portal.id] || [];
+
+                    return (
+                      <div key={portal.id} className="rounded-xl border border-subtle bg-layer-2 shadow-sm">
+                        <div className="border-b border-subtle px-4 py-3">
+                          <h3 className="text-14 font-medium text-primary">
+                            /helpdesk/p/{portal.public_slug}
+                          </h3>
+                        </div>
+                        <div className="overflow-x-auto">
+                          {logs.length === 0 ? (
+                            <div className="px-6 py-12 text-center text-13 text-tertiary">
+                              No IMAP logs found for this portal.
+                            </div>
+                          ) : (
+                            <table className="w-full text-left text-13">
+                              <thead>
+                                <tr className="border-b border-subtle text-secondary">
+                                  <th className="px-4 py-3 font-medium">Status</th>
+                                  <th className="px-4 py-3 font-medium">Emails Fetched</th>
+                                  <th className="px-4 py-3 font-medium">Time</th>
+                                  <th className="px-4 py-3 font-medium">Error (if any)</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-subtle">
+                                {logs.map((log) => (
+                                  <tr key={log.id} className="text-primary hover:bg-layer-1">
+                                    <td className="px-4 py-3">
+                                      {log.status === "success" && (
+                                        <Badge variant="success" size="sm">Success</Badge>
+                                      )}
+                                      {log.status === "error" && (
+                                        <Badge variant="danger" size="sm">Error</Badge>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      {log.emails_fetched}
+                                    </td>
+                                    <td className="px-4 py-3 text-tertiary">
+                                      {new Date(log.created_at).toLocaleString()}
+                                    </td>
+                                    <td className="px-4 py-3 text-red-500 max-w-[200px] truncate" title={log.error_message ?? ""}>
+                                      {log.error_message || "-"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-subtle bg-layer-2 px-6 py-12 text-center text-tertiary">
+                  Create a portal first to view IMAP logs.
+                </div>
+              )}
+            </section>
+          )}
+
 
           {activeTab === "forms" && (
             <section>

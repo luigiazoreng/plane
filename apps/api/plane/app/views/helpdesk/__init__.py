@@ -10,6 +10,8 @@ from .portal import (
     HelpdeskPortalViewSet,
     PublicHelpdeskPortalEndpoint,
     HelpdeskPortalEmailLogsEndpoint,
+    HelpdeskPortalIMAPLogsEndpoint,
+    HelpdeskPortalIMAPSyncEndpoint,
 )
 from .form import (
     HelpdeskFormFieldViewSet,

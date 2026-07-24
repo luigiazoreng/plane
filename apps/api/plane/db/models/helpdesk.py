@@ -395,3 +395,22 @@ class HelpdeskMember(WorkspaceBaseModel):
 
     def __str__(self):
         return f"{self.member.email} <Helpdesk>"
+
+class HelpdeskIMAPSyncLog(WorkspaceBaseModel):
+    portal = models.ForeignKey(
+        "plane.HelpdeskPortal",
+        on_delete=models.CASCADE,
+        related_name="imap_sync_logs",
+    )
+    status = models.CharField(max_length=50, choices=[('success', 'Success'), ('error', 'Error')])
+    emails_fetched = models.IntegerField(default=0)
+    error_message = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Helpdesk IMAP Sync Log"
+        verbose_name_plural = "Helpdesk IMAP Sync Logs"
+        db_table = "helpdesk_imap_sync_logs"
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.portal.public_slug} - {self.status} - {self.created_at}"

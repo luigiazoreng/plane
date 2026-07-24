@@ -11,6 +11,8 @@ from plane.app.views.helpdesk import (
     HelpdeskPortalViewSet,
     PublicHelpdeskPortalEndpoint,
     HelpdeskPortalEmailLogsEndpoint,
+    HelpdeskPortalIMAPLogsEndpoint,
+    HelpdeskPortalIMAPSyncEndpoint,
     HelpdeskFormViewSet,
     HelpdeskFormFieldViewSet,
     PublicHelpdeskFormListEndpoint,
@@ -91,6 +93,16 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/email-logs/",
         HelpdeskPortalEmailLogsEndpoint.as_view(),
         name="helpdesk-portal-email-logs",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/imap-logs/",
+        HelpdeskPortalIMAPLogsEndpoint.as_view(),
+        name="helpdesk-portal-imap-logs",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/imap-sync/",
+        HelpdeskPortalIMAPSyncEndpoint.as_view(),
+        name="helpdesk-portal-imap-sync",
     ),
     # --- Attachments (agent) ---
     path(

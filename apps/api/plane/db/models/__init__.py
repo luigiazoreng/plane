@@ -103,6 +103,7 @@ from .helpdesk import (
     HelpdeskCustomer,
     HelpdeskForm,
     HelpdeskFormField,
+    HelpdeskIMAPSyncLog,
     HelpdeskMember,
     HelpdeskPortal,
     HelpdeskRequest,
