@@ -68,7 +68,7 @@ function ProjectKpiPage() {
       fetchProjectConfig(workspaceSlug, projectId),
       // Still fetched for the project-wide StatBar aggregates; the per-issue
       // rows themselves are no longer rendered on this (now read-only) page.
-      fetchProjectIssues(workspaceSlug, projectId),
+      fetchProjectIssues(workspaceSlug, projectId, { aggregates_only: true }),
       fetchProjectMemberAggregates(workspaceSlug, projectId),
     ]).finally(() => mounted && setLoading(false));
     return () => {

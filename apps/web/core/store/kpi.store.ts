@@ -43,7 +43,11 @@ export interface IKpiStore {
   updateProjectConfig: (workspaceSlug: string, projectId: string, data: Partial<IKpiConfig>) => Promise<IKpiConfig>;
   resetProjectConfig: (workspaceSlug: string, projectId: string) => Promise<void>;
   // issue actions
-  fetchProjectIssues: (workspaceSlug: string, projectId: string) => Promise<IKpiIssueRow[]>;
+  fetchProjectIssues: (
+    workspaceSlug: string,
+    projectId: string,
+    params?: { aggregates_only?: boolean }
+  ) => Promise<IKpiIssueRow[]>;
   fetchProjectMemberAggregates: (workspaceSlug: string, projectId: string) => Promise<IKpiMemberAggregate[]>;
   fetchWorkspaceMemberAggregates: (workspaceSlug: string) => Promise<IKpiMemberAggregate[]>;
   fetchWorkspaceOverview: (
@@ -156,10 +160,14 @@ export class KpiStore implements IKpiStore {
     await this.fetchProjectConfig(workspaceSlug, projectId);
   };
 
-  fetchProjectIssues = async (workspaceSlug: string, projectId: string): Promise<IKpiIssueRow[]> => {
+  fetchProjectIssues = async (
+    workspaceSlug: string,
+    projectId: string,
+    params?: { aggregates_only?: boolean }
+  ): Promise<IKpiIssueRow[]> => {
     this._setLoading(`issues-${projectId}`, true);
     try {
-      const response = await this.kpiService.getProjectIssues(workspaceSlug, projectId);
+      const response = await this.kpiService.getProjectIssues(workspaceSlug, projectId, params);
       runInAction(() => {
         set(this.issues, [projectId], response.results);
         set(this.aggregates, [projectId], response.aggregates);

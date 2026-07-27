@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.db.models import Q
 from django.utils import timezone
@@ -246,7 +246,9 @@ def _period_filter(start, end):
     """
     if start is None or end is None:
         return Q()
-    return Q(completed_at__date__gte=start, completed_at__date__lte=end) | Q(
+    start_dt = timezone.make_aware(datetime.combine(start, time.min))
+    end_dt = timezone.make_aware(datetime.combine(end, time.max))
+    return Q(completed_at__gte=start_dt, completed_at__lte=end_dt) | Q(
         completed_at__isnull=True, target_date__gte=start, target_date__lte=end
     )
 
@@ -261,10 +263,12 @@ class KpiIssueListEndpoint(BaseAPIView):
 
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
-            .select_related("type", "state", "kpi_attribute", "estimate_point")
+            .select_related("state", "kpi_attribute", "estimate_point")
             .order_by("-created_at")
         )
         resolver = KpiPropertyResolver(issues)
+
+        aggregates_only = request.GET.get("aggregates_only", "false").lower() == "true"
 
         results = []
         sum_vp = 0.0
@@ -282,28 +286,29 @@ class KpiIssueListEndpoint(BaseAPIView):
                 sum_vp += calc["Vp"]
                 sum_vf += calc["Vf"] if calc["Vf"] is not None else 0.0
 
-            results.append(
-                {
-                    "id": str(issue.id),
-                    "name": issue.name,
-                    "sequence_id": issue.sequence_id,
-                    "priority": issue.priority,
-                    "target_date": issue.target_date,
-                    "completed_at": issue.completed_at,
-                    "state_group": issue.state.group if issue.state_id else None,
-                    "estimate_point": str(issue.estimate_point_id) if issue.estimate_point_id else None,
-                    "difficulty_estimate_point": str(difficulty_point.id) if difficulty_point else None,
-                    "repetitive_estimate_point": str(repetitive_point.id) if repetitive_point else None,
-                    "difficulty": _difficulty_display_value(issue, difficulty_point),
-                    "repetitive": _repetitive_display_value(attribute, repetitive_point),
-                    "type": task["type"],
-                    "vp": calc["Vp"],
-                    "d": calc["d"],
-                    "p": calc["p"],
-                    "vf": calc["Vf"],
-                    "status": row_status,
-                }
-            )
+            if not aggregates_only:
+                results.append(
+                    {
+                        "id": str(issue.id),
+                        "name": issue.name,
+                        "sequence_id": issue.sequence_id,
+                        "priority": issue.priority,
+                        "target_date": issue.target_date,
+                        "completed_at": issue.completed_at,
+                        "state_group": issue.state.group if issue.state_id else None,
+                        "estimate_point": str(issue.estimate_point_id) if issue.estimate_point_id else None,
+                        "difficulty_estimate_point": str(difficulty_point.id) if difficulty_point else None,
+                        "repetitive_estimate_point": str(repetitive_point.id) if repetitive_point else None,
+                        "difficulty": _difficulty_display_value(issue, difficulty_point),
+                        "repetitive": _repetitive_display_value(attribute, repetitive_point),
+                        "type": task["type"],
+                        "vp": calc["Vp"],
+                        "d": calc["d"],
+                        "p": calc["p"],
+                        "vf": calc["Vf"],
+                        "status": row_status,
+                    }
+                )
 
         decimals = contract["params"].get("vf_decimals", 2)
         efficiency = round(sum_vf / sum_vp, 4) if sum_vp else None
@@ -316,7 +321,7 @@ class KpiIssueListEndpoint(BaseAPIView):
                     "sum_vf": round(sum_vf, decimals),
                     "efficiency": efficiency,
                     "counts": counts,
-                    "total": len(results),
+                    "total": len(issues),
                 },
             }
         )
@@ -339,7 +344,7 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
 
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
-            .select_related("type", "state", "kpi_attribute", "estimate_point")
+            .select_related("kpi_attribute", "estimate_point")
             .prefetch_related("assignees", "labels")
         )
         resolver = KpiPropertyResolver(issues)
@@ -381,7 +386,7 @@ class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
 
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
-            .select_related("type", "state", "kpi_attribute", "estimate_point")
+            .select_related("kpi_attribute", "estimate_point")
             .prefetch_related("assignees", "labels")
         )
         resolver = KpiPropertyResolver(issues)
@@ -456,7 +461,7 @@ class WorkspaceKpiOverviewEndpoint(BaseAPIView):
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
             .filter(_period_filter(start, end))
-            .select_related("type", "state", "kpi_attribute", "estimate_point")
+            .select_related("kpi_attribute", "estimate_point")
             .prefetch_related("assignees", "labels")
         )
         resolver = KpiPropertyResolver(issues)
