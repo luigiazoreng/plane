@@ -16,7 +16,7 @@ import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { IHelpdeskStatus, ISearchIssueResponse } from "@plane/types";
 import { AppHeader } from "@/components/core/app-header";
 import { DateDropdown } from "@/components/dropdowns/date";
-import { generateWorkItemLink, getDate, renderFormattedPayloadDate } from "@plane/utils";
+import { generateWorkItemLink, getDate, getFileURL, renderFormattedPayloadDate } from "@plane/utils";
 
 const FORM_RESPONSE_LABELS: Record<string, string> = {
   category_1: "Categoria",
@@ -51,6 +51,57 @@ function formatFormValue(value: unknown): string {
   if (typeof value === "boolean") return value ? "Sim" : "Não";
   return String(value);
 }
+
+function HelpdeskCommentContent({ content }: { content: string }) {
+  if (!content) return null;
+  const parsed = content
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
+  const dividers = [
+    /\n_{3,}\s*From:/i,
+    /\n-{3,}\s*Original\s*-{3,}/i,
+    /\nOn\s+.*?\s+wrote:\s*\n/i,
+    /\nFrom:\s+.*?<.*?>\s*\nDate:\s+/i,
+    /\n-{3,}\s*Forwarded message\s*-{3,}/i,
+  ];
+
+  let splitIndex = -1;
+  for (const regex of dividers) {
+    const match = parsed.match(regex);
+    if (match && match.index !== undefined) {
+      if (splitIndex === -1 || match.index < splitIndex) {
+        splitIndex = match.index;
+      }
+    }
+  }
+
+  if (splitIndex !== -1) {
+    const mainText = parsed.substring(0, splitIndex).trim();
+    const quotedText = parsed.substring(splitIndex).trim();
+    return (
+      <div className="flex flex-col gap-2">
+        {mainText ? <p className="break-words whitespace-pre-wrap">{mainText}</p> : null}
+        <details className="group">
+          <summary className="text-text-400 hover:text-text-200 text-xs cursor-pointer list-none font-medium select-none">
+            <span className="inline-flex items-center gap-1">
+              <span className="rounded border border-subtle bg-surface-1 px-2 py-0.5">...</span>
+            </span>
+          </summary>
+          <div className="text-text-400 text-xs mt-2 border-l-2 border-subtle pl-3 opacity-70">
+            <p className="break-words whitespace-pre-wrap">{quotedText}</p>
+          </div>
+        </details>
+      </div>
+    );
+  }
+
+  return <p className="break-words whitespace-pre-wrap">{parsed}</p>;
+}
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -58,6 +109,7 @@ import {
   Lock,
   MessageCircleMore,
   MessageSquareText,
+  Paperclip,
   Plus,
   Send,
   UserRound,
@@ -505,7 +557,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                                 : undefined
                             }
                           >
-                            <p className="whitespace-pre-wrap">{comment.content}</p>
+                            <HelpdeskCommentContent content={comment.content} />
                             <CommentAttachments attachments={comment.attachments} />
                           </div>
                         </div>
@@ -696,6 +748,37 @@ const WorkspaceRequestDetailPage = observer(() => {
                       .filter(([key, value]) => !HIDDEN_FORM_RESPONSE_KEYS.has(key) && formatFormValue(value) !== "—")
                       .map(([key, value]) => {
                         const field = request.form_detail?.fields_detail?.find((item) => item.key === key);
+
+                        if (field?.field_type === "attachment") {
+                          const assetIds = Array.isArray(value)
+                            ? value
+                            : typeof value === "string" && value
+                              ? [value]
+                              : [];
+                          if (assetIds.length === 0) return null;
+                          return (
+                            <div key={key} className="flex items-start justify-between gap-2">
+                              <p className="text-xs text-text-400 shrink-0 pt-0.5">{field?.label || labelFor(key)}</p>
+                              <div className="flex flex-col items-end gap-1">
+                                {assetIds.map((assetId: string, idx: number) => (
+                                  <a
+                                    key={assetId}
+                                    href={getFileURL(`/api/workspaces/${wSlug}/helpdesk/assets/${assetId}/`)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm flex items-center gap-1.5 text-primary hover:underline"
+                                  >
+                                    <Paperclip className="size-3.5 shrink-0" />
+                                    <span className="max-w-[200px] truncate">
+                                      Attachment {assetIds.length > 1 ? idx + 1 : ""}
+                                    </span>
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div key={key} className="flex items-start justify-between gap-2">
                             <p className="text-xs text-text-400 shrink-0 pt-0.5">{field?.label || labelFor(key)}</p>
