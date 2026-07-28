@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { observer } from "mobx-react";
+import { Users } from "lucide-react";
 import { BarChart } from "@plane/propel/charts/bar-chart";
 import type { IHelpdeskAgentChartPoint } from "@plane/types";
 
@@ -40,8 +41,10 @@ export const TopAgentsChart = observer(function TopAgentsChart({ data, isLoading
   if (!chartData.length) {
     return (
       <div className="border-custom-border-100 bg-custom-background-90 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
-        <span className="text-2xl">🏆</span>
-        <p className="text-sm text-custom-text-400">No agent data for this period</p>
+        <div className="bg-custom-background-80 text-custom-text-400 flex size-10 items-center justify-center rounded-full">
+          <Users className="size-5" />
+        </div>
+        <p className="text-xs text-custom-text-300 font-medium">No agent data for this period</p>
       </div>
     );
   }

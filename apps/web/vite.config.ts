@@ -5,7 +5,7 @@ import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
-dotenv.config({ path: path.resolve(__dirname, ".env") });
+dotenv.config({ path: path.resolve(__dirname, ".env"), override: true });
 
 // Expose only vars starting with VITE_
 const viteEnv = Object.keys(process.env)
@@ -15,7 +15,7 @@ const viteEnv = Object.keys(process.env)
     return a;
   }, {});
 
-const backendBase = process.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const backendBase = process.env.VITE_API_BASE_URL || "http://127.0.0.1";
 
 // Vite plugin that manually tunnels SSE connections before http-proxy can buffer them.
 // http-proxy accumulates the entire response body before forwarding, which breaks
@@ -94,9 +94,9 @@ export default defineConfig(() => ({
   server: {
     host: "127.0.0.1",
     proxy: {
-      // Proxy /api/workspaces so cookies are sent same-origin (avoids SameSite=Lax restriction).
+      // Proxy /api so cookies are sent same-origin (avoids SameSite=Lax restriction).
       // /helpdesk/events/ is handled by sseTunnelPlugin above before reaching this proxy.
-      "/api/workspaces": {
+      "/api": {
         target: backendBase,
         changeOrigin: true,
         secure: false,

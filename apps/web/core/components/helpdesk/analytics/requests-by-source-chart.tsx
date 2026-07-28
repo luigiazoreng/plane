@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { observer } from "mobx-react";
+import { PieChart as PieIcon } from "lucide-react";
 import { PieChart } from "@plane/propel/charts/pie-chart";
 import type { IHelpdeskSourceChartPoint } from "@plane/types";
 
@@ -11,15 +12,15 @@ type Props = {
 };
 
 const SOURCE_COLORS: Record<string, string> = {
-  public_form: "#1192E8",
-  internal_form: "#F97316",
+  public_form: "#3B82F6",
+  internal_form: "#8B5CF6",
   unknown: "#64748B",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
   public_form: "Public form",
   internal_form: "Internal form",
-  unknown: "Sem origem",
+  unknown: "Direct / Other",
 };
 
 export const RequestsBySourceChart = observer(function RequestsBySourceChart({ data, isLoading }: Props) {
@@ -53,8 +54,10 @@ export const RequestsBySourceChart = observer(function RequestsBySourceChart({ d
   if (!chartData.length) {
     return (
       <div className="border-custom-border-100 bg-custom-background-90 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
-        <span className="text-2xl">🔍</span>
-        <p className="text-sm text-custom-text-400">No source data for this period</p>
+        <div className="bg-custom-background-80 text-custom-text-400 flex size-10 items-center justify-center rounded-full">
+          <PieIcon className="size-5" />
+        </div>
+        <p className="text-xs text-custom-text-300 font-medium">No source data for this period</p>
       </div>
     );
   }
