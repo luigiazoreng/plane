@@ -506,3 +506,103 @@ class TestPublicHelpdeskForms:
         assert response.status_code == status.HTTP_201_CREATED
         created_request = HelpdeskRequest.objects.get(id=response.data["id"])
         assert created_request.assignees.count() == 0
+
+
+@pytest.fixture
+def make_request(workspace, portal, open_status, create_user):
+    """Factory for helpdesk requests, so priority tests can build a small queue."""
+
+    def _make(title, priority="none", status_obj=None):
+        return HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            title=title,
+            priority=priority,
+            status=status_obj or open_status,
+            created_by=create_user,
+        )
+
+    return _make
+
+
+@pytest.mark.contract
+class TestHelpdeskRequestPriorityAPI:
+    @pytest.mark.django_db
+    def test_priority_defaults_to_none(self, session_client, workspace, make_request):
+        request_obj = make_request("Sem prioridade definida")
+
+        response = session_client.get(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["priority"] == "none"
+
+    @pytest.mark.django_db
+    def test_update_priority(self, session_client, workspace, make_request):
+        request_obj = make_request("Erro 500 na API")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"priority": "urgent"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["priority"] == "urgent"
+        request_obj.refresh_from_db()
+        assert request_obj.priority == "urgent"
+
+    @pytest.mark.django_db
+    def test_rejects_unknown_priority(self, session_client, workspace, make_request):
+        request_obj = make_request("Prioridade inválida")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"priority": "critical"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "priority" in response.data
+        request_obj.refresh_from_db()
+        assert request_obj.priority == "none"
+
+    @pytest.mark.django_db
+    def test_filter_by_priority(self, session_client, workspace, make_request):
+        make_request("Urgente", priority="urgent")
+        make_request("Alta", priority="high")
+        make_request("Baixa", priority="low")
+
+        response = session_client.get(
+            reverse("helpdesk-request", kwargs={"slug": workspace.slug}),
+            {"priority": "urgent,high"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        returned = {item["title"] for item in response.data["results"]}
+        assert returned == {"Urgente", "Alta"}
+
+    @pytest.mark.django_db
+    def test_order_by_priority_uses_severity_not_alphabetical(self, session_client, workspace, make_request):
+        # Alphabetically this would be high < low < none < urgent, which is
+        # meaningless for triage. Severity order must win.
+        make_request("Baixa", priority="low")
+        make_request("Urgente", priority="urgent")
+        make_request("Sem", priority="none")
+        make_request("Media", priority="medium")
+        make_request("Alta", priority="high")
+
+        response = session_client.get(
+            reverse("helpdesk-request", kwargs={"slug": workspace.slug}),
+            {"order_by": "priority"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert [item["priority"] for item in response.data["results"]] == [
+            "urgent",
+            "high",
+            "medium",
+            "low",
+            "none",
+        ]
