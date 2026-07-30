@@ -7,7 +7,7 @@
 import { observer } from "mobx-react";
 import { X } from "lucide-react";
 import type { IHelpdeskForm, IHelpdeskPortal, IHelpdeskRequestFilters, IHelpdeskStatus } from "@plane/types";
-import { hasActiveHelpdeskFilters } from "@/helpers/helpdesk/filters";
+import { hasActiveHelpdeskFilters, HELPDESK_PRIORITIES } from "@/helpers/helpdesk/filters";
 import { useMember } from "@/hooks/store/use-member";
 
 type Props = {
@@ -30,6 +30,7 @@ const GROUP_TITLES: Record<keyof IHelpdeskRequestFilters, string> = {
   portal: "Portal",
   form: "Form",
   source: "Source",
+  priority: "Priority",
   created_at: "Created at",
 };
 
@@ -66,6 +67,8 @@ export const HelpdeskAppliedFilters = observer(function HelpdeskAppliedFilters(p
         return formMap[value] ?? value;
       case "source":
         return SOURCE_LABELS[value] ?? value;
+      case "priority":
+        return HELPDESK_PRIORITIES.find((p) => p.id === value)?.name ?? value;
       case "created_at":
         return value.replace("after:", "After ").replace("before:", "Before ");
       default:

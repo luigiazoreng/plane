@@ -8,7 +8,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHelpdeskSSE, type THelpdeskSSEEvent } from "@/hooks/use-helpdesk-sse";
 import { observer } from "mobx-react";
 import { Link, useParams } from "react-router";
-import type { TIntakeIssueStatus } from "@plane/types";
 import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
 import { Switch } from "@plane/propel/switch";
@@ -52,56 +51,6 @@ function formatFormValue(value: unknown): string {
   return String(value);
 }
 
-function HelpdeskCommentContent({ content }: { content: string }) {
-  if (!content) return null;
-  const parsed = content
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
-  const dividers = [
-    /\n_{3,}\s*From:/i,
-    /\n-{3,}\s*Original\s*-{3,}/i,
-    /\nOn\s+.*?\s+wrote:\s*\n/i,
-    /\nFrom:\s+.*?<.*?>\s*\nDate:\s+/i,
-    /\n-{3,}\s*Forwarded message\s*-{3,}/i,
-  ];
-
-  let splitIndex = -1;
-  for (const regex of dividers) {
-    const match = parsed.match(regex);
-    if (match && match.index !== undefined) {
-      if (splitIndex === -1 || match.index < splitIndex) {
-        splitIndex = match.index;
-      }
-    }
-  }
-
-  if (splitIndex !== -1) {
-    const mainText = parsed.substring(0, splitIndex).trim();
-    const quotedText = parsed.substring(splitIndex).trim();
-    return (
-      <div className="flex flex-col gap-2">
-        {mainText ? <p className="break-words whitespace-pre-wrap">{mainText}</p> : null}
-        <details className="group">
-          <summary className="text-text-400 hover:text-text-200 text-xs cursor-pointer list-none font-medium select-none">
-            <span className="inline-flex items-center gap-1">
-              <span className="rounded border border-subtle bg-surface-1 px-2 py-0.5">...</span>
-            </span>
-          </summary>
-          <div className="text-text-400 text-xs mt-2 border-l-2 border-subtle pl-3 opacity-70">
-            <p className="break-words whitespace-pre-wrap">{quotedText}</p>
-          </div>
-        </details>
-      </div>
-    );
-  }
-
-  return <p className="break-words whitespace-pre-wrap">{parsed}</p>;
-}
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -118,22 +67,15 @@ import {
 import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
 import { CommentAttachments, PendingAttachmentChips } from "@/components/helpdesk/attachments/attachment-chips";
 import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
+import { HelpdeskCommentContent } from "@/components/helpdesk/comment-content";
+import { ForwardToIntakeModal } from "@/components/helpdesk/forward-to-intake-modal";
+import { INTAKE_STATUS_META } from "@/components/helpdesk/intake-status";
 import { ExistingIssuesListModal } from "@/components/core/modals/existing-issues-list-modal";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useProject } from "@/hooks/store/use-project";
 import { IssueIdentifier } from "@/plane-web/components/issues/issue-details/issue-identifier";
-
-const INTAKE_STATUS_META: Record<
-  TIntakeIssueStatus,
-  { label: string; variant: "warning" | "brand" | "success" | "neutral" | "danger" }
-> = {
-  [-2]: { label: "Pending", variant: "warning" },
-  [-1]: { label: "Rejected", variant: "danger" },
-  [1]: { label: "Accepted", variant: "success" },
-  [2]: { label: "Duplicate", variant: "neutral" },
-};
 
 const WorkspaceRequestDetailPage = observer(() => {
   const { workspaceSlug, requestId } = useParams();
@@ -144,12 +86,7 @@ const WorkspaceRequestDetailPage = observer(() => {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
-  // Intake forwarding state
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [forwardTitle, setForwardTitle] = useState("");
-  const [forwardDescription, setForwardDescription] = useState("");
-  const [isForwarding, setIsForwarding] = useState(false);
   const previousAcceptedIssueIdsRef = useRef<string[]>([]);
 
   // A public reply always reaches the customer through both channels; the only
@@ -305,19 +242,10 @@ const WorkspaceRequestDetailPage = observer(() => {
     }
   };
 
-  const handleForwardToIntake = async () => {
-    if (!selectedProjectId || !forwardTitle.trim()) return;
-    setIsForwarding(true);
+  const handleForwardToIntake = async (payload: { project: string; title: string; description?: string }) => {
     try {
-      await helpdeskStore.createRequestIntakeIssue(wSlug, rId, {
-        project: selectedProjectId,
-        title: forwardTitle.trim(),
-        description: forwardDescription.trim() || undefined,
-      });
+      await helpdeskStore.createRequestIntakeIssue(wSlug, rId, payload);
       setIsForwardModalOpen(false);
-      setSelectedProjectId("");
-      setForwardTitle("");
-      setForwardDescription("");
       setToast({
         type: TOAST_TYPE.SUCCESS,
         title: "Forwarded",
@@ -325,8 +253,6 @@ const WorkspaceRequestDetailPage = observer(() => {
       });
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not forward to Intake" });
-    } finally {
-      setIsForwarding(false);
     }
   };
 
@@ -337,15 +263,6 @@ const WorkspaceRequestDetailPage = observer(() => {
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not remove intake link" });
     }
-  };
-
-  // Pre-fill forward form with request title when opening modal
-  const openForwardModal = () => {
-    if (request) {
-      setForwardTitle(request.title);
-      setForwardDescription(request.description || "");
-    }
-    setIsForwardModalOpen(true);
   };
 
   if (requestState.isLoading && !request) {
@@ -794,7 +711,7 @@ const WorkspaceRequestDetailPage = observer(() => {
               <section className="border-b border-subtle p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h2 className="text-xs tracking-wider text-text-400 font-semibold uppercase">Dev pipeline</h2>
-                  <Button variant="secondary" size="sm" onClick={openForwardModal}>
+                  <Button variant="secondary" size="sm" onClick={() => setIsForwardModalOpen(true)}>
                     <span className="flex items-center gap-1.5">
                       <ArrowUpRight className="size-3.5" />
                       Forward
@@ -960,86 +877,15 @@ const WorkspaceRequestDetailPage = observer(() => {
       />
 
       {/* Forward to Intake modal */}
-      {isForwardModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="shadow-xl w-full max-w-md rounded-xl border border-subtle bg-surface-1 p-6">
-            <div className="mb-5">
-              <h2 className="text-base text-text-100 font-semibold">Forward to Intake</h2>
-              <p className="text-sm text-text-400 mt-1">
-                This will create an Intake issue in the selected project for the dev team to review.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="forward-project" className="text-xs text-text-400 mb-1.5 block font-medium">
-                  Project
-                </label>
-                <select
-                  id="forward-project"
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
-                >
-                  <option value="">Select a project…</option>
-                  {(workspaceProjectIds || []).map((projectId) => {
-                    const project = getProjectById(projectId);
-                    if (!project) return null;
-                    return (
-                      <option key={projectId} value={projectId}>
-                        {project.identifier} — {project.name}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="forward-title" className="text-xs text-text-400 mb-1.5 block font-medium">
-                  Title
-                </label>
-                <input
-                  id="forward-title"
-                  value={forwardTitle}
-                  onChange={(e) => setForwardTitle(e.target.value)}
-                  placeholder="Issue title for the dev team"
-                  className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="forward-description" className="text-xs text-text-400 mb-1.5 block font-medium">
-                  Description (optional)
-                </label>
-                <textarea
-                  id="forward-description"
-                  value={forwardDescription}
-                  onChange={(e) => setForwardDescription(e.target.value)}
-                  placeholder="Additional context for the dev team…"
-                  className="text-sm text-text-100 focus:border-primary min-h-20 w-full resize-none rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-3">
-              <Button variant="ghost" size="base" onClick={() => setIsForwardModalOpen(false)} disabled={isForwarding}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="base"
-                onClick={handleForwardToIntake}
-                disabled={isForwarding || !selectedProjectId || !forwardTitle.trim()}
-              >
-                <span className="flex items-center gap-2">
-                  <ArrowUpRight className="size-4" />
-                  {isForwarding ? "Forwarding…" : "Forward to Intake"}
-                </span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ForwardToIntakeModal
+        isOpen={isForwardModalOpen}
+        onClose={() => setIsForwardModalOpen(false)}
+        projectIds={workspaceProjectIds || []}
+        getProjectById={getProjectById}
+        defaultTitle={request.title}
+        defaultDescription={request.description || ""}
+        onSubmit={handleForwardToIntake}
+      />
     </>
   );
 });
