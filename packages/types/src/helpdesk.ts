@@ -151,6 +151,7 @@ export interface IHelpdeskRequest {
   assignees: string[];
   start_date: string | null;
   target_date: string | null;
+  priority?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -180,8 +181,14 @@ export interface IHelpdeskAttachment {
   name: string;
   type: string;
   size: number;
+  asset_id?: string;
   /** API path that 302s to a presigned download; prefix with getFileURL(). */
   asset_url: string | null;
+  attributes?: {
+    name?: string;
+    type?: string;
+    size?: number;
+  };
   created_at: string;
 }
 
