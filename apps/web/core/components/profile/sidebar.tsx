@@ -177,7 +177,7 @@ export const ProfileSidebar = observer(function ProfileSidebar(props: TProfileSi
                                     completedIssuePercentage <= 35
                                       ? "bg-danger-subtle text-danger-primary"
                                       : completedIssuePercentage <= 70
-                                        ? "bg-yellow-500/10 text-yellow-500"
+                                        ? "bg-warning-subtle text-warning-primary"
                                         : "bg-success-subtle text-success-primary"
                                   }`}
                                 >

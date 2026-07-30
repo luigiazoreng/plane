@@ -22,13 +22,13 @@ export const AnalyticsFilters = observer(function AnalyticsFilters({ filters, po
     <div className="flex items-center gap-2">
       {/* Date Filter */}
       <div className="relative flex items-center">
-        <div className="text-custom-text-300 pointer-events-none absolute left-2.5 flex items-center">
+        <div className="text-tertiary pointer-events-none absolute left-2.5 flex items-center">
           <Calendar className="size-3.5" />
         </div>
         <select
           value={filters.date_filter}
           onChange={(e) => onChange({ ...filters, date_filter: e.target.value as THelpdeskDateFilter })}
-          className="border-custom-border-200 bg-custom-background-100 text-custom-text-100 hover:bg-custom-background-90 hover:border-custom-border-300 focus:ring-custom-border-300 text-xs h-7 cursor-pointer appearance-none rounded-md border pr-7 pl-8 font-medium transition-colors focus:ring-1 focus:outline-none"
+          className="border-subtle bg-surface-1 text-primary hover:bg-layer-1 hover:border-strong focus:ring-strong text-xs h-7 cursor-pointer appearance-none rounded-md border pr-7 pl-8 font-medium transition-colors focus:ring-1 focus:outline-none"
         >
           {DATE_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -36,7 +36,7 @@ export const AnalyticsFilters = observer(function AnalyticsFilters({ filters, po
             </option>
           ))}
         </select>
-        <div className="text-custom-text-300 pointer-events-none absolute right-2 flex items-center">
+        <div className="text-tertiary pointer-events-none absolute right-2 flex items-center">
           <ChevronDown className="size-3" />
         </div>
       </div>
@@ -44,13 +44,13 @@ export const AnalyticsFilters = observer(function AnalyticsFilters({ filters, po
       {/* Portal Filter */}
       {portals.length > 1 && (
         <div className="relative flex items-center">
-          <div className="text-custom-text-300 pointer-events-none absolute left-2.5 flex items-center">
+          <div className="text-tertiary pointer-events-none absolute left-2.5 flex items-center">
             <Globe className="size-3.5" />
           </div>
           <select
             value={filters.portal_id ?? ""}
             onChange={(e) => onChange({ ...filters, portal_id: e.target.value || undefined })}
-            className="border-custom-border-200 bg-custom-background-100 text-custom-text-100 hover:bg-custom-background-90 hover:border-custom-border-300 focus:ring-custom-border-300 text-xs h-7 cursor-pointer appearance-none rounded-md border pr-7 pl-8 font-medium transition-colors focus:ring-1 focus:outline-none"
+            className="border-subtle bg-surface-1 text-primary hover:bg-layer-1 hover:border-strong focus:ring-strong text-xs h-7 cursor-pointer appearance-none rounded-md border pr-7 pl-8 font-medium transition-colors focus:ring-1 focus:outline-none"
           >
             <option value="">All portals</option>
             {portals.map((portal) => (
@@ -59,7 +59,7 @@ export const AnalyticsFilters = observer(function AnalyticsFilters({ filters, po
               </option>
             ))}
           </select>
-          <div className="text-custom-text-300 pointer-events-none absolute right-2 flex items-center">
+          <div className="text-tertiary pointer-events-none absolute right-2 flex items-center">
             <ChevronDown className="size-3" />
           </div>
         </div>

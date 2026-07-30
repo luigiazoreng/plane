@@ -87,12 +87,12 @@ function HelpdeskCommentContent({ content }: { content: string }) {
       <div className="flex flex-col gap-2">
         {mainText ? <p className="break-words whitespace-pre-wrap">{mainText}</p> : null}
         <details className="group">
-          <summary className="text-text-400 hover:text-text-200 text-xs cursor-pointer list-none font-medium select-none">
+          <summary className="text-placeholder hover:text-secondary text-xs cursor-pointer list-none font-medium select-none">
             <span className="inline-flex items-center gap-1">
               <span className="rounded border border-subtle bg-surface-1 px-2 py-0.5">...</span>
             </span>
           </summary>
-          <div className="text-text-400 text-xs mt-2 border-l-2 border-subtle pl-3 opacity-70">
+          <div className="text-placeholder text-xs mt-2 border-l-2 border-subtle pl-3 opacity-70">
             <p className="break-words whitespace-pre-wrap">{quotedText}</p>
           </div>
         </details>
@@ -351,7 +351,7 @@ const WorkspaceRequestDetailPage = observer(() => {
   if (requestState.isLoading && !request) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2" />
+        <div className="border-accent-subtle h-8 w-8 animate-spin rounded-full border-b-2" />
       </div>
     );
   }
@@ -366,14 +366,14 @@ const WorkspaceRequestDetailPage = observer(() => {
                 <ArrowLeft className="size-4" />
               </Link>
               <div>
-                <h3 className="text-sm text-text-100 font-semibold">Request not found</h3>
-                <p className="text-xs text-text-400">The selected request is unavailable or was removed.</p>
+                <h3 className="text-sm text-primary font-semibold">Request not found</h3>
+                <p className="text-xs text-placeholder">The selected request is unavailable or was removed.</p>
               </div>
             </div>
           }
         />
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-text-400">No request data available.</p>
+          <p className="text-sm text-placeholder">No request data available.</p>
         </div>
       </div>
     );
@@ -395,7 +395,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                     {request.display_id && (
                       <span className="font-mono shrink-0 text-11 text-tertiary">{request.display_id}</span>
                     )}
-                    <h1 className="text-sm text-text-100 min-w-0 truncate font-semibold">{request.title}</h1>
+                    <h1 className="text-sm text-primary min-w-0 truncate font-semibold">{request.title}</h1>
                     {request.status && statusMap[request.status] && (
                       <span
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-11 font-medium"
@@ -412,7 +412,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-text-400 mt-0.5 truncate">
+                  <p className="text-xs text-placeholder mt-0.5 truncate">
                     {request.contact_email || "Authenticated customer"} ·{" "}
                     {request.source === "public_form" ? "Public form" : "Internal form"} ·{" "}
                     {new Date(request.created_at).toLocaleString()}
@@ -433,9 +433,9 @@ const WorkspaceRequestDetailPage = observer(() => {
           {/* Main content — conversation (70%) */}
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center gap-2 border-b border-subtle px-4 py-3">
-              <MessageCircleMore className="text-text-300 size-4" />
-              <h2 className="text-sm text-text-100 font-semibold">Conversation</h2>
-              <span className="text-xs text-text-400">· replies and internal notes</span>
+              <MessageCircleMore className="text-tertiary size-4" />
+              <h2 className="text-sm text-primary font-semibold">Conversation</h2>
+              <span className="text-xs text-placeholder">· replies and internal notes</span>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-5">
@@ -443,31 +443,31 @@ const WorkspaceRequestDetailPage = observer(() => {
                 {/* Original customer message — always shown as first bubble */}
                 <div className="shadow-sm rounded-xl border border-subtle bg-surface-2 p-4">
                   <div className="mb-3 flex items-center gap-2">
-                    <div className="text-text-300 flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-1">
+                    <div className="text-tertiary flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-1">
                       <MessageSquareText className="size-3.5" />
                     </div>
-                    <span className="text-sm text-text-100 font-medium">{request.contact_email || "Customer"}</span>
+                    <span className="text-sm text-primary font-medium">{request.contact_email || "Customer"}</span>
                     <Badge variant="neutral" size="sm">
                       Original request
                     </Badge>
-                    <span className="text-text-400 ml-auto text-11">
+                    <span className="text-placeholder ml-auto text-11">
                       {new Date(request.created_at).toLocaleString()}
                     </span>
                   </div>
                   {request.description ? (
                     <div
-                      className="prose-sm prose-invert text-sm text-text-200 max-w-none prose [&_li]:my-0.5 [&_ol]:my-1 [&_p]:my-1 [&_ul]:my-1"
+                      className="prose-sm prose-invert text-sm text-secondary max-w-none prose [&_li]:my-0.5 [&_ol]:my-1 [&_p]:my-1 [&_ul]:my-1"
                       // eslint-disable-next-line react/no-danger
                       dangerouslySetInnerHTML={{ __html: request.description }}
                     />
                   ) : (
-                    <p className="text-sm text-text-400 italic">No description provided.</p>
+                    <p className="text-sm text-placeholder italic">No description provided.</p>
                   )}
                 </div>
 
                 {commentsState.isLoading && comments.length === 0 ? (
                   <div className="flex justify-center py-10">
-                    <div className="border-primary h-7 w-7 animate-spin rounded-full border-b-2" />
+                    <div className="border-accent-subtle h-7 w-7 animate-spin rounded-full border-b-2" />
                   </div>
                 ) : (
                   comments.map((comment) => {
@@ -480,7 +480,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                     // all derive from this instead.
                     const authorKind = comment.actor ? "agent" : comment.customer ? "customer" : "unattributed";
                     const isAgent = authorKind === "agent";
-                    const avatarClass = isAgent ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-300";
+                    const avatarClass = isAgent ? "bg-accent-subtle text-accent-primary" : "bg-surface-2 text-tertiary";
                     // actor_detail/customer_detail may be absent on comments
                     // cached before the API started sending them, so both the
                     // name and the avatar fall back to the previous behaviour.
@@ -498,8 +498,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                     return (
                       <div key={comment.id} className={`flex gap-3 ${isAgent ? "flex-row-reverse" : "flex-row"}`}>
                         <div
-                          className={`mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full ${comment.is_internal ? "text-blue-400" : avatarClass}`}
-                          style={comment.is_internal ? { backgroundColor: "rgba(59,130,246,0.15)" } : undefined}
+                          className={`mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full ${comment.is_internal ? "bg-warning-subtle text-warning-primary" : avatarClass}`}
                         >
                           {avatarUrl ? (
                             <img src={avatarUrl} alt={authorName} className="size-full object-cover" />
@@ -515,7 +514,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                         </div>
                         <div className={`flex max-w-[80%] min-w-0 flex-col ${isAgent ? "items-end" : "items-start"}`}>
                           <div className={`mb-1.5 flex items-center gap-2 ${isAgent ? "flex-row-reverse" : ""}`}>
-                            <span className="text-sm text-text-100 font-medium">{authorName}</span>
+                            <span className="text-sm text-primary font-medium">{authorName}</span>
                             {comment.is_internal && (
                               <Badge variant="neutral" size="sm">
                                 Internal note
@@ -541,12 +540,12 @@ const WorkspaceRequestDetailPage = observer(() => {
                                 ⏳ Pending
                               </Badge>
                             )}
-                            <span className="text-text-400 text-11">
+                            <span className="text-placeholder text-11">
                               {new Date(comment.created_at).toLocaleString()}
                             </span>
                           </div>
                           <div
-                            className={`text-sm shadow-sm rounded-xl border px-4 py-3 ${comment.is_internal ? "" : "text-text-100 border-subtle bg-surface-2"}`}
+                            className={`text-sm shadow-sm rounded-xl border px-4 py-3 ${comment.is_internal ? "" : "text-primary border-subtle bg-surface-2"}`}
                             style={
                               comment.is_internal
                                 ? {
@@ -572,7 +571,7 @@ const WorkspaceRequestDetailPage = observer(() => {
               <div className="mx-auto max-w-3xl">
                 <div
                   className={`rounded-lg border bg-surface-2 transition-colors focus-within:border-strong ${
-                    isInternalNote ? "border-amber-500/30 bg-amber-500/5" : "border-subtle"
+                    isInternalNote ? "border-warning-subtle bg-warning-subtle" : "border-subtle"
                   }`}
                 >
                   <textarea
@@ -581,7 +580,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                     placeholder={
                       isInternalNote ? "Capture context for the team..." : "Write a reply to the customer..."
                     }
-                    className="text-sm text-text-100 min-h-[72px] w-full resize-none bg-transparent p-3 outline-none"
+                    className="text-sm text-primary min-h-[72px] w-full resize-none bg-transparent p-3 outline-none"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                         e.preventDefault();
@@ -602,8 +601,8 @@ const WorkspaceRequestDetailPage = observer(() => {
                         aria-pressed={isInternalNote}
                         className={`text-xs flex items-center gap-2 rounded-md border px-2 py-1 transition-colors ${
                           isInternalNote
-                            ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
-                            : "text-text-300 hover:text-text-100 border-subtle bg-surface-2 hover:bg-layer-1"
+                            ? "border-warning-subtle bg-warning-subtle text-warning-primary"
+                            : "text-tertiary hover:text-primary border-subtle bg-surface-2 hover:bg-layer-1"
                         }`}
                       >
                         <Lock className="size-3.5" />
@@ -613,7 +612,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                       <AttachmentPicker onSelect={attachments.upload} disabled={submittingComment} />
                     </div>
                     <div className="flex items-center gap-2">
-                      <p className="text-text-400 hidden text-11 sm:block">Ctrl/Cmd + Enter</p>
+                      <p className="text-placeholder hidden text-11 sm:block">Ctrl/Cmd + Enter</p>
                       <Button
                         variant="primary"
                         size="sm"
@@ -637,10 +636,10 @@ const WorkspaceRequestDetailPage = observer(() => {
             <div className="flex flex-col">
               {/* Request details */}
               <section className="border-b border-subtle p-4">
-                <h2 className="text-xs tracking-wider text-text-400 mb-3 font-semibold uppercase">Request details</h2>
+                <h2 className="text-xs tracking-wider text-placeholder mb-3 font-semibold uppercase">Request details</h2>
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-text-400 shrink-0">Status</p>
+                    <p className="text-xs text-placeholder shrink-0">Status</p>
                     <select
                       value={request.status ?? ""}
                       onChange={(e) => helpdeskStore.updateRequest(wSlug, rId, { status: e.target.value })}
@@ -664,23 +663,23 @@ const WorkspaceRequestDetailPage = observer(() => {
                     </select>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-text-400 shrink-0">Contact</p>
-                    <p className="text-sm text-text-100 truncate">{request.contact_email || "Authenticated"}</p>
+                    <p className="text-xs text-placeholder shrink-0">Contact</p>
+                    <p className="text-sm text-primary truncate">{request.contact_email || "Authenticated"}</p>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-text-400 shrink-0">Source</p>
-                    <p className="text-sm text-text-100">
+                    <p className="text-xs text-placeholder shrink-0">Source</p>
+                    <p className="text-sm text-primary">
                       {request.source === "public_form" ? "Public form" : "Internal form"}
                     </p>
                   </div>
                   {request.form_detail ? (
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-text-400 shrink-0">Form</p>
-                      <p className="text-sm text-text-100 truncate">{request.form_detail.name}</p>
+                      <p className="text-xs text-placeholder shrink-0">Form</p>
+                      <p className="text-sm text-primary truncate">{request.form_detail.name}</p>
                     </div>
                   ) : null}
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-text-400 shrink-0">Assignees</p>
+                    <p className="text-xs text-placeholder shrink-0">Assignees</p>
                     <MemberDropdown
                       value={request.assignees}
                       onChange={(assignees: string[]) => helpdeskStore.updateRequest(wSlug, rId, { assignees })}
@@ -691,7 +690,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                     />
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-text-400 shrink-0">Start date</p>
+                    <p className="text-xs text-placeholder shrink-0">Start date</p>
                     <DateDropdown
                       placeholder="Add start date"
                       value={request.start_date}
@@ -704,13 +703,13 @@ const WorkspaceRequestDetailPage = observer(() => {
                       buttonVariant="transparent-with-text"
                       className="group w-full grow"
                       buttonContainerClassName="w-full text-right h-7"
-                      buttonClassName={`text-sm ${request.start_date ? "text-text-100" : "text-text-400"}`}
+                      buttonClassName={`text-sm ${request.start_date ? "text-primary" : "text-placeholder"}`}
                       hideIcon
                       clearIconClassName="h-3 w-3 hidden group-hover:inline"
                     />
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-text-400 shrink-0">Due date</p>
+                    <p className="text-xs text-placeholder shrink-0">Due date</p>
                     <DateDropdown
                       placeholder="Add due date"
                       value={request.target_date}
@@ -723,14 +722,14 @@ const WorkspaceRequestDetailPage = observer(() => {
                       buttonVariant="transparent-with-text"
                       className="group w-full grow"
                       buttonContainerClassName="w-full text-right h-7"
-                      buttonClassName={`text-sm ${request.target_date ? "text-text-100" : "text-text-400"}`}
+                      buttonClassName={`text-sm ${request.target_date ? "text-primary" : "text-placeholder"}`}
                       hideIcon
                       clearIconClassName="h-3 w-3 hidden group-hover:inline"
                     />
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-text-400 shrink-0">Updated</p>
-                    <p className="text-sm text-text-100 truncate">
+                    <p className="text-xs text-placeholder shrink-0">Updated</p>
+                    <p className="text-sm text-primary truncate">
                       {new Date(request.updated_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -740,7 +739,7 @@ const WorkspaceRequestDetailPage = observer(() => {
               {/* Form responses */}
               {Object.keys(request.form_responses || {}).filter((k) => !HIDDEN_FORM_RESPONSE_KEYS.has(k)).length > 0 ? (
                 <section className="border-b border-subtle p-4">
-                  <h2 className="text-xs tracking-wider text-text-400 mb-3 font-semibold uppercase">
+                  <h2 className="text-xs tracking-wider text-placeholder mb-3 font-semibold uppercase">
                     Detalhes do formulário
                   </h2>
                   <div className="space-y-2.5">
@@ -758,7 +757,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                           if (assetIds.length === 0) return null;
                           return (
                             <div key={key} className="flex items-start justify-between gap-2">
-                              <p className="text-xs text-text-400 shrink-0 pt-0.5">{field?.label || labelFor(key)}</p>
+                              <p className="text-xs text-placeholder shrink-0 pt-0.5">{field?.label || labelFor(key)}</p>
                               <div className="flex flex-col items-end gap-1">
                                 {assetIds.map((assetId: string, idx: number) => (
                                   <a
@@ -781,8 +780,8 @@ const WorkspaceRequestDetailPage = observer(() => {
 
                         return (
                           <div key={key} className="flex items-start justify-between gap-2">
-                            <p className="text-xs text-text-400 shrink-0 pt-0.5">{field?.label || labelFor(key)}</p>
-                            <p className="text-sm text-text-100 text-right break-all">{formatFormValue(value)}</p>
+                            <p className="text-xs text-placeholder shrink-0 pt-0.5">{field?.label || labelFor(key)}</p>
+                            <p className="text-sm text-primary text-right break-all">{formatFormValue(value)}</p>
                           </div>
                         );
                       })}
@@ -793,7 +792,7 @@ const WorkspaceRequestDetailPage = observer(() => {
               {/* Dev pipeline — Intake links */}
               <section className="border-b border-subtle p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h2 className="text-xs tracking-wider text-text-400 font-semibold uppercase">Dev pipeline</h2>
+                  <h2 className="text-xs tracking-wider text-placeholder font-semibold uppercase">Dev pipeline</h2>
                   <Button variant="secondary" size="sm" onClick={openForwardModal}>
                     <span className="flex items-center gap-1.5">
                       <ArrowUpRight className="size-3.5" />
@@ -804,10 +803,10 @@ const WorkspaceRequestDetailPage = observer(() => {
 
                 {intakeLinksState.isLoading && intakeLinks.length === 0 ? (
                   <div className="flex justify-center py-4">
-                    <div className="border-primary h-6 w-6 animate-spin rounded-full border-b-2" />
+                    <div className="border-accent-subtle h-6 w-6 animate-spin rounded-full border-b-2" />
                   </div>
                 ) : intakeLinks.length === 0 ? (
-                  <p className="text-xs text-text-400">No intake issues yet. Forward to create one.</p>
+                  <p className="text-xs text-placeholder">No intake issues yet. Forward to create one.</p>
                 ) : (
                   <div className="space-y-1">
                     {intakeLinks.map((link) => {
@@ -825,11 +824,11 @@ const WorkspaceRequestDetailPage = observer(() => {
                             <Link to={intakeUrl} className="min-w-0 flex-1 hover:text-primary">
                               <div className="flex items-center gap-1.5">
                                 {identifier ? (
-                                  <span className="text-text-400 rounded bg-surface-1 px-1 py-0.5 text-11 font-semibold">
+                                  <span className="text-placeholder rounded bg-surface-1 px-1 py-0.5 text-11 font-semibold">
                                     {identifier}
                                   </span>
                                 ) : null}
-                                <p className="text-sm text-text-100 truncate font-medium">
+                                <p className="text-sm text-primary truncate font-medium">
                                   {project?.name || link.forwarded_to_project}
                                 </p>
                               </div>
@@ -851,7 +850,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                             <button
                               type="button"
                               onClick={() => handleUnlinkIntakeIssue(link.id)}
-                              className="text-text-300 hover:bg-red-500/10 hover:text-red-500 shrink-0 rounded p-0.5 opacity-0 transition-all group-hover:opacity-100"
+                              className="text-tertiary hover:bg-danger-subtle hover:text-danger-primary shrink-0 rounded p-0.5 opacity-0 transition-all group-hover:opacity-100"
                               title="Remove intake link"
                             >
                               <X className="size-3.5" />
@@ -867,7 +866,7 @@ const WorkspaceRequestDetailPage = observer(() => {
               {/* Linked issues */}
               <section className="p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h2 className="text-xs tracking-wider text-text-400 font-semibold uppercase">Linked issues</h2>
+                  <h2 className="text-xs tracking-wider text-placeholder font-semibold uppercase">Linked issues</h2>
                   <Button variant="secondary" size="sm" onClick={() => setIsIssueModalOpen(true)}>
                     <span className="flex items-center gap-1.5">
                       <Plus className="size-3.5" />
@@ -878,10 +877,10 @@ const WorkspaceRequestDetailPage = observer(() => {
 
                 {linkedIssuesState.isLoading && linkedIssues.length === 0 ? (
                   <div className="flex justify-center py-4">
-                    <div className="border-primary h-6 w-6 animate-spin rounded-full border-b-2" />
+                    <div className="border-accent-subtle h-6 w-6 animate-spin rounded-full border-b-2" />
                   </div>
                 ) : linkedIssues.length === 0 ? (
-                  <p className="text-xs text-text-400">No linked issues yet.</p>
+                  <p className="text-xs text-placeholder">No linked issues yet.</p>
                 ) : (
                   <div className="space-y-1">
                     {linkedIssues.map((requestIssue) => {
@@ -920,10 +919,10 @@ const WorkspaceRequestDetailPage = observer(() => {
                                   {isUnavailable ? "Issue unavailable" : "Linked issue"}
                                 </Badge>
                               )}
-                              <p className="text-sm text-text-100 mt-1 truncate font-medium">
+                              <p className="text-sm text-primary mt-1 truncate font-medium">
                                 {issue?.name || requestIssue.issue}
                               </p>
-                              <p className="text-text-400 mt-0.5 text-11">
+                              <p className="text-placeholder mt-0.5 text-11">
                                 {isUnavailable
                                   ? "This issue could not be loaded."
                                   : `Linked ${new Date(requestIssue.created_at).toLocaleDateString()}`}
@@ -932,7 +931,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                             <button
                               type="button"
                               onClick={() => handleUnlinkIssue(requestIssue.id)}
-                              className="text-text-300 hover:bg-red-500/10 hover:text-red-500 shrink-0 rounded p-0.5 opacity-0 transition-all group-hover:opacity-100"
+                              className="text-tertiary hover:bg-danger-subtle hover:text-danger-primary shrink-0 rounded p-0.5 opacity-0 transition-all group-hover:opacity-100"
                               title="Unlink issue"
                             >
                               <X className="size-3.5" />
@@ -964,22 +963,22 @@ const WorkspaceRequestDetailPage = observer(() => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="shadow-xl w-full max-w-md rounded-xl border border-subtle bg-surface-1 p-6">
             <div className="mb-5">
-              <h2 className="text-base text-text-100 font-semibold">Forward to Intake</h2>
-              <p className="text-sm text-text-400 mt-1">
+              <h2 className="text-base text-primary font-semibold">Forward to Intake</h2>
+              <p className="text-sm text-placeholder mt-1">
                 This will create an Intake issue in the selected project for the dev team to review.
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="forward-project" className="text-xs text-text-400 mb-1.5 block font-medium">
+                <label htmlFor="forward-project" className="text-xs text-placeholder mb-1.5 block font-medium">
                   Project
                 </label>
                 <select
                   id="forward-project"
                   value={selectedProjectId}
                   onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
+                  className="text-sm text-primary focus:border-accent-subtle w-full rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
                 >
                   <option value="">Select a project…</option>
                   {(workspaceProjectIds || []).map((projectId) => {
@@ -995,7 +994,7 @@ const WorkspaceRequestDetailPage = observer(() => {
               </div>
 
               <div>
-                <label htmlFor="forward-title" className="text-xs text-text-400 mb-1.5 block font-medium">
+                <label htmlFor="forward-title" className="text-xs text-placeholder mb-1.5 block font-medium">
                   Title
                 </label>
                 <input
@@ -1003,12 +1002,12 @@ const WorkspaceRequestDetailPage = observer(() => {
                   value={forwardTitle}
                   onChange={(e) => setForwardTitle(e.target.value)}
                   placeholder="Issue title for the dev team"
-                  className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
+                  className="text-sm text-primary focus:border-accent-subtle w-full rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
                 />
               </div>
 
               <div>
-                <label htmlFor="forward-description" className="text-xs text-text-400 mb-1.5 block font-medium">
+                <label htmlFor="forward-description" className="text-xs text-placeholder mb-1.5 block font-medium">
                   Description (optional)
                 </label>
                 <textarea
@@ -1016,7 +1015,7 @@ const WorkspaceRequestDetailPage = observer(() => {
                   value={forwardDescription}
                   onChange={(e) => setForwardDescription(e.target.value)}
                   placeholder="Additional context for the dev team…"
-                  className="text-sm text-text-100 focus:border-primary min-h-20 w-full resize-none rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
+                  className="text-sm text-primary focus:border-accent-subtle min-h-20 w-full resize-none rounded-md border border-subtle bg-surface-2 px-3 py-2 transition-colors outline-none"
                 />
               </div>
             </div>

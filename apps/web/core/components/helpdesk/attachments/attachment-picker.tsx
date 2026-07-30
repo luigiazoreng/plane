@@ -42,7 +42,7 @@ export const AttachmentPicker = ({ onSelect, disabled = false, title = "Anexar a
         aria-label={title}
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
-        className="text-text-300 hover:bg-layer-1 hover:text-text-100 flex size-7 items-center justify-center rounded-md border border-subtle bg-surface-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        className="text-tertiary hover:bg-layer-1 hover:text-primary flex size-7 items-center justify-center rounded-md border border-subtle bg-surface-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Paperclip className="size-3.5" />
       </button>

@@ -22,7 +22,7 @@ type KPICardProps = {
 };
 
 const KPICard = ({ title, value, icon: Icon, iconBgColor, iconTextColor, pctChange, suffix }: KPICardProps) => (
-  <div className="border-custom-border-200 bg-custom-background-100 hover:border-custom-border-300 group hover:shadow-sm flex flex-col justify-between gap-4 rounded-xl border p-4.5 transition-all duration-200">
+  <div className="border-subtle bg-surface-1 hover:border-strong group hover:shadow-sm flex flex-col justify-between gap-4 rounded-xl border p-4.5 transition-all duration-200">
     <div className="flex items-start justify-between gap-2">
       <div className="flex items-center gap-2.5">
         <div
@@ -34,15 +34,15 @@ const KPICard = ({ title, value, icon: Icon, iconBgColor, iconTextColor, pctChan
         >
           <Icon className="size-4" />
         </div>
-        <span className="text-xs text-custom-text-300 font-medium">{title}</span>
+        <span className="text-xs text-tertiary font-medium">{title}</span>
       </div>
       {pctChange !== null && pctChange !== undefined && (
         <span
           className={cn(
             "text-xs flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold transition-colors",
             pctChange >= 0
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+              ? "bg-success-subtle text-success-primary"
+              : "bg-danger-subtle text-danger-primary"
           )}
         >
           {pctChange >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
@@ -52,25 +52,25 @@ const KPICard = ({ title, value, icon: Icon, iconBgColor, iconTextColor, pctChan
     </div>
 
     <div className="flex items-baseline gap-1.5 pt-1">
-      <span className="text-2xl text-custom-text-100 font-bold tracking-tight">
+      <span className="text-2xl text-primary font-bold tracking-tight">
         {value === null || value === undefined ? "—" : value}
       </span>
       {suffix && value !== null && value !== undefined && (
-        <span className="text-xs text-custom-text-300 font-medium">{suffix}</span>
+        <span className="text-xs text-tertiary font-medium">{suffix}</span>
       )}
     </div>
   </div>
 );
 
 const KPICardSkeleton = () => (
-  <div className="border-custom-border-200 bg-custom-background-100 flex animate-pulse flex-col justify-between gap-4 rounded-xl border p-4.5">
+  <div className="border-subtle bg-surface-1 flex animate-pulse flex-col justify-between gap-4 rounded-xl border p-4.5">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2.5">
-        <div className="bg-custom-background-80 size-8 rounded-lg" />
-        <div className="bg-custom-background-80 h-3 w-20 rounded" />
+        <div className="bg-layer-2 size-8 rounded-lg" />
+        <div className="bg-layer-2 h-3 w-20 rounded" />
       </div>
     </div>
-    <div className="bg-custom-background-80 h-7 w-16 rounded-md" />
+    <div className="bg-layer-2 h-7 w-16 rounded-md" />
   </div>
 );
 
@@ -92,22 +92,22 @@ export const KpiCards = observer(function KpiCards({ kpis, isLoading }: Props) {
         value={kpis.total_requests.current}
         pctChange={kpis.total_requests.pct_change}
         icon={Inbox}
-        iconBgColor="bg-blue-500/10"
-        iconTextColor="text-blue-600 dark:text-blue-400"
+        iconBgColor="bg-accent-subtle"
+        iconTextColor="text-accent-primary"
       />
       <KPICard
         title="Open"
         value={kpis.open_requests.current}
         icon={Clock}
-        iconBgColor="bg-orange-500/10"
-        iconTextColor="text-orange-600 dark:text-orange-400"
+        iconBgColor="bg-warning-subtle"
+        iconTextColor="text-warning-primary"
       />
       <KPICard
         title="Resolved"
         value={kpis.resolved_requests.current}
         icon={CheckCircle2}
-        iconBgColor="bg-emerald-500/10"
-        iconTextColor="text-emerald-600 dark:text-emerald-400"
+        iconBgColor="bg-success-subtle"
+        iconTextColor="text-success-primary"
       />
       <KPICard
         title="Avg first response"
@@ -118,8 +118,8 @@ export const KpiCards = observer(function KpiCards({ kpis, isLoading }: Props) {
         }
         suffix="hours"
         icon={Zap}
-        iconBgColor="bg-amber-500/10"
-        iconTextColor="text-amber-600 dark:text-amber-400"
+        iconBgColor="bg-warning-subtle"
+        iconTextColor="text-warning-primary"
       />
       <KPICard
         title="Avg resolution"
@@ -130,8 +130,8 @@ export const KpiCards = observer(function KpiCards({ kpis, isLoading }: Props) {
         }
         suffix="hours"
         icon={Timer}
-        iconBgColor="bg-purple-500/10"
-        iconTextColor="text-purple-600 dark:text-purple-400"
+        iconBgColor="bg-label-indigo-bg"
+        iconTextColor="text-label-indigo-text"
       />
     </div>
   );

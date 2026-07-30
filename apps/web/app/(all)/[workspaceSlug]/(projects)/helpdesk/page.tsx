@@ -351,19 +351,19 @@ const WorkspaceHelpdeskPage = observer(() => {
         header={
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="bg-custom-sidebar-accent/15 text-custom-sidebar-accent flex size-6 shrink-0 items-center justify-center rounded-md">
+              <div className="bg-accent-subtle text-accent-primary flex size-6 shrink-0 items-center justify-center rounded-md">
                 <Headset className="size-3.5" />
               </div>
-              <span className="text-sm text-text-100 font-semibold">Helpdesk</span>
+              <span className="text-sm text-primary font-semibold">Helpdesk</span>
               <div className="hidden items-center gap-1.5 md:flex">
                 <span className="text-13 text-tertiary">·</span>
                 <span className="rounded-md bg-layer-1 px-2 py-0.5 text-12 text-secondary">
                   {requests.length < totalRequests ? `${requests.length} / ${totalRequests}` : `${totalRequests}`} total
                 </span>
-                <span className="bg-orange-500/10 text-orange-500 rounded-md px-2 py-0.5 text-12">
+                <span className="bg-warning-subtle text-warning-primary rounded-md px-2 py-0.5 text-12">
                   {activeRequests} active
                 </span>
-                <span className="bg-emerald-500/10 text-emerald-500 rounded-md px-2 py-0.5 text-12">
+                <span className="bg-success-subtle text-success-primary rounded-md px-2 py-0.5 text-12">
                   {resolvedRequests} resolved
                 </span>
               </div>
@@ -397,7 +397,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                   className={cn(
                     "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
                     layout === "list"
-                      ? "bg-accent-strong shadow-sm text-white"
+                      ? "bg-accent-primary shadow-sm text-white"
                       : "text-secondary hover:bg-layer-2 hover:text-primary"
                   )}
                 >
@@ -410,7 +410,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                   className={cn(
                     "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
                     layout === "kanban"
-                      ? "bg-accent-strong shadow-sm text-white"
+                      ? "bg-accent-primary shadow-sm text-white"
                       : "text-secondary hover:bg-layer-2 hover:text-primary"
                   )}
                 >
@@ -556,7 +556,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                           type="button"
                           onClick={() => handleAddRequest(statusId)}
                           disabled={!newRequestTitle.trim() || !defaultPortalId}
-                          className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                          className="bg-accent-primary rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                         >
                           Add
                         </button>
@@ -570,7 +570,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                         >
                           Cancel
                         </button>
-                        {!defaultPortalId && <span className="text-red-400 text-11">No portal configured</span>}
+                        {!defaultPortalId && <span className="text-danger-primary text-11">No portal configured</span>}
                       </div>
                     </div>
                   );
@@ -730,7 +730,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                               type="button"
                               onClick={() => handleAddRequest(group.id)}
                               disabled={!newRequestTitle.trim() || !defaultPortalId}
-                              className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                              className="bg-accent-primary rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                             >
                               Add
                             </button>

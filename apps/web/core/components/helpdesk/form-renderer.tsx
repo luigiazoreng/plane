@@ -61,7 +61,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled, attach
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          className="text-sm text-text-100 placeholder:text-text-400 focus:border-primary min-h-[140px] w-full rounded-md border border-subtle bg-surface-1 p-3 outline-none disabled:opacity-60"
+          className="text-sm text-primary placeholder:text-placeholder focus:border-accent-subtle min-h-[140px] w-full rounded-md border border-subtle bg-surface-1 p-3 outline-none disabled:opacity-60"
           disabled={disabled}
         />
       );
@@ -70,7 +70,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled, attach
         <select
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
+          className="text-sm text-primary focus:border-accent-subtle w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
           disabled={disabled}
         >
           <option value="">Select an option</option>
@@ -96,7 +96,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled, attach
         <select
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
+          className="text-sm text-primary focus:border-accent-subtle w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
           disabled={disabled || isBlocked || options.length === 0}
         >
           <option value="">{placeholder}</option>
@@ -110,7 +110,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled, attach
     }
     case "checkbox":
       return (
-        <label className="text-sm text-text-200 flex items-center gap-3">
+        <label className="text-sm text-secondary flex items-center gap-3">
           <input
             type="checkbox"
             checked={Boolean(value)}
@@ -186,7 +186,7 @@ function AttachmentFieldInput({
           disabled={disabled || !transport || pending.length >= 5} // Limit to 5 per field
           title="Anexar arquivo (Max 5)"
         />
-        <span className="text-sm text-text-400">
+        <span className="text-sm text-placeholder">
           {!transport
             ? "Attachments not available in preview"
             : pending.length >= 5
@@ -222,8 +222,8 @@ export function HelpdeskFormRenderer({
     <div className="space-y-6">
       {ordered.map((field) => (
         <div key={field.id}>
-          <label className="text-sm text-text-200 mb-1.5 block font-medium">
-            {field.label} {field.required ? <span className="text-red-500">*</span> : null}
+          <label className="text-sm text-secondary mb-1.5 block font-medium">
+            {field.label} {field.required ? <span className="text-danger-primary">*</span> : null}
           </label>
           <FieldInput
             field={field}
@@ -235,7 +235,7 @@ export function HelpdeskFormRenderer({
             attachmentTransport={attachmentTransport}
           />
           {field.field_type !== "checkbox" && field.help_text ? (
-            <p className="text-xs text-text-400 mt-1">{field.help_text}</p>
+            <p className="text-xs text-placeholder mt-1">{field.help_text}</p>
           ) : null}
         </div>
       ))}

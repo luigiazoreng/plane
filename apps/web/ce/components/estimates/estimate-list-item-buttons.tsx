@@ -47,7 +47,7 @@ export const EstimateListItemButtons = observer(function EstimateListItemButtons
       />
       {!isActive && (
         <button
-          className="text-custom-text-300 hover:text-custom-text-100 relative flex h-6 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-sm px-2 text-11 transition-colors hover:bg-layer-1"
+          className="text-tertiary hover:text-primary relative flex h-6 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-sm px-2 text-11 transition-colors hover:bg-layer-1"
           onClick={() => onSetActiveClick && onSetActiveClick(estimateId)}
           data-ph-element={PROJECT_SETTINGS_TRACKER_ELEMENTS.ESTIMATES_LIST_ITEM}
         >

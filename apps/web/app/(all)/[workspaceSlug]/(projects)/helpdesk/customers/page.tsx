@@ -125,7 +125,7 @@ const HelpdeskCustomersPage = observer(() => {
                   <tr key={customer.id} className="group transition-colors hover:bg-layer-2">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="bg-primary/10 text-xs flex size-8 shrink-0 items-center justify-center rounded-full font-semibold text-primary">
+                        <div className="bg-accent-subtle text-xs flex size-8 shrink-0 items-center justify-center rounded-full font-semibold text-accent-primary">
                           {customer.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="font-medium text-primary">{customer.name}</span>
@@ -136,8 +136,8 @@ const HelpdeskCustomersPage = observer(() => {
                       <span
                         className={`text-xs inline-flex items-center rounded-full px-2.5 py-0.5 font-medium ${
                           customer.is_active
-                            ? "bg-green-500/10 text-green-600"
-                            : "bg-custom-background-80 text-tertiary"
+                            ? "bg-success-subtle text-success-primary"
+                            : "bg-layer-2 text-tertiary"
                         }`}
                       >
                         {customer.is_active ? "Active" : "Inactive"}
@@ -165,7 +165,7 @@ const HelpdeskCustomersPage = observer(() => {
                           type="button"
                           onClick={() => setDeletingCustomer(customer)}
                           title="Delete"
-                          className="hover:bg-red-500/10 hover:text-red-500 rounded-md p-1.5 text-tertiary transition-colors"
+                          className="hover:bg-danger-subtle hover:text-danger-primary rounded-md p-1.5 text-tertiary transition-colors"
                         >
                           <Trash2 className="size-4" />
                         </button>

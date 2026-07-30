@@ -59,8 +59,8 @@ const HelpdeskResetPasswordPage = observer(() => {
   if (!token) {
     return (
       <div className="shadow-sm mx-auto mt-12 max-w-md rounded-lg border border-subtle bg-surface-2 p-8 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Invalid reset link</h1>
-        <p className="text-sm text-text-400 mt-2">
+        <h1 className="text-2xl text-primary font-bold">Invalid reset link</h1>
+        <p className="text-sm text-placeholder mt-2">
           This password reset link is missing or invalid. Please request a new one.
         </p>
         <Link
@@ -76,13 +76,13 @@ const HelpdeskResetPasswordPage = observer(() => {
   return (
     <div className="shadow-sm mx-auto mt-12 max-w-md rounded-lg border border-subtle bg-surface-2 p-8">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Set a new password</h1>
-        <p className="text-sm text-text-400 mt-2">Choose a new password for your support account.</p>
+        <h1 className="text-2xl text-primary font-bold">Set a new password</h1>
+        <p className="text-sm text-placeholder mt-2">Choose a new password for your support account.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="password" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="password" className="text-sm text-secondary mb-1.5 block font-medium">
             New Password
           </label>
           <Input
@@ -98,7 +98,7 @@ const HelpdeskResetPasswordPage = observer(() => {
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="confirmPassword" className="text-sm text-secondary mb-1.5 block font-medium">
             Confirm Password
           </label>
           <Input
@@ -118,7 +118,7 @@ const HelpdeskResetPasswordPage = observer(() => {
         </Button>
       </form>
 
-      <p className="text-sm text-text-400 mt-6 text-center">
+      <p className="text-sm text-placeholder mt-6 text-center">
         Remembered your password?{" "}
         <Link to={`/helpdesk/p/${pSlug}/login`} className="font-medium text-primary hover:underline">
           Sign in

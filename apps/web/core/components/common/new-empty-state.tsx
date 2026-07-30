@@ -60,12 +60,12 @@ export function NewEmptyState({ title, description, image, primaryButton, disabl
                 <div
                   onMouseEnter={handleMouseEnter}
                   onMouseLeave={handleMouseLeave}
-                  className={`bg-blue-300 absolute ${
+                  className={`bg-accent-subtle absolute ${
                     comicBox?.direction === "left" ? "left-0 ml-2" : "right-0 mr-2"
                   } z-10 h-2.5 w-2.5 animate-ping rounded-full`}
                 />
                 <div
-                  className={`bg-blue-400/40 absolute ${
+                  className={`bg-accent-subtle absolute ${
                     comicBox?.direction === "left" ? "left-0 ml-2.5" : "right-0 mr-2.5"
                   } h-1.5 w-1.5 rounded-full`}
                 />
