@@ -5,7 +5,9 @@
  */
 
 import { cn } from "@plane/utils";
-import { AtSign, ChevronDown, Send, Smile } from "lucide-react";
+import type { IHelpdeskMacro } from "@plane/types";
+import { AtSign, ChevronDown, Send, Smile, Zap } from "lucide-react";
+import { Popover } from "@headlessui/react";
 import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
 import { PendingAttachmentChips } from "@/components/helpdesk/attachments/attachment-chips";
 import type { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
@@ -20,9 +22,11 @@ type TComposerProps = {
   onSubmit: () => void;
   isSubmitting: boolean;
   attachments: ReturnType<typeof useAttachmentUpload>;
+  macros?: IHelpdeskMacro[];
+  onSelectMacro?: (macro: IHelpdeskMacro) => void;
 };
 
-export function Composer({ mode, onModeChange, value, onChange, onSubmit, isSubmitting, attachments }: TComposerProps) {
+export function Composer({ mode, onModeChange, value, onChange, onSubmit, isSubmitting, attachments, macros, onSelectMacro }: TComposerProps) {
   const isNote = mode === "note";
   const canSend = value.trim().length > 0 && !isSubmitting;
 
@@ -103,15 +107,47 @@ export function Composer({ mode, onModeChange, value, onChange, onSubmit, isSubm
                 <AtSign className="size-4" />
               </button>
               <span className="mx-0.5 h-4 w-px bg-layer-2" />
-              <button
-                type="button"
-                disabled
-                title="Macros — em breve"
-                className="flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 font-medium text-secondary opacity-40"
-              >
-                Macros
-                <ChevronDown className="size-3" />
-              </button>
+
+              <Popover className="relative">
+                <Popover.Button
+                  type="button"
+                  className="flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 font-medium text-secondary hover:border-strong transition-colors"
+                >
+                  <Zap className="size-3 text-warning-primary" />
+                  Macros
+                  <ChevronDown className="size-3" />
+                </Popover.Button>
+                <Popover.Panel className="absolute bottom-full left-0 z-20 mb-2.5 w-64 rounded-md border border-subtle bg-surface-1 p-1 shadow-md">
+                  {({ close }: { close: () => void }) =>
+                    !macros || macros.length === 0 ? (
+                      <div className="px-3 py-2 text-12 text-tertiary text-center">Nenhuma macro disponível</div>
+                    ) : (
+                      <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                        {macros.map((macro) => (
+                          <button
+                            key={macro.id}
+                            type="button"
+                            onClick={() => {
+                              if (onSelectMacro) onSelectMacro(macro);
+                              else onChange(value ? `${value}\n${macro.content}` : macro.content);
+                              close();
+                            }}
+                            className="flex flex-col items-start gap-0.5 rounded px-2.5 py-1.5 text-left text-12 transition-colors hover:bg-layer-2"
+                          >
+                            <span className="font-medium text-primary flex items-center gap-1">
+                              {macro.name}
+                              {!macro.is_public && (
+                                <span className="text-[10px] text-tertiary bg-layer-2 px-1 rounded">Privada</span>
+                              )}
+                            </span>
+                            {macro.description && <span className="text-11 text-tertiary truncate w-full">{macro.description}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  }
+                </Popover.Panel>
+              </Popover>
             </div>
 
             <div className="flex items-center gap-2.5">

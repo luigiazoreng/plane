@@ -24,19 +24,31 @@ import type { IHelpdeskPortal, IHelpdeskRequest, TIssuePriorities } from "@plane
  * Pending backend — these return empty until the API grows the fields.
  * ------------------------------------------------------------------ */
 
-/** TODO(backend): `tags` / labels m2m on HelpdeskRequest. */
-export function getRequestTags(_request: IHelpdeskRequest): string[] {
-  return [];
+/** Tags for the Classification panel, derived from labels M2M on the request. */
+export type THelpdeskLabelDetail = { id: string; name: string; color: string };
+
+export function getRequestTags(request: IHelpdeskRequest): THelpdeskLabelDetail[] {
+  return request.label_detail ?? [];
 }
 
-/** TODO(backend): `team` FK on HelpdeskRequest (agent groups). */
-export function getRequestTeam(_request: IHelpdeskRequest): string | null {
-  return null;
+/** Team / agent group assigned to the request. */
+export function getRequestTeam(request: IHelpdeskRequest): string | null {
+  return request.team_detail?.name ?? null;
 }
 
-/** TODO(backend): per-agent read receipts. */
-export function isRequestUnread(_request: IHelpdeskRequest): boolean {
-  return false;
+/** Read receipt status for the current user. */
+export function isRequestUnread(request: IHelpdeskRequest): boolean {
+  return request.is_unread ?? false;
+}
+
+/** Bookmark / favorite status for the current user. */
+export function isRequestBookmarked(request: IHelpdeskRequest): boolean {
+  return request.is_bookmarked ?? false;
+}
+
+/** Snooze date/time set by agent. */
+export function getRequestSnoozedUntil(request: IHelpdeskRequest): string | null {
+  return request.snoozed_until ?? null;
 }
 
 export type THelpdeskCustomerStats = {

@@ -10,6 +10,7 @@ from plane.app.serializers.helpdesk import HelpdeskRequestCommentSerializer
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
 from plane.app.helpdesk.attachments import COMMENT_ENTITY, assets_for, bind_assets
+from plane.app.helpdesk.activity import record_helpdesk_comment_activity
 
 
 class HelpdeskRequestCommentViewSet(BaseViewSet):
@@ -106,6 +107,10 @@ class HelpdeskRequestCommentViewSet(BaseViewSet):
             HelpdeskRequest.objects.filter(id=hd_request.id).update(
                 first_responded_at=comment.created_at
             )
+
+        # Record activity for the timeline
+        record_helpdesk_comment_activity(hd_request, self.request.user, is_internal=is_internal)
+
         publish(self.kwargs.get("slug", ""), {"type": "comment.created", "request_id": str(hd_request.id)})
 
         if should_send_email:

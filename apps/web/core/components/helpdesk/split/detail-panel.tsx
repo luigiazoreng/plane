@@ -8,14 +8,17 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type {
+  IHelpdeskCustomerStats,
   IHelpdeskPortal,
   IHelpdeskRequest,
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
   IHelpdeskStatus,
+  IHelpdeskTeam,
   TIssue,
   TIssuePriorities,
 } from "@plane/types";
+import { Popover } from "@headlessui/react";
 import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
 import { cn, generateWorkItemLink } from "@plane/utils";
@@ -26,7 +29,7 @@ import { INTAKE_STATUS_META } from "@/components/helpdesk/intake-status";
 import { HelpdeskStatusPill } from "@/components/helpdesk/status-pill";
 import { IssueIdentifier } from "@/plane-web/components/issues/issue-details/issue-identifier";
 import {
-  getCustomerStats,
+  getCustomerStats as getFallbackCustomerStats,
   getRequestChannel,
   getRequestClassification,
   getRequestPriority,
@@ -40,8 +43,11 @@ type TDetailPanelProps = {
   request: IHelpdeskRequest;
   statusMap: Record<string, IHelpdeskStatus>;
   portal: IHelpdeskPortal | undefined;
+  customerStats?: IHelpdeskCustomerStats | null;
   onAssigneesChange: (assignees: string[]) => void;
   onPriorityChange: (priority: TIssuePriorities) => void;
+  teams?: IHelpdeskTeam[];
+  onTeamChange?: (teamId: string | null) => void;
   intakeLinks: IHelpdeskRequestIntakeIssue[];
   isLoadingIntakeLinks: boolean;
   onForward: () => void;
@@ -61,8 +67,11 @@ export function DetailPanel({
   request,
   statusMap,
   portal,
+  customerStats: customerStatsProp,
   onAssigneesChange,
   onPriorityChange,
+  teams = [],
+  onTeamChange,
   intakeLinks,
   isLoadingIntakeLinks,
   onForward,
@@ -82,7 +91,7 @@ export function DetailPanel({
   const sla = getRequestSla(request, portal);
   const tags = getRequestTags(request);
   const classification = getRequestClassification(request);
-  const customerStats = getCustomerStats(request);
+  const customerStats = customerStatsProp ?? getFallbackCustomerStats(request);
 
   return (
     <aside className="hidden w-[300px] min-w-[300px] flex-col overflow-y-auto border-l border-subtle bg-surface-2 xl:flex">
@@ -107,7 +116,56 @@ export function DetailPanel({
             placeholder="Assign"
           />
         </Row>
-        <Row label="Team">{team ? <span className="text-13 text-primary">{team}</span> : <Empty />}</Row>
+        <Row label="Team">
+          <Popover className="relative">
+            <Popover.Button
+              type="button"
+              className="inline-flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 text-secondary hover:border-strong transition-colors"
+            >
+              {request.team_detail ? (
+                <>
+                  <span className="size-2 rounded-full" style={{ backgroundColor: request.team_detail.color || "#3B82F6" }} />
+                  <span>{request.team_detail.name}</span>
+                </>
+              ) : team ? (
+                <span>{team}</span>
+              ) : (
+                <span className="text-tertiary">—</span>
+              )}
+              <ChevronDown className="size-3 text-tertiary" />
+            </Popover.Button>
+            <Popover.Panel className="absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-subtle bg-surface-1 p-1 shadow-md">
+              {({ close }: { close: () => void }) => (
+                <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto text-12">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onTeamChange) onTeamChange(null);
+                      close();
+                    }}
+                    className="rounded px-2.5 py-1.5 text-left text-tertiary hover:bg-layer-2"
+                  >
+                    — Sem time —
+                  </button>
+                  {teams.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        if (onTeamChange) onTeamChange(t.id);
+                        close();
+                      }}
+                      className="flex items-center gap-2 rounded px-2.5 py-1.5 text-left text-primary hover:bg-layer-2"
+                    >
+                      <span className="size-2 rounded-full" style={{ backgroundColor: t.color || "#3B82F6" }} />
+                      <span className="truncate">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Popover.Panel>
+          </Popover>
+        </Row>
 
         {sla ? (
           <div className="flex flex-col gap-1.5">
@@ -191,10 +249,14 @@ export function DetailPanel({
             <div className="flex flex-wrap justify-end gap-1">
               {tags.map((tag) => (
                 <span
-                  key={tag}
-                  className="inline-flex h-5 items-center rounded-md bg-layer-2 px-2 text-11 text-secondary"
+                  key={tag.id}
+                  className="inline-flex h-5 items-center gap-1 rounded-md bg-layer-2 px-2 text-11 text-secondary"
                 >
-                  {tag}
+                  <span
+                    className="inline-block size-2 shrink-0 rounded-full"
+                    style={{ background: tag.color || "var(--border-color-subtle)" }}
+                  />
+                  {tag.name}
                 </span>
               ))}
             </div>

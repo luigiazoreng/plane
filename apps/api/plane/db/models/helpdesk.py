@@ -240,6 +240,7 @@ class HelpdeskRequest(WorkspaceBaseModel):
     first_responded_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
+    snoozed_until = models.DateTimeField(null=True, blank=True)
     sla_resolution_due_at = models.DateTimeField(null=True, blank=True)
     start_date = models.DateField(null=True, blank=True)
     target_date = models.DateField(null=True, blank=True)
@@ -252,6 +253,18 @@ class HelpdeskRequest(WorkspaceBaseModel):
         related_name="helpdesk_requests",
         through="HelpdeskRequestAssignee",
         through_fields=("request", "assignee"),
+    )
+    labels = models.ManyToManyField(
+        "db.Label",
+        blank=True,
+        related_name="helpdesk_requests",
+    )
+    team = models.ForeignKey(
+        "db.HelpdeskTeam",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requests",
     )
 
     class Meta:
@@ -434,3 +447,126 @@ class HelpdeskIMAPSyncLog(WorkspaceBaseModel):
 
     def __str__(self):
         return f"{self.portal.public_slug} - {self.status} - {self.created_at}"
+
+
+class HelpdeskRequestActivity(WorkspaceBaseModel):
+    """Audit log entry for a single field change on a helpdesk request.
+
+    Mirrors the IssueActivity pattern (field/old_value/new_value/actor) but
+    lives on WorkspaceBaseModel to match the helpdesk scope.
+    """
+
+    request = models.ForeignKey(HelpdeskRequest, on_delete=models.CASCADE, related_name="activities")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="helpdesk_activities",
+    )
+    verb = models.CharField(max_length=50, default="updated")  # created, updated, commented
+    field = models.CharField(max_length=255, blank=True, default="")
+    old_value = models.TextField(blank=True, default="")
+    new_value = models.TextField(blank=True, default="")
+    old_identifier = models.UUIDField(null=True, blank=True)
+    new_identifier = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Helpdesk Request Activity"
+        verbose_name_plural = "Helpdesk Request Activities"
+        db_table = "helpdesk_request_activities"
+        ordering = ("created_at",)
+
+    def __str__(self):
+        return f"{self.request.title} - {self.field} - {self.verb}"
+
+
+class HelpdeskTeam(WorkspaceBaseModel):
+    """Team / agent group for assigning tickets and organizing work."""
+
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    color = models.CharField(max_length=20, default="#3B82F6")
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="helpdesk_teams",
+    )
+
+    class Meta:
+        verbose_name = "Helpdesk Team"
+        verbose_name_plural = "Helpdesk Teams"
+        db_table = "helpdesk_teams"
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+
+class HelpdeskRequestReadReceipt(WorkspaceBaseModel):
+    """Tracks when an agent last viewed a specific request to compute unread status."""
+
+    request = models.ForeignKey(
+        HelpdeskRequest, on_delete=models.CASCADE, related_name="read_receipts"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="helpdesk_read_receipts"
+    )
+    last_read_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Helpdesk Request Read Receipt"
+        verbose_name_plural = "Helpdesk Request Read Receipts"
+        db_table = "helpdesk_request_read_receipts"
+        unique_together = ["request", "user", "deleted_at"]
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.request.title} @ {self.last_read_at}"
+
+
+class HelpdeskMacro(WorkspaceBaseModel):
+    """Canned response / macro template for agents in composer.
+
+    If is_public is True, all agents in the workspace can view and use it.
+    If is_public is False, only the author (created_by) can view and use it.
+    """
+
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    content = models.TextField(blank=True, default="")
+    is_public = models.BooleanField(default=True)
+    actions = models.JSONField(default=list, blank=True)
+    sequence = models.FloatField(default=65535)
+
+    class Meta:
+        verbose_name = "Helpdesk Macro"
+        verbose_name_plural = "Helpdesk Macros"
+        db_table = "helpdesk_macros"
+        ordering = ("sequence", "name")
+
+    def __str__(self):
+        return self.name
+
+
+class HelpdeskRequestBookmark(WorkspaceBaseModel):
+    """Favorite / bookmarked request for a specific agent."""
+
+    request = models.ForeignKey(
+        HelpdeskRequest, on_delete=models.CASCADE, related_name="bookmarks"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="helpdesk_request_bookmarks"
+    )
+
+    class Meta:
+        verbose_name = "Helpdesk Request Bookmark"
+        verbose_name_plural = "Helpdesk Request Bookmarks"
+        db_table = "helpdesk_request_bookmarks"
+        unique_together = ["request", "user", "deleted_at"]
+
+    def __str__(self):
+        return f"{self.user.email} star -> {self.request.title}"
+
+
+
+

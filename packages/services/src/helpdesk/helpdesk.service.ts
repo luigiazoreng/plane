@@ -20,9 +20,13 @@ import type {
   IHelpdeskRequest,
   IHelpdeskAssetUploadResponse,
   IHelpdeskRequestComment,
+  IHelpdeskRequestActivity,
+  IHelpdeskCustomerStats,
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
   IHelpdeskStatus,
+  IHelpdeskTeam,
+  IHelpdeskMacro,
   IHelpdeskIMAPSyncLog,
 } from "@plane/types";
 
@@ -189,6 +193,24 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/requests/${requestId}/archive/`).then((res) => res?.data);
   }
 
+  async markRequestRead(workspaceSlug: string, requestId: string): Promise<{ is_unread: boolean; last_read_at: string }> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/mark-read/`, {}).then((res) => res?.data);
+  }
+
+  async toggleBookmark(workspaceSlug: string, requestId: string): Promise<{ is_bookmarked: boolean }> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/bookmark/`, {}).then((res) => res?.data);
+  }
+
+  async snoozeRequest(
+    workspaceSlug: string,
+    requestId: string,
+    snoozedUntil: string | null
+  ): Promise<{ snoozed_until: string | null }> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/snooze/`, {
+      snoozed_until: snoozedUntil,
+    }).then((res) => res?.data);
+  }
+
   // --- Comments Management ---
 
   async getRequestComments(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestComment[]> {
@@ -201,6 +223,18 @@ export class HelpdeskService extends APIService {
     data: Partial<IHelpdeskRequestComment>
   ): Promise<IHelpdeskRequestComment> {
     return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/comments/`, data).then((res) => res?.data);
+  }
+
+  async getRequestActivities(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestActivity[]> {
+    return this.get(`${workspaceSlug}/helpdesk/requests/${requestId}/activities/`).then((res) => res?.data);
+  }
+
+  async getCustomerHistory(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequest[]> {
+    return this.get(`${workspaceSlug}/helpdesk/requests/${requestId}/customer-history/`).then((res) => res?.data);
+  }
+
+  async getCustomerStats(workspaceSlug: string, requestId: string): Promise<IHelpdeskCustomerStats> {
+    return this.get(`${workspaceSlug}/helpdesk/requests/${requestId}/customer-stats/`).then((res) => res?.data);
   }
 
   // --- Attachments ---
@@ -301,6 +335,42 @@ export class HelpdeskService extends APIService {
 
   async removeMember(workspaceSlug: string, memberId: string): Promise<void> {
     return this.delete(`${workspaceSlug}/helpdesk/members/${memberId}/`).then((res) => res?.data);
+  }
+
+  // --- Team Management ---
+
+  async getTeams(workspaceSlug: string): Promise<IHelpdeskTeam[]> {
+    return this.get(`${workspaceSlug}/helpdesk/teams/`).then((res) => res?.data);
+  }
+
+  async createTeam(workspaceSlug: string, data: Partial<IHelpdeskTeam>): Promise<IHelpdeskTeam> {
+    return this.post(`${workspaceSlug}/helpdesk/teams/`, data).then((res) => res?.data);
+  }
+
+  async updateTeam(workspaceSlug: string, teamId: string, data: Partial<IHelpdeskTeam>): Promise<IHelpdeskTeam> {
+    return this.patch(`${workspaceSlug}/helpdesk/teams/${teamId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteTeam(workspaceSlug: string, teamId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/teams/${teamId}/`).then((res) => res?.data);
+  }
+
+  // --- Macro Management ---
+
+  async getMacros(workspaceSlug: string): Promise<IHelpdeskMacro[]> {
+    return this.get(`${workspaceSlug}/helpdesk/macros/`).then((res) => res?.data);
+  }
+
+  async createMacro(workspaceSlug: string, data: Partial<IHelpdeskMacro>): Promise<IHelpdeskMacro> {
+    return this.post(`${workspaceSlug}/helpdesk/macros/`, data).then((res) => res?.data);
+  }
+
+  async updateMacro(workspaceSlug: string, macroId: string, data: Partial<IHelpdeskMacro>): Promise<IHelpdeskMacro> {
+    return this.patch(`${workspaceSlug}/helpdesk/macros/${macroId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteMacro(workspaceSlug: string, macroId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/macros/${macroId}/`).then((res) => res?.data);
   }
 
   // --- Customer Management (admin) ---

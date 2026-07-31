@@ -13,12 +13,16 @@ from plane.db.models import (
     HelpdeskMember,
     HelpdeskPortal,
     HelpdeskRequest,
+    HelpdeskRequestActivity,
     HelpdeskRequestAssignee,
     HelpdeskRequestComment,
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
     HelpdeskStatus,
+    HelpdeskTeam,
+    HelpdeskMacro,
     HelpdeskIMAPSyncLog,
+    Label,
 )
 from plane.app.serializers.base import BaseSerializer
 from plane.app.serializers.user import UserLiteSerializer
@@ -223,6 +227,9 @@ class HelpdeskRequestSerializer(BaseSerializer):
     # Use the lite serializer (no fields_detail) — avoids serializing all form
     # fields for every ticket in the list response.
     form_detail = HelpdeskFormLiteSerializer(source="form", read_only=True)
+    team_detail = serializers.SerializerMethodField()
+    is_unread = serializers.BooleanField(read_only=True, default=False)
+    is_bookmarked = serializers.BooleanField(read_only=True, default=False)
     # `assignees` is an M2M with a custom through model, so DRF treats it as
     # read-only. Declare it explicitly to make it writable and sync the through
     # table manually in create()/update().
@@ -232,6 +239,16 @@ class HelpdeskRequestSerializer(BaseSerializer):
         allow_empty=True,
         write_only=True,
     )
+    # `labels` is a plain M2M (no custom through) — DRF can handle it, but
+    # we declare it as a write-only list to match the assignees pattern and
+    # keep the read representation as label_detail (with name + color).
+    labels = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
+    label_detail = serializers.SerializerMethodField()
     # Files submitted with the original form, as opposed to those on replies.
     attachments = serializers.SerializerMethodField()
 
@@ -275,17 +292,60 @@ class HelpdeskRequestSerializer(BaseSerializer):
 
     def create(self, validated_data):
         assignees = validated_data.pop("assignees", None)
+        label_ids = validated_data.pop("labels", None)
         instance = super().create(validated_data)
         if assignees is not None:
             self._sync_assignees(instance, assignees)
+        if label_ids is not None:
+            self._sync_labels(instance, label_ids)
         return instance
 
     def update(self, instance, validated_data):
         assignees = validated_data.pop("assignees", None)
+        label_ids = validated_data.pop("labels", None)
         instance = super().update(instance, validated_data)
         if assignees is not None:
             self._sync_assignees(instance, assignees)
+            if hasattr(instance, "_prefetched_assignees"):
+                delattr(instance, "_prefetched_assignees")
+        if label_ids is not None:
+            self._sync_labels(instance, label_ids)
+            if hasattr(instance, "_prefetched_labels"):
+                delattr(instance, "_prefetched_labels")
         return instance
+
+    def get_label_detail(self, obj):
+        """Read-only: name + color for each label, used by the frontend to
+        render coloured pills without a separate fetch."""
+        prefetched = getattr(obj, "_prefetched_labels", None)
+        if prefetched is not None:
+            labels = prefetched
+        else:
+            labels = obj.labels.all()
+        return [{"id": str(l.id), "name": l.name, "color": l.color} for l in labels]
+
+    def get_team_detail(self, obj):
+        if not obj.team_id:
+            return None
+        team = getattr(obj, "team", None)
+        if team and team.id == obj.team_id:
+            return {"id": str(team.id), "name": team.name, "color": team.color}
+        team_obj = HelpdeskTeam.objects.filter(id=obj.team_id).first()
+        if team_obj:
+            return {"id": str(team_obj.id), "name": team_obj.name, "color": team_obj.color}
+        return None
+
+    def _sync_labels(self, instance, label_ids):
+        """Replace all labels on the request with the given UUIDs.
+        Validates that all labels belong to the same workspace."""
+        unique_ids = list(dict.fromkeys(str(uid) for uid in label_ids))
+        if unique_ids:
+            valid = Label.objects.filter(
+                id__in=unique_ids, workspace_id=instance.workspace_id
+            ).values_list("id", flat=True)
+            instance.labels.set(valid)
+        else:
+            instance.labels.clear()
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -481,3 +541,51 @@ class HelpdeskIMAPSyncLogSerializer(BaseSerializer):
         model = HelpdeskIMAPSyncLog
         fields = "__all__"
         read_only_fields = READ_ONLY_BASE + ["workspace", "portal"]
+
+
+class HelpdeskRequestActivitySerializer(BaseSerializer):
+    actor_detail = UserLiteSerializer(source="actor", read_only=True)
+
+    class Meta:
+        model = HelpdeskRequestActivity
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE + ["request", "actor"]
+
+
+class HelpdeskTeamSerializer(BaseSerializer):
+    members_detail = UserLiteSerializer(source="members", many=True, read_only=True)
+    members = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
+
+    class Meta:
+        model = HelpdeskTeam
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE + ["workspace"]
+
+    def create(self, validated_data):
+        members = validated_data.pop("members", None)
+        instance = super().create(validated_data)
+        if members is not None:
+            instance.members.set(members)
+        return instance
+
+    def update(self, instance, validated_data):
+        members = validated_data.pop("members", None)
+        instance = super().update(instance, validated_data)
+        if members is not None:
+            instance.members.set(members)
+        return instance
+
+
+class HelpdeskMacroSerializer(BaseSerializer):
+    class Meta:
+        model = HelpdeskMacro
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE + ["workspace"]
+
+
+

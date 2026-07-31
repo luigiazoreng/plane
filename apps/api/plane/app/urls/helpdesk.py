@@ -31,6 +31,11 @@ from plane.app.views.helpdesk import (
     HelpdeskCustomerViewSet,
     HelpdeskAssetEndpoint,
     PublicHelpdeskAssetEndpoint,
+    HelpdeskRequestActivityViewSet,
+    HelpdeskCustomerHistoryEndpoint,
+    HelpdeskCustomerStatsEndpoint,
+    HelpdeskTeamViewSet,
+    HelpdeskMacroViewSet,
 )
 from plane.app.views.helpdesk.inbound import PublicHelpdeskInboundEmailEndpoint
 
@@ -45,6 +50,38 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/register/",
         HelpdeskCustomerRegisterEndpoint.as_view(),
         name="helpdesk-customer-register",
+    ),
+
+    # --- Team management (workspace-level) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/teams/",
+        HelpdeskTeamViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-teams",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/teams/<uuid:pk>/",
+        HelpdeskTeamViewSet.as_view({
+            "get": "retrieve",
+            "patch": "partial_update",
+            "delete": "destroy",
+        }),
+        name="helpdesk-team-detail",
+    ),
+
+    # --- Macro management (workspace-level) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/macros/",
+        HelpdeskMacroViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-macros",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/macros/<uuid:pk>/",
+        HelpdeskMacroViewSet.as_view({
+            "get": "retrieve",
+            "patch": "partial_update",
+            "delete": "destroy",
+        }),
+        name="helpdesk-macro-detail",
     ),
 
     # --- Status management (workspace-level) ---
@@ -223,6 +260,36 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/archive/",
         HelpdeskRequestViewSet.as_view({"post": "archive", "delete": "unarchive"}),
         name="helpdesk-request-archive-unarchive",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/mark-read/",
+        HelpdeskRequestViewSet.as_view({"post": "mark_read"}),
+        name="helpdesk-request-mark-read",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/bookmark/",
+        HelpdeskRequestViewSet.as_view({"post": "toggle_bookmark"}),
+        name="helpdesk-request-bookmark",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/snooze/",
+        HelpdeskRequestViewSet.as_view({"post": "snooze"}),
+        name="helpdesk-request-snooze",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:request_pk>/activities/",
+        HelpdeskRequestActivityViewSet.as_view({"get": "list"}),
+        name="helpdesk-request-activities",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/customer-history/",
+        HelpdeskCustomerHistoryEndpoint.as_view(),
+        name="helpdesk-request-customer-history",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/customer-stats/",
+        HelpdeskCustomerStatsEndpoint.as_view(),
+        name="helpdesk-request-customer-stats",
     ),
 
     # --- Request → Issue links ---

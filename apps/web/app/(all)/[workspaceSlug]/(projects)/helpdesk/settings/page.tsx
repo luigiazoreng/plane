@@ -75,7 +75,7 @@ const COLOR_PALETTE = [
   "#78716C",
 ];
 
-type TSettingsTab = "statuses" | "portal-settings" | "forms" | "members" | "email" | "email-logs" | "imap-logs";
+type TSettingsTab = "statuses" | "portal-settings" | "forms" | "members" | "email" | "email-logs" | "imap-logs" | "teams" | "macros";
 
 const validateFormForActivation = (fields: IHelpdeskFormField[]): string[] => {
   const errors: string[] = [];
@@ -167,10 +167,25 @@ const HelpdeskSettingsPage = observer(() => {
   const [isLoadingImapLogs, setIsLoadingImapLogs] = useState(false);
   const [isSyncingImap, setIsSyncingImap] = useState(false);
 
+  // ---- Teams state ----
+  const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  const [teamName, setTeamName] = useState("");
+  const [teamDescription, setTeamDescription] = useState("");
+  const [teamColor, setTeamColor] = useState("#3B82F6");
+
+  // ---- Macros state ----
+  const [isCreatingMacro, setIsCreatingMacro] = useState(false);
+  const [macroName, setMacroName] = useState("");
+  const [macroDescription, setMacroDescription] = useState("");
+  const [macroContent, setMacroContent] = useState("");
+  const [macroIsPublic, setMacroIsPublic] = useState(true);
+
   useEffect(() => {
     if (!wSlug) return;
     helpdeskStore.fetchStatuses(wSlug);
     helpdeskStore.fetchMembers(wSlug);
+    helpdeskStore.fetchTeams(wSlug);
+    helpdeskStore.fetchMacros(wSlug);
 
     void helpdeskStore.fetchPortals(wSlug).then((portals) => {
       if (!portals?.length) return undefined;
@@ -721,6 +736,16 @@ const HelpdeskSettingsPage = observer(() => {
               label="Members"
               isActive={activeTab === "members"}
               onClick={() => setActiveTab("members")}
+            />
+            <SettingsTabButton
+              label="Teams"
+              isActive={activeTab === "teams"}
+              onClick={() => setActiveTab("teams")}
+            />
+            <SettingsTabButton
+              label="Macros"
+              isActive={activeTab === "macros"}
+              onClick={() => setActiveTab("macros")}
             />
           </div>
 
@@ -2374,6 +2399,272 @@ const HelpdeskSettingsPage = observer(() => {
                 {helpdeskStore.getWorkspaceMembers(wSlug).length === 0 && (
                   <div className="py-10 text-center text-13 text-tertiary">
                     No members added yet. Add workspace members above to give them access.
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* ── Teams ── */}
+          {activeTab === "teams" && (
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-primary">Teams</h2>
+                  <p className="mt-0.5 text-13 text-tertiary">
+                    Create teams and agent groups to organize ticket routing and assignments.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingTeam(true)}
+                  className="flex items-center gap-1.5 rounded-md border border-subtle bg-layer-2 px-3 py-1.5 text-13 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
+                >
+                  <Plus className="size-3.5" />
+                  Create team
+                </button>
+              </div>
+
+              {isCreatingTeam && (
+                <div className="mb-4 space-y-3 rounded-xl border border-dashed border-subtle bg-layer-2 p-4">
+                  <p className="tracking-wider text-12 font-medium text-tertiary uppercase">New Team</p>
+                  <div className="flex flex-col gap-3">
+                    <input
+                      type="text"
+                      placeholder="Team name (e.g. Suporte N2, Financeiro)"
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      className="rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Description (optional)"
+                      value={teamDescription}
+                      onChange={(e) => setTeamDescription(e.target.value)}
+                      className="rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                    />
+                    <div className="flex items-center gap-2">
+                      <span className="text-12 text-tertiary">Color:</span>
+                      <div className="flex items-center gap-1">
+                        {COLOR_PALETTE.slice(0, 8).map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setTeamColor(c)}
+                            style={{ backgroundColor: c }}
+                            className={cn(
+                              "size-5 rounded-full border border-black/20 transition-transform",
+                              teamColor === c && "scale-125 ring-2 ring-white"
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        disabled={!teamName.trim()}
+                        onClick={async () => {
+                          if (!teamName.trim()) return;
+                          try {
+                            await helpdeskStore.createTeam(wSlug, {
+                              name: teamName.trim(),
+                              description: teamDescription.trim(),
+                              color: teamColor,
+                            });
+                            setTeamName("");
+                            setTeamDescription("");
+                            setIsCreatingTeam(false);
+                            setToast({ type: TOAST_TYPE.SUCCESS, title: "Team created" });
+                          } catch {
+                            setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to create team" });
+                          }
+                        }}
+                        className="bg-accent-strong rounded-md px-3 py-2 text-13 font-medium text-white disabled:opacity-50"
+                      >
+                        Create
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreatingTeam(false);
+                          setTeamName("");
+                          setTeamDescription("");
+                        }}
+                        className="text-tertiary transition-colors hover:text-primary"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle bg-layer-2">
+                {helpdeskStore.getWorkspaceTeams(wSlug).map((team) => (
+                  <div key={team.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: team.color || "#3B82F6" }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-13 font-medium text-primary">{team.name}</p>
+                        {team.description && <p className="truncate text-12 text-tertiary">{team.description}</p>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await helpdeskStore.deleteTeam(wSlug, team.id);
+                          setToast({ type: TOAST_TYPE.SUCCESS, title: "Team removed" });
+                        } catch {
+                          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to delete team" });
+                        }
+                      }}
+                      className="hover:text-red-500 text-tertiary transition-colors"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                ))}
+                {helpdeskStore.getWorkspaceTeams(wSlug).length === 0 && (
+                  <div className="py-10 text-center text-13 text-tertiary">
+                    No teams created yet. Click "Create team" above to add your first agent group.
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* ── Macros ── */}
+          {activeTab === "macros" && (
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-primary">Macros & Response Templates</h2>
+                  <p className="mt-0.5 text-13 text-tertiary">
+                    Create reusable response templates for agents to quickly reply to common customer requests.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingMacro(true)}
+                  className="flex items-center gap-1.5 rounded-md border border-subtle bg-layer-2 px-3 py-1.5 text-13 font-medium text-secondary transition-colors hover:bg-layer-1 hover:text-primary"
+                >
+                  <Plus className="size-3.5" />
+                  Create macro
+                </button>
+              </div>
+
+              {isCreatingMacro && (
+                <div className="mb-4 space-y-3 rounded-xl border border-dashed border-subtle bg-layer-2 p-4">
+                  <p className="tracking-wider text-12 font-medium text-tertiary uppercase">New Macro</p>
+                  <div className="flex flex-col gap-3">
+                    <input
+                      type="text"
+                      placeholder="Macro name (e.g. Solicitar logs, Confirmação de recebimento)"
+                      value={macroName}
+                      onChange={(e) => setMacroName(e.target.value)}
+                      className="rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Description (optional short summary)"
+                      value={macroDescription}
+                      onChange={(e) => setMacroDescription(e.target.value)}
+                      className="rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
+                    />
+                    <textarea
+                      placeholder="Response template content..."
+                      rows={3}
+                      value={macroContent}
+                      onChange={(e) => setMacroContent(e.target.value)}
+                      className="rounded-md border border-subtle bg-layer-1 p-3 text-13 text-primary outline-none resize-none"
+                    />
+                    <label className="flex items-center gap-2 cursor-pointer text-12 text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={macroIsPublic}
+                        onChange={(e) => setMacroIsPublic(e.target.checked)}
+                        className="rounded border-subtle"
+                      />
+                      <span>Public macro (accessible by all agents in the workspace)</span>
+                    </label>
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        disabled={!macroName.trim() || !macroContent.trim()}
+                        onClick={async () => {
+                          if (!macroName.trim() || !macroContent.trim()) return;
+                          try {
+                            await helpdeskStore.createMacro(wSlug, {
+                              name: macroName.trim(),
+                              description: macroDescription.trim(),
+                              content: macroContent.trim(),
+                              is_public: macroIsPublic,
+                            });
+                            setMacroName("");
+                            setMacroDescription("");
+                            setMacroContent("");
+                            setMacroIsPublic(true);
+                            setIsCreatingMacro(false);
+                            setToast({ type: TOAST_TYPE.SUCCESS, title: "Macro created" });
+                          } catch {
+                            setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to create macro" });
+                          }
+                        }}
+                        className="bg-accent-strong rounded-md px-3 py-2 text-13 font-medium text-white disabled:opacity-50"
+                      >
+                        Create
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreatingMacro(false);
+                          setMacroName("");
+                          setMacroDescription("");
+                          setMacroContent("");
+                        }}
+                        className="text-tertiary transition-colors hover:text-primary"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle bg-layer-2">
+                {helpdeskStore.getWorkspaceMacros(wSlug).map((macro) => (
+                  <div key={macro.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-13 text-primary">{macro.name}</span>
+                        {!macro.is_public && (
+                          <span className="text-[10px] bg-layer-1 border border-subtle px-1.5 py-0.5 rounded text-tertiary">Privada</span>
+                        )}
+                      </div>
+                      {macro.description && <p className="text-12 text-tertiary">{macro.description}</p>}
+                      <p className="text-12 text-secondary font-mono bg-layer-1 p-2 rounded border border-subtle whitespace-pre-wrap">{macro.content}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await helpdeskStore.deleteMacro(wSlug, macro.id);
+                          setToast({ type: TOAST_TYPE.SUCCESS, title: "Macro removed" });
+                        } catch {
+                          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to delete macro" });
+                        }
+                      }}
+                      className="hover:text-red-500 text-tertiary transition-colors shrink-0"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                ))}
+                {helpdeskStore.getWorkspaceMacros(wSlug).length === 0 && (
+                  <div className="py-10 text-center text-13 text-tertiary">
+                    No macros created yet. Click "Create macro" above to add your first response template.
                   </div>
                 )}
               </div>

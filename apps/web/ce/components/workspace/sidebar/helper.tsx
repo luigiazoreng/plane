@@ -17,7 +17,7 @@ import {
   YourWorkIcon,
 } from "@plane/propel/icons";
 import { cn } from "@plane/utils";
-import { Gauge, Headset } from "lucide-react";
+import { Gauge, Headset, LayoutDashboard } from "lucide-react";
 
 export const getSidebarNavigationItemIcon = (key: string, className: string = "") => {
   switch (key) {
@@ -45,5 +45,7 @@ export const getSidebarNavigationItemIcon = (key: string, className: string = ""
       return <Headset className={cn("size-4 shrink-0", className)} />;
     case "kpi":
       return <Gauge className={cn("size-4 shrink-0", className)} />;
+    case "executive":
+      return <LayoutDashboard className={cn("size-4 shrink-0", className)} />;
   }
 };
