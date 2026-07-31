@@ -187,9 +187,11 @@ SITE_ID = 1
 AUTH_USER_MODEL = "db.User"
 
 # Database
+conn_max_age = int(os.environ.get("DATABASE_CONN_MAX_AGE", "600"))
+
 if bool(os.environ.get("DATABASE_URL")):
     # Parse database configuration from $DATABASE_URL
-    DATABASES = {"default": dj_database_url.config()}
+    DATABASES = {"default": dj_database_url.config(conn_max_age=conn_max_age)}
 else:
     DATABASES = {
         "default": {
@@ -199,6 +201,7 @@ else:
             "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
             "HOST": os.environ.get("POSTGRES_HOST"),
             "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": conn_max_age,
         }
     }
 

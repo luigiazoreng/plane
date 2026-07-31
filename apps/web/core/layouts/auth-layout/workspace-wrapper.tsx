@@ -110,21 +110,21 @@ export const WorkspaceAuthWrapper = observer(function WorkspaceAuthWrapper(props
   useSWR(
     workspaceSlug ? WORKSPACE_STATES(workspaceSlug.toString()) : null,
     workspaceSlug ? () => fetchWorkspaceStates(workspaceSlug.toString()) : null,
-    { revalidateIfStale: false, revalidateOnFocus: false }
+    { revalidateIfStale: false, revalidateOnFocus: false, dedupingInterval: 10000 }
   );
 
   // fetch workspace sidebar preferences
   useSWR(
     workspaceSlug ? WORKSPACE_SIDEBAR_PREFERENCES(workspaceSlug.toString()) : null,
     workspaceSlug ? () => fetchSidebarNavigationPreferences(workspaceSlug.toString()) : null,
-    { revalidateIfStale: false, revalidateOnFocus: false }
+    { revalidateIfStale: false, revalidateOnFocus: false, dedupingInterval: 10000 }
   );
 
   // fetch workspace project navigation preferences
   useSWR(
     workspaceSlug ? WORKSPACE_PROJECT_NAVIGATION_PREFERENCES(workspaceSlug.toString()) : null,
     workspaceSlug ? () => fetchProjectNavigationPreferences(workspaceSlug.toString()) : null,
-    { revalidateIfStale: false, revalidateOnFocus: false }
+    { revalidateIfStale: false, revalidateOnFocus: false, dedupingInterval: 10000 }
   );
 
   const handleSignOut = async () => {

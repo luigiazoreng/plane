@@ -17,7 +17,7 @@ from .. import BaseViewSet, BaseAPIView
 from plane.app.serializers import LabelSerializer
 from plane.app.permissions import allow_permission, ProjectBasePermission, ROLE
 from plane.db.models import Project, Label
-from plane.utils.cache import invalidate_cache
+from plane.utils.cache import cache_response, invalidate_cache
 
 
 class LabelViewSet(BaseViewSet):
@@ -38,6 +38,11 @@ class LabelViewSet(BaseViewSet):
             .distinct()
             .order_by("sort_order")
         )
+
+    @cache_response(timeout=60 * 60, user=False)
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     @invalidate_cache(path="/api/workspaces/:slug/labels/", url_params=True, user=False, multiple=True)
     @allow_permission([ROLE.ADMIN])
