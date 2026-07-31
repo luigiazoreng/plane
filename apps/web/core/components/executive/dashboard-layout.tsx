@@ -1,37 +1,42 @@
-"use client";
-
 /**
  * Copyright (c) 2023-present Plane Software, Inc. and contributors
  * SPDX-License-Identifier: AGPL-3.0-only
  * See the LICENSE file for details.
  */
 
+"use client";
+
 import React, { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
-import { Info } from "lucide-react";
-// ui
 import { Spinner } from "@plane/ui";
-// plane types
-import type { IHelpdeskAnalyticsFilters, TKpiPeriod, IKpiAggregates } from "@plane/types";
+import type { IHelpdeskAnalyticsFilters } from "@plane/types";
 // hooks
 import { useHelpdeskAnalytics } from "@/hooks/store/use-helpdesk-analytics";
 import { useKpi } from "@/hooks/store/use-kpi";
-// KPI components (Projects)
-import { UnifiedKpiHero } from "@/components/kpi/unified-kpi-hero";
-import { KpiStatBar } from "@/components/kpi/stat-bar";
-import { KpiScoreBarChart } from "@/components/kpi/score-bar-chart";
-// Helpdesk components
+// Helpdesk analytics components
 import { KpiCards as HelpdeskKpiCards } from "@/components/helpdesk/analytics/kpi-cards";
 import { SLAComplianceCard } from "@/components/helpdesk/analytics/sla-compliance-card";
 import { RequestsOverTimeChart } from "@/components/helpdesk/analytics/requests-over-time-chart";
 import { ResolutionTimeTrendChart } from "@/components/helpdesk/analytics/resolution-time-trend-chart";
+// KPI components
+import { KpiScoreBarChart } from "@/components/kpi/score-bar-chart";
+// Executive components
+import { ITGeneralIndex } from "./it-general-index";
+import { SectorHealth } from "./sector-health";
+import { ExecutiveMemberTable } from "./executive-member-table";
+import { computeITGeneralIndex, buildExecutiveMembers } from "./helpers";
 
 type Props = {
   workspaceSlug: string;
 };
 
-// Reusable card wrapper — uses the same token set as the Helpdesk analytics
-// cards so the two columns look visually consistent.
+const SectionHeader = ({ title, hint }: { title: string; hint?: string }) => (
+  <div className="flex h-11 shrink-0 items-center gap-2 border-b border-subtle bg-surface-1 px-page-x">
+    <h3 className="text-13 font-medium text-primary">{title}</h3>
+    {hint && <span className="truncate text-12 text-tertiary">{hint}</span>}
+  </div>
+);
+
 const CardWrapper = ({
   title,
   subtitle,
@@ -41,10 +46,10 @@ const CardWrapper = ({
   subtitle?: string;
   children: React.ReactNode;
 }) => (
-  <div className="border-custom-border-200 bg-custom-background-100 flex flex-col justify-between gap-4 rounded-xl border p-5">
-    <div className="border-custom-border-100 flex items-center justify-between border-b pb-3">
-      <h3 className="text-xs text-custom-text-100 tracking-wider font-semibold uppercase">{title}</h3>
-      {subtitle && <span className="text-custom-text-400 text-[11px] font-medium">{subtitle}</span>}
+  <div className="flex flex-col justify-between gap-4 rounded-md border border-subtle bg-surface-1 p-4">
+    <div className="flex items-center justify-between border-b border-subtle pb-3">
+      <h3 className="text-12 font-medium tracking-wide text-primary uppercase">{title}</h3>
+      {subtitle && <span className="text-11 text-tertiary">{subtitle}</span>}
     </div>
     <div className="flex-1">{children}</div>
   </div>
@@ -57,12 +62,14 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
 
   // ── Local state ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<"30d" | "90d">("90d");
 
-  // Fixed 90-day window for the executive view.
-  const kpiPeriod: Exclude<TKpiPeriod, "custom"> = "90d";
-  const hdFilters: IHelpdeskAnalyticsFilters = useMemo(() => ({
-    date_filter: "last_3_months",
-  }), []);
+  const hdFilters: IHelpdeskAnalyticsFilters = useMemo(
+    () => ({
+      date_filter: period === "30d" ? "last_30_days" : "last_3_months",
+    }),
+    [period]
+  );
 
   // ── Derived data ─────────────────────────────────────────────
   const overview = workspaceOverview[workspaceSlug];
@@ -73,30 +80,24 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     let mounted = true;
     setLoading(true);
 
-    Promise.all([
-      fetchWorkspaceOverview(workspaceSlug, { period: kpiPeriod }),
-      fetchAnalytics(workspaceSlug, hdFilters),
-    ]).finally(() => {
-      if (mounted) setLoading(false);
-    });
+    Promise.all([fetchWorkspaceOverview(workspaceSlug, { period }), fetchAnalytics(workspaceSlug, hdFilters)]).finally(
+      () => {
+        if (mounted) setLoading(false);
+      }
+    );
 
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, kpiPeriod, hdFilters, fetchWorkspaceOverview, fetchAnalytics]);
+  }, [workspaceSlug, period, hdFilters, fetchWorkspaceOverview, fetchAnalytics]);
 
-  // Adapt the unified KPI summary into the shape expected by KpiStatBar.
-  const statAggregates: IKpiAggregates | undefined = useMemo(() => {
-    if (!overview) return undefined;
-    const { unified } = overview;
-    return {
-      sum_vp: unified.sum_vp_raw,
-      sum_vf: unified.sum_vf_raw,
-      efficiency: unified.kpi,
-      counts: unified.counts,
-      total: unified.scored_items,
-    };
-  }, [overview]);
+  // ── Computed values ──────────────────────────────────────────
+  const itIndex = useMemo(() => computeITGeneralIndex(helpdeskData, overview), [helpdeskData, overview]);
+
+  const executiveMembers = useMemo(
+    () => buildExecutiveMembers(overview?.members ?? [], helpdeskData?.charts.top_agents ?? []),
+    [overview, helpdeskData]
+  );
 
   const projectChartData = useMemo(
     () =>
@@ -118,75 +119,66 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     );
   }
 
+  const periodDaysLabel = period === "30d" ? "30 days" : "90 days";
+
   // ── Render ───────────────────────────────────────────────────
   return (
-    <div className="executive-dashboard-print vertical-scrollbar scrollbar-lg flex h-full w-full flex-col overflow-y-auto bg-custom-background-90 pb-10">
+    <div className="executive-dashboard-print vertical-scrollbar flex scrollbar-lg h-full w-full flex-col overflow-y-auto bg-surface-1">
+      {/* ─── Section 1: IT General Index Hero ─────────────────── */}
+      <ITGeneralIndex data={itIndex} period={period} onPeriodChange={setPeriod} />
 
-      {/* Context Hero / Disclaimer — visible both on-screen and in print */}
-      <div className="px-page-x py-6">
-        <div className="border-custom-border-200 bg-custom-background-100 rounded-lg border p-5 flex items-start gap-4">
-          <Info className="size-5 text-custom-text-300 shrink-0 mt-0.5" />
-          <div>
-            <h2 className="text-sm font-semibold text-custom-text-100 mb-1">Bimodal IT Operations</h2>
-            <p className="text-sm text-custom-text-300">
-              This dashboard provides a unified view of our IT performance across two distinct focus areas.
-              <strong className="text-custom-text-200"> Helpdesk & Support</strong> metrics reflect our operational
-              stability and rapid response capabilities, while
-              <strong className="text-custom-text-200"> Engineering & Projects</strong> (KPIs) reflect our development
-              velocity and delivery of new features. Teams and individuals may focus on one area exclusively, and both
-              are essential to the organization's success.
-            </p>
-          </div>
+      {/* ─── Section 2: Sector Health ─────────────────────────── */}
+      <div>
+        <SectionHeader
+          title="Sector Health"
+          hint={`Operational stability & feature delivery velocity over the last ${periodDaysLabel}`}
+        />
+        <div className="px-page-x py-4">
+          <SectorHealth helpdeskData={helpdeskData} kpiOverview={overview} />
         </div>
       </div>
 
-      {/* Dashboard Grid */}
-      <div className="px-page-x grid grid-cols-1 xl:grid-cols-2 gap-8 mt-2">
+      {/* ─── Section 3: Team Performance ──────────────────────── */}
+      <div>
+        <SectionHeader
+          title="Team Performance"
+          hint="Scores evaluated by profile: Helpdesk ticket volume, Engineering efficiency, or Hybrid blend"
+        />
+        <div className="px-page-x py-4">
+          <ExecutiveMemberTable members={executiveMembers} />
+        </div>
+      </div>
 
-        {/* ─── COLUMN 1: Helpdesk / Operations ─────────────────── */}
-        <div className="flex flex-col gap-6">
-          <div className="border-custom-border-100 border-b pb-2">
-            <h2 className="text-lg font-medium text-custom-text-100">Helpdesk & Support</h2>
-            <p className="text-xs text-custom-text-300">Operational performance and response times over the last 90 days.</p>
-          </div>
-
-          {/* Fix #5: Helpdesk KPI summary cards */}
+      {/* ─── Section 4: Operational & Delivery Trends ──────────── */}
+      <div>
+        <SectionHeader
+          title="Operational & Delivery Trends"
+          hint={`Trend breakdown over the last ${periodDaysLabel}`}
+        />
+        <div className="flex flex-col gap-6 px-page-x py-4">
+          {/* Row 1: 5 KPI Summary Cards */}
           <HelpdeskKpiCards kpis={helpdeskData?.kpis} isLoading={hdLoading} />
 
-          {/* Fix #6: SLA compliance */}
-          <SLAComplianceCard sla={helpdeskData?.sla} isLoading={hdLoading} />
-
-          {/* Trend charts */}
-          <CardWrapper title="Requests Volume Over Time" subtitle="Trend analysis">
-            <RequestsOverTimeChart data={helpdeskData?.charts.requests_over_time} isLoading={hdLoading} />
-          </CardWrapper>
-
-          <CardWrapper title="Resolution Time Trend" subtitle="Average time to resolve in hours">
-            <ResolutionTimeTrendChart data={helpdeskData?.charts.resolution_time_trend} isLoading={hdLoading} />
-          </CardWrapper>
-        </div>
-
-        {/* ─── COLUMN 2: Projects / Engineering KPIs ───────────── */}
-        <div className="flex flex-col gap-6">
-          <div className="border-custom-border-100 border-b pb-2">
-            <h2 className="text-lg font-medium text-custom-text-100">Engineering & Projects</h2>
-            <p className="text-xs text-custom-text-300">Development velocity and KPI performance over the last 90 days.</p>
+          {/* Row 2: SLA Compliance & Project Efficiency side-by-side */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <SLAComplianceCard sla={helpdeskData?.sla} isLoading={hdLoading} />
+            {projectChartData.length > 0 && (
+              <CardWrapper title="Project Efficiency" subtitle="Efficiency scores (%) by project">
+                <KpiScoreBarChart data={projectChartData} label="Efficiency (%)" />
+              </CardWrapper>
+            )}
           </div>
 
-          {overview && (
-            <div className="border-custom-border-200 bg-custom-background-100 rounded-xl border overflow-hidden">
-              <UnifiedKpiHero unified={overview.unified} />
-              <KpiStatBar agg={statAggregates} mixedScale />
-            </div>
-          )}
-
-          {projectChartData.length > 0 && (
-            <CardWrapper title="Project Efficiency" subtitle="Efficiency scores (%) by project">
-              <KpiScoreBarChart data={projectChartData} label="Efficiency (%)" />
+          {/* Row 3: Requests Volume Over Time & Resolution Time Trend side-by-side */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <CardWrapper title="Requests Volume Over Time" subtitle="Trend analysis">
+              <RequestsOverTimeChart data={helpdeskData?.charts.requests_over_time} isLoading={hdLoading} />
             </CardWrapper>
-          )}
+            <CardWrapper title="Resolution Time Trend" subtitle="Average time to resolve in hours">
+              <ResolutionTimeTrendChart data={helpdeskData?.charts.resolution_time_trend} isLoading={hdLoading} />
+            </CardWrapper>
+          </div>
         </div>
-
       </div>
     </div>
   );

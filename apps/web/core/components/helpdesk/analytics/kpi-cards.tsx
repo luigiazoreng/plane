@@ -22,27 +22,19 @@ type KPICardProps = {
 };
 
 const KPICard = ({ title, value, icon: Icon, iconBgColor, iconTextColor, pctChange, suffix }: KPICardProps) => (
-  <div className="border-custom-border-200 bg-custom-background-100 hover:border-custom-border-300 group hover:shadow-sm flex flex-col justify-between gap-4 rounded-xl border p-4.5 transition-all duration-200">
+  <div className="flex flex-col justify-between gap-3 rounded-md border border-subtle bg-surface-1 p-4 transition-all duration-200">
     <div className="flex items-start justify-between gap-2">
-      <div className="flex items-center gap-2.5">
-        <div
-          className={cn(
-            "flex size-8 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105",
-            iconBgColor,
-            iconTextColor
-          )}
-        >
-          <Icon className="size-4" />
+      <div className="flex items-center gap-2">
+        <div className={cn("flex size-7 items-center justify-center rounded-md", iconBgColor, iconTextColor)}>
+          <Icon className="size-3.5" />
         </div>
-        <span className="text-xs text-custom-text-300 font-medium">{title}</span>
+        <span className="text-11 font-medium text-tertiary">{title}</span>
       </div>
       {pctChange !== null && pctChange !== undefined && (
         <span
           className={cn(
-            "text-xs flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold transition-colors",
-            pctChange >= 0
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+            "flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-11 font-medium",
+            pctChange >= 0 ? "bg-success-primary/10 text-success-primary" : "bg-danger-primary/10 text-danger-primary"
           )}
         >
           {pctChange >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
@@ -52,25 +44,23 @@ const KPICard = ({ title, value, icon: Icon, iconBgColor, iconTextColor, pctChan
     </div>
 
     <div className="flex items-baseline gap-1.5 pt-1">
-      <span className="text-2xl text-custom-text-100 font-bold tracking-tight">
+      <span className="text-20 font-semibold text-primary tabular-nums">
         {value === null || value === undefined ? "—" : value}
       </span>
-      {suffix && value !== null && value !== undefined && (
-        <span className="text-xs text-custom-text-300 font-medium">{suffix}</span>
-      )}
+      {suffix && value !== null && value !== undefined && <span className="text-11 text-tertiary">{suffix}</span>}
     </div>
   </div>
 );
 
 const KPICardSkeleton = () => (
-  <div className="border-custom-border-200 bg-custom-background-100 flex animate-pulse flex-col justify-between gap-4 rounded-xl border p-4.5">
+  <div className="flex animate-pulse flex-col justify-between gap-3 rounded-md border border-subtle bg-surface-1 p-4">
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        <div className="bg-custom-background-80 size-8 rounded-lg" />
-        <div className="bg-custom-background-80 h-3 w-20 rounded" />
+      <div className="flex items-center gap-2">
+        <div className="size-7 rounded-md bg-surface-2" />
+        <div className="h-3 w-16 rounded bg-surface-2" />
       </div>
     </div>
-    <div className="bg-custom-background-80 h-7 w-16 rounded-md" />
+    <div className="h-6 w-12 rounded-md bg-surface-2" />
   </div>
 );
 
