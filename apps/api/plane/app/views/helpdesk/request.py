@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import Case, IntegerField, Prefetch, Value, When
+from django.db.models import BooleanField, Case, Exists, F, IntegerField, OuterRef, Prefetch, Subquery, Value, When
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -12,6 +12,8 @@ from plane.db.models.helpdesk import (
     HelpdeskPortal,
     HelpdeskRequest,
     HelpdeskRequestAssignee,
+    HelpdeskRequestBookmark,
+    HelpdeskRequestReadReceipt,
     HelpdeskStatus,
 )
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
@@ -21,6 +23,7 @@ from .form import get_customer_from_token
 from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, generate_ticket_display_id
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
+from plane.app.helpdesk.activity import diff_and_record_activities
 from plane.utils.order_queryset import PRIORITY_ORDER
 
 HELPDESK_ARCHIVABLE_STATUS_NAMES = ("resolved", "closed", "completed", "canceled", "cancelled")
@@ -116,8 +119,40 @@ class HelpdeskRequestViewSet(BaseViewSet):
                 "request_assignees",
                 queryset=HelpdeskRequestAssignee.objects.filter(deleted_at__isnull=True),
                 to_attr="_prefetched_assignees",
-            )
+            ),
+            Prefetch(
+                "labels",
+                to_attr="_prefetched_labels",
+            ),
         )
+
+        if self.request and self.request.user and self.request.user.is_authenticated:
+            user_bookmark = HelpdeskRequestBookmark.objects.filter(
+                request=OuterRef("pk"),
+                user=self.request.user,
+                deleted_at__isnull=True,
+            ).values("id")[:1]
+
+            user_receipt = HelpdeskRequestReadReceipt.objects.filter(
+                request=OuterRef("pk"),
+                user=self.request.user,
+                deleted_at__isnull=True,
+            ).values("last_read_at")[:1]
+
+            queryset = queryset.annotate(
+                is_bookmarked=Case(
+                    When(Exists(user_bookmark), then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+                last_read_at=Subquery(user_receipt),
+                is_unread=Case(
+                    When(last_read_at__isnull=True, then=Value(True)),
+                    When(last_read_at__lt=F("updated_at"), then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+            )
 
         return queryset
 
@@ -185,13 +220,68 @@ class HelpdeskRequestViewSet(BaseViewSet):
         publish(slug or "", {"type": "request.updated", "request_id": str(instance.id)})
         return Response({"archived_at": None}, status=status.HTTP_200_OK)
 
+    def mark_read(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        if get_helpdesk_role(request.user, slug) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        receipt, _ = HelpdeskRequestReadReceipt.objects.update_or_create(
+            request=instance,
+            user=request.user,
+            workspace_id=instance.workspace_id,
+            defaults={"deleted_at": None},
+        )
+        receipt.save()  # auto_now updates last_read_at
+        return Response({"is_unread": False, "last_read_at": receipt.last_read_at.isoformat()}, status=status.HTTP_200_OK)
+
+    def toggle_bookmark(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        if get_helpdesk_role(request.user, slug) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        bookmark = HelpdeskRequestBookmark.objects.filter(
+            request=instance, user=request.user, deleted_at__isnull=True
+        ).first()
+        if bookmark:
+            bookmark.delete()
+            return Response({"is_bookmarked": False}, status=status.HTTP_200_OK)
+        else:
+            HelpdeskRequestBookmark.objects.create(
+                request=instance, user=request.user, workspace_id=instance.workspace_id
+            )
+            return Response({"is_bookmarked": True}, status=status.HTTP_200_OK)
+
+    def snooze(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can snooze requests."}, status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        snoozed_until = request.data.get("snoozed_until")
+        instance.snoozed_until = snoozed_until
+        instance.save(update_fields=["snoozed_until", "updated_at"])
+        publish(slug or "", {"type": "request.updated", "request_id": str(instance.id)})
+        return Response({"snoozed_until": instance.snoozed_until}, status=status.HTTP_200_OK)
+
     def partial_update(self, request, *args, **kwargs):
         slug = self.kwargs.get("slug")
         role = get_helpdesk_role(request.user, slug)
         if role is None or role < MEMBER:
             return Response({"error": "Helpdesk Members or Admins can update requests."}, status=status.HTTP_403_FORBIDDEN)
         instance = self.get_object()
-        old_status_id = str(instance.status_id) if instance.status_id else None
+        # Snapshot before the update for activity diff
+        old_snapshot = {
+            "status_id": str(instance.status_id) if instance.status_id else None,
+            "priority": instance.priority,
+            "assignee_ids": sorted(
+                str(uid) for uid in instance.assignees.values_list("id", flat=True)
+            ),
+            "label_ids": sorted(
+                str(uid) for uid in instance.labels.values_list("id", flat=True)
+            ),
+            "team_id": str(instance.team_id) if instance.team_id else None,
+        }
+        old_status_id = old_snapshot["status_id"]
         response = super().partial_update(request, *args, **kwargs)
         new_status_id = request.data.get("status")
         if new_status_id and new_status_id != old_status_id:
@@ -200,6 +290,8 @@ class HelpdeskRequestViewSet(BaseViewSet):
                 HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=timezone.now())
             elif new_status and not new_status.is_terminal:
                 HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=None)
+        # Record activity for any changed fields
+        diff_and_record_activities(instance, request.user, old_snapshot, request.data)
         publish(self.kwargs.get("slug", ""), {"type": "request.updated", "request_id": str(instance.id)})
         return response
 

@@ -234,6 +234,13 @@ export const WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS: Record<string, IWorkspa
     access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER],
     highlight: (pathname: string, url: string) => pathname.includes(url),
   },
+  executive: {
+    key: "executive",
+    labelTranslationKey: "sidebar.executive",
+    href: `/executive/`,
+    access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER],
+    highlight: (pathname: string, url: string) => pathname.includes(url),
+  },
 };
 
 export const WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS: IWorkspaceSidebarNavigationItem[] = [
@@ -242,6 +249,7 @@ export const WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS: IWorkspaceSidebar
   WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS["archives"],
   WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS["helpdesk"],
   WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS["kpi"],
+  WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS["executive"],
 ];
 
 export const WORKSPACE_SIDEBAR_STATIC_NAVIGATION_ITEMS: Record<string, IWorkspaceSidebarNavigationItem> = {

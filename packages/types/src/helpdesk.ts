@@ -153,8 +153,40 @@ export interface IHelpdeskRequest {
   priority: TIssuePriorities;
   form_responses: Record<string, unknown>;
   assignees: string[];
+  labels: string[];
+  label_detail?: { id: string; name: string; color: string }[];
+  team?: string | null;
+  team_detail?: { id: string; name: string; color: string } | null;
+  is_unread?: boolean;
+  is_bookmarked?: boolean;
+  snoozed_until?: string | null;
   start_date: string | null;
   target_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IHelpdeskTeam {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  workspace: string;
+  members: string[];
+  members_detail?: { id: string; name?: string; display_name?: string; avatar_url?: string; email?: string }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IHelpdeskMacro {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  is_public: boolean;
+  actions: { type: string; value: string }[];
+  sequence: number;
+  workspace: string;
   created_at: string;
   updated_at: string;
 }
@@ -195,6 +227,28 @@ export interface IHelpdeskAttachment {
   /** API path that 302s to a presigned download; prefix with getFileURL(). */
   asset_url: string | null;
   created_at: string;
+}
+
+export interface IHelpdeskRequestActivity {
+  id: string;
+  request: string;
+  actor: string | null;
+  actor_detail?: { id: string; name?: string; display_name?: string; avatar_url?: string; email?: string } | null;
+  verb: string;
+  field: string;
+  old_value: string;
+  new_value: string;
+  old_identifier: string | null;
+  new_identifier: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IHelpdeskCustomerStats {
+  total: number;
+  open: number;
+  resolved: number;
+  firstContactAt: string | null;
 }
 
 /** Response from the helpdesk asset upload endpoints. */

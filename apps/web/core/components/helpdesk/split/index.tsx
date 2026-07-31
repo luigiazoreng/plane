@@ -126,6 +126,12 @@ export const HelpdeskSplitView = observer(
         .fetchRequestIssues(workspaceSlug, rId)
         .then(() => helpdeskStore.hydrateLinkedIssues(workspaceSlug, rId));
       helpdeskStore.fetchRequestIntakeIssues(workspaceSlug, rId);
+      helpdeskStore.fetchRequestActivities(workspaceSlug, rId);
+      helpdeskStore.fetchCustomerHistory(workspaceSlug, rId);
+      helpdeskStore.fetchCustomerStats(workspaceSlug, rId);
+      helpdeskStore.fetchMacros(workspaceSlug);
+      helpdeskStore.fetchTeams(workspaceSlug);
+      helpdeskStore.markRequestRead(workspaceSlug, rId);
     }, [workspaceSlug, selectedRequestId, helpdeskStore]);
 
     // Drafts are per-ticket in the agent's head; clear when switching rows so a
@@ -151,6 +157,11 @@ export const HelpdeskSplitView = observer(
 
     const rId = selectedRequestId ?? "";
     const comments = helpdeskStore.getRequestComments(rId);
+    const activities = helpdeskStore.getRequestActivities(rId);
+    const customerHistory = helpdeskStore.getCustomerHistory(rId);
+    const customerStats = helpdeskStore.getCustomerStats(rId);
+    const macros = helpdeskStore.getWorkspaceMacros(workspaceSlug);
+    const teams = helpdeskStore.getWorkspaceTeams(workspaceSlug);
     const linkedIssues = helpdeskStore.getRequestIssues(rId);
     const intakeLinks = helpdeskStore.getRequestIntakeIssues(rId);
     const unresolvedLinkedIssueIds = helpdeskStore.getUnresolvedLinkedIssues(rId);
@@ -233,6 +244,31 @@ export const HelpdeskSplitView = observer(
         }
       },
       [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
+    );
+
+    const handleTeamChange = useCallback(
+      async (teamId: string | null) => {
+        if (!selectedRequestId) return;
+        try {
+          applyRequestUpdate(await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { team: teamId }));
+        } catch (_error) {
+          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update team" });
+        }
+      },
+      [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
+    );
+
+    const handleToggleBookmark = useCallback(() => {
+      if (!selectedRequestId) return;
+      helpdeskStore.toggleBookmark(workspaceSlug, selectedRequestId);
+    }, [workspaceSlug, selectedRequestId, helpdeskStore]);
+
+    const handleSnooze = useCallback(
+      (snoozedUntil: string | null) => {
+        if (!selectedRequestId) return;
+        helpdeskStore.snoozeRequest(workspaceSlug, selectedRequestId, snoozedUntil);
+      },
+      [workspaceSlug, selectedRequestId, helpdeskStore]
     );
 
     const handleLinkIssues = useCallback(
@@ -320,12 +356,19 @@ export const HelpdeskSplitView = observer(
               <ConversationPanel
                 request={selectedRequest}
                 comments={comments}
+                activities={activities}
+                customerHistory={customerHistory}
+                macros={macros}
+                teams={teams}
                 isLoadingComments={commentsState.isLoading}
                 statuses={statuses}
                 statusMap={statusMap}
                 onStatusChange={handleStatusChange}
                 onPriorityChange={handlePriorityChange}
                 onAssigneesChange={handleAssigneesChange}
+                onTeamChange={handleTeamChange}
+                onToggleBookmark={handleToggleBookmark}
+                onSnooze={handleSnooze}
                 composerMode={composerMode}
                 onComposerModeChange={setComposerMode}
                 draft={draft}
@@ -341,8 +384,11 @@ export const HelpdeskSplitView = observer(
                 request={selectedRequest}
                 statusMap={statusMap}
                 portal={portal}
+                customerStats={customerStats}
                 onAssigneesChange={handleAssigneesChange}
                 onPriorityChange={handlePriorityChange}
+                teams={teams}
+                onTeamChange={handleTeamChange}
                 intakeLinks={intakeLinks}
                 isLoadingIntakeLinks={intakeLinksState.isLoading}
                 onForward={() => setIsForwardModalOpen(true)}
