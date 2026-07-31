@@ -150,6 +150,8 @@ export class CoreRootStore {
     // handling the system theme when user logged out from the app
     localStorage.setItem("theme", "system");
     localStorage.setItem(LANGUAGE_STORAGE_KEY, FALLBACK_LANGUAGE);
+    localStorage.removeItem("app_rail_preferences");
+    localStorage.removeItem("app_sidebar_collapsed");
     this.router = new RouterStore();
     this.commandPalette = new CommandPaletteStore();
     this.instance = new InstanceStore();

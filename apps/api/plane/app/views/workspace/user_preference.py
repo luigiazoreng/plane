@@ -27,38 +27,35 @@ class WorkspaceUserPreferenceViewSet(BaseAPIView):
         workspace = Workspace.objects.get(slug=slug)
 
         get_preference = WorkspaceUserPreference.objects.filter(user=request.user, workspace_id=workspace.id)
-
-        create_preference_keys = []
+        existing_keys = set(get_preference.values_list("key", flat=True))
 
         keys = [key for key, _ in WorkspaceUserPreference.UserPreferenceKeys.choices]
+        missing_keys = [k for k in keys if k not in existing_keys]
 
-        for preference in keys:
-            if preference not in get_preference.values_list("key", flat=True):
-                create_preference_keys.append(preference)
-
-                preference = WorkspaceUserPreference.objects.bulk_create(
-                    [
-                        WorkspaceUserPreference(
-                            key=key,
-                            user=request.user,
-                            workspace=workspace,
-                            sort_order=(65535 + (i * 10000)),
-                            is_pinned=(
-                                True
-                                if key
-                                in [
-                                    WorkspaceUserPreference.UserPreferenceKeys.DRAFTS,
-                                    WorkspaceUserPreference.UserPreferenceKeys.YOUR_WORK,
-                                    WorkspaceUserPreference.UserPreferenceKeys.STICKIES,
-                                ]
-                                else False
-                            ),
-                        )
-                        for i, key in enumerate(create_preference_keys)
-                    ],
-                    batch_size=10,
-                    ignore_conflicts=True,
-                )
+        if missing_keys:
+            WorkspaceUserPreference.objects.bulk_create(
+                [
+                    WorkspaceUserPreference(
+                        key=key,
+                        user=request.user,
+                        workspace=workspace,
+                        sort_order=(65535 + (i * 10000)),
+                        is_pinned=(
+                            True
+                            if key
+                            in [
+                                WorkspaceUserPreference.UserPreferenceKeys.DRAFTS,
+                                WorkspaceUserPreference.UserPreferenceKeys.YOUR_WORK,
+                                WorkspaceUserPreference.UserPreferenceKeys.STICKIES,
+                            ]
+                            else False
+                        ),
+                    )
+                    for i, key in enumerate(missing_keys)
+                ],
+                batch_size=10,
+                ignore_conflicts=True,
+            )
 
         preferences = (
             WorkspaceUserPreference.objects.filter(user=request.user, workspace_id=workspace.id)
@@ -80,22 +77,33 @@ class WorkspaceUserPreferenceViewSet(BaseAPIView):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def patch(self, request, slug):
+        workspace = Workspace.objects.get(slug=slug)
         for data in request.data:
             key = data.pop("key", None)
             if not key:
                 continue
 
-            preference = WorkspaceUserPreference.objects.filter(key=key, workspace__slug=slug).first()
+            preference, _ = WorkspaceUserPreference.objects.get_or_create(
+                key=key,
+                workspace=workspace,
+                user=request.user,
+                defaults={
+                    "is_pinned": data.get("is_pinned", False),
+                    "sort_order": data.get("sort_order", 65535),
+                },
+            )
 
-            if not preference:
-                continue
-
+            update_fields = []
             if "is_pinned" in data:
                 preference.is_pinned = data["is_pinned"]
+                update_fields.append("is_pinned")
 
             if "sort_order" in data:
                 preference.sort_order = data["sort_order"]
+                update_fields.append("sort_order")
 
-            preference.save(update_fields=["is_pinned", "sort_order"])
+            if update_fields:
+                preference.save(update_fields=update_fields)
 
         return Response({"message": "Successfully updated"}, status=status.HTTP_200_OK)
+
