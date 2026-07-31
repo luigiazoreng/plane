@@ -43,6 +43,11 @@ type THelpdeskSplitViewProps = {
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore: () => void;
+  /** Owned by the route, so a ticket URL is shareable and survives reload. */
+  selectedRequestId: string | null;
+  onSelectRequest: (requestId: string) => void;
+  /** Mobile only: returns from the conversation to the full-width queue. */
+  onClearSelection: () => void;
 };
 
 export const HelpdeskSplitView = observer(
@@ -56,28 +61,61 @@ export const HelpdeskSplitView = observer(
     hasMore,
     isLoadingMore,
     onLoadMore,
+    selectedRequestId,
+    onSelectRequest,
+    onClearSelection,
   }: THelpdeskSplitViewProps) => {
     const helpdeskStore = useHelpdesk();
     const { issueMap } = useIssues();
     const { getProjectById, getProjectIdentifierById, workspaceProjectIds } = useProject();
 
-    const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
     const [composerMode, setComposerMode] = useState<TComposerMode>("reply");
     const [draft, setDraft] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
     const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
 
-    // Keep a selection pinned to a row that still exists after a refetch.
+    // A ticket reached by URL is very often outside the loaded page — the queue
+    // holds ~100 of several thousand, and filters narrow it further. It is
+    // fetched on its own and kept in local state rather than through
+    // helpdeskStore.fetchRequestById, which would prepend it to the queue (wrong
+    // position, possibly outside the active filter) and inflate totalCount.
+    // Falling back to requests[0] here would be worse than a 404: the agent
+    // would silently be shown a different ticket than the link named.
+    const [offQueueRequest, setOffQueueRequest] = useState<IHelpdeskRequest | null>(null);
+    const [isLoadingOffQueue, setIsLoadingOffQueue] = useState(false);
+    const [isMissing, setIsMissing] = useState(false);
+
+    const queuedRequest = useMemo(
+      () => requests.find((r) => r.id === selectedRequestId),
+      [requests, selectedRequestId]
+    );
+
     useEffect(() => {
-      if (requests.length === 0) {
-        if (selectedRequestId !== null) setSelectedRequestId(null);
+      if (!selectedRequestId || queuedRequest) {
+        setOffQueueRequest(null);
+        setIsMissing(false);
         return;
       }
-      if (!selectedRequestId || !requests.some((r) => r.id === selectedRequestId)) {
-        setSelectedRequestId(requests[0].id);
-      }
-    }, [requests, selectedRequestId]);
+      if (offQueueRequest?.id === selectedRequestId) return;
+
+      let cancelled = false;
+      setIsLoadingOffQueue(true);
+      setIsMissing(false);
+      void (async () => {
+        try {
+          const request = await helpdeskStore.helpdeskService.getRequestById(workspaceSlug, selectedRequestId);
+          if (!cancelled) setOffQueueRequest(request);
+        } catch {
+          if (!cancelled) setIsMissing(true);
+        } finally {
+          if (!cancelled) setIsLoadingOffQueue(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [selectedRequestId, queuedRequest, offQueueRequest, workspaceSlug, helpdeskStore]);
 
     // Load the detail bundle for whichever ticket is selected.
     useEffect(() => {
@@ -108,10 +146,8 @@ export const HelpdeskSplitView = observer(
     );
     const attachments = useAttachmentUpload(attachmentTransport);
 
-    const selectedRequest = useMemo(
-      () => requests.find((r) => r.id === selectedRequestId),
-      [requests, selectedRequestId]
-    );
+    // The queue copy wins when present so store updates keep flowing into it.
+    const selectedRequest = queuedRequest ?? (offQueueRequest?.id === selectedRequestId ? offQueueRequest : undefined);
 
     const rId = selectedRequestId ?? "";
     const comments = helpdeskStore.getRequestComments(rId);
@@ -128,6 +164,12 @@ export const HelpdeskSplitView = observer(
     );
 
     const linkedIssueIds = useMemo(() => linkedIssues.map((i) => i.issue), [linkedIssues]);
+
+    // updateRequest maps its response into the queue list, which is a no-op for
+    // an off-queue ticket — so feed the response back into local state by hand.
+    const applyRequestUpdate = useCallback((updated: IHelpdeskRequest) => {
+      setOffQueueRequest((current) => (current && current.id === updated.id ? updated : current));
+    }, []);
 
     const handleSubmitComment = useCallback(async () => {
       const content = draft.trim();
@@ -159,36 +201,38 @@ export const HelpdeskSplitView = observer(
       async (statusId: string) => {
         if (!selectedRequestId) return;
         try {
-          await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { status: statusId || null });
+          applyRequestUpdate(
+            await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { status: statusId || null })
+          );
         } catch (_error) {
           setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update status" });
         }
       },
-      [helpdeskStore, workspaceSlug, selectedRequestId]
+      [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
     );
 
     const handlePriorityChange = useCallback(
       async (priority: TIssuePriorities) => {
         if (!selectedRequestId) return;
         try {
-          await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { priority });
+          applyRequestUpdate(await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { priority }));
         } catch (_error) {
           setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update priority" });
         }
       },
-      [helpdeskStore, workspaceSlug, selectedRequestId]
+      [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
     );
 
     const handleAssigneesChange = useCallback(
       async (assignees: string[]) => {
         if (!selectedRequestId) return;
         try {
-          await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { assignees });
+          applyRequestUpdate(await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { assignees }));
         } catch (_error) {
           setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update assignees" });
         }
       },
-      [helpdeskStore, workspaceSlug, selectedRequestId]
+      [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
     );
 
     const handleLinkIssues = useCallback(
@@ -262,12 +306,13 @@ export const HelpdeskSplitView = observer(
             requests={requests}
             statusMap={statusMap}
             selectedRequestId={selectedRequestId}
-            onSelect={setSelectedRequestId}
+            onSelect={onSelectRequest}
             displayFilters={displayFilters}
             onOrderByChange={onOrderByChange}
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}
             onLoadMore={onLoadMore}
+            isTicketOpen={!!selectedRequestId}
           />
 
           {selectedRequest ? (
@@ -288,6 +333,7 @@ export const HelpdeskSplitView = observer(
                 onSubmit={handleSubmitComment}
                 isSubmitting={isSubmitting}
                 attachments={attachments}
+                onBackToQueue={onClearSelection}
               />
 
               <DetailPanel
@@ -311,8 +357,20 @@ export const HelpdeskSplitView = observer(
                 getProjectById={getProjectById}
               />
             </>
+          ) : isLoadingOffQueue ? (
+            <div className="hidden flex-1 items-center justify-center lg:flex">
+              <div className="size-7 animate-spin rounded-full border-b-2 border-accent-strong" />
+            </div>
+          ) : isMissing ? (
+            <div className="hidden flex-1 flex-col items-center justify-center gap-1.5 px-6 text-center lg:flex">
+              <MessageSquareText className="mb-2 size-7 text-tertiary" />
+              <p className="text-13 font-medium text-primary">Ticket não encontrado</p>
+              <p className="max-w-sm text-12 text-tertiary">
+                Este ticket foi removido ou você não tem acesso a ele. Escolha outro na fila à esquerda.
+              </p>
+            </div>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-1.5 px-6 text-center">
+            <div className="hidden flex-1 flex-col items-center justify-center gap-1.5 px-6 text-center lg:flex">
               <MessageSquareText className="mb-2 size-7 text-tertiary" />
               <p className="text-13 font-medium text-primary">Selecione um ticket</p>
               <p className="text-12 text-tertiary">Escolha uma conversa na fila à esquerda para começar a triagem.</p>

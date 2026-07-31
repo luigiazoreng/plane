@@ -85,7 +85,7 @@ export function DetailPanel({
   const customerStats = getCustomerStats(request);
 
   return (
-    <aside className="flex w-[300px] min-w-[300px] flex-col overflow-y-auto border-l border-subtle bg-surface-2">
+    <aside className="hidden w-[300px] min-w-[300px] flex-col overflow-y-auto border-l border-subtle bg-surface-2 xl:flex">
       {/* ---------------- Ticket ---------------- */}
       <Section title="Ticket">
         <Row label="Status">{status ? <HelpdeskStatusPill status={status} /> : <Empty />}</Row>

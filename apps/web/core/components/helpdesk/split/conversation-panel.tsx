@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import type { IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskStatus, TIssuePriorities } from "@plane/types";
 import { cn, convertBytesToSize, getFileURL } from "@plane/utils";
-import { ChevronDown, Clock, MoreHorizontal, Paperclip, Star } from "lucide-react";
+import { ArrowLeft, ChevronDown, Clock, MoreHorizontal, Paperclip, Star } from "lucide-react";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { HelpdeskStatusDot } from "@/components/helpdesk/status-pill";
@@ -34,6 +34,7 @@ type TConversationPanelProps = {
   onSubmit: () => void;
   isSubmitting: boolean;
   attachments: ReturnType<typeof useAttachmentUpload>;
+  onBackToQueue: () => void;
 };
 
 export function ConversationPanel({
@@ -52,6 +53,7 @@ export function ConversationPanel({
   onSubmit,
   isSubmitting,
   attachments,
+  onBackToQueue,
 }: TConversationPanelProps) {
   const [tab, setTab] = useState<TConversationTab>("conversation");
 
@@ -73,6 +75,14 @@ export function ConversationPanel({
       {/* ------------------------------- Header ------------------------------- */}
       <div className="flex flex-col gap-2 border-b border-subtle px-5 pt-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onBackToQueue}
+            aria-label="Voltar para a fila"
+            className="-ml-1 grid size-7 shrink-0 place-items-center rounded text-tertiary hover:bg-layer-1 hover:text-primary lg:hidden"
+          >
+            <ArrowLeft className="size-4" />
+          </button>
           {request.display_id && <span className="font-mono shrink-0 text-11 text-tertiary">{request.display_id}</span>}
           <h2 className="text-sm min-w-0 truncate font-semibold text-primary">{request.title}</h2>
           <PriorityDropdown

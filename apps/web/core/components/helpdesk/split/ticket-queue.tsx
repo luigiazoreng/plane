@@ -46,6 +46,8 @@ type TTicketQueueProps = {
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore: () => void;
+  /** Drives the mobile split: queue and conversation swap instead of stacking. */
+  isTicketOpen: boolean;
 };
 
 export function TicketQueue({
@@ -58,6 +60,7 @@ export function TicketQueue({
   hasMore,
   isLoadingMore,
   onLoadMore,
+  isTicketOpen,
 }: TTicketQueueProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const onLoadMoreRef = useRef(onLoadMore);
@@ -77,7 +80,15 @@ export function TicketQueue({
   }, [hasMore]);
 
   return (
-    <div className="flex w-[312px] min-w-[312px] flex-col border-r border-subtle bg-surface-1">
+    <div
+      className={cn(
+        "flex flex-col border-r border-subtle bg-surface-1",
+        // Below lg the three columns cannot coexist: the queue takes the whole
+        // width until a ticket is opened, then yields it to the conversation.
+        "w-full lg:w-[312px] lg:min-w-[312px]",
+        isTicketOpen && "hidden lg:flex"
+      )}
+    >
       {/* Sort bar */}
       <div className="flex h-9 min-h-9 items-center justify-between gap-2 border-b border-subtle px-3">
         <div className="relative flex items-center gap-1 text-secondary">

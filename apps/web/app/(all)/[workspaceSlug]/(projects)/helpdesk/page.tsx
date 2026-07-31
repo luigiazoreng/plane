@@ -108,7 +108,7 @@ function StatusChip({
 }
 
 const WorkspaceHelpdeskPage = observer(() => {
-  const { workspaceSlug } = useParams();
+  const { workspaceSlug, requestId: routeRequestId } = useParams();
   const navigate = useNavigate();
   const helpdeskStore = useHelpdesk();
   const { getUserDetails } = useMember();
@@ -138,7 +138,18 @@ const WorkspaceHelpdeskPage = observer(() => {
   const listSentinelRef = useRef<HTMLDivElement>(null);
 
   const wSlug = workspaceSlug?.toString() || "";
-  const layout = storedLayout || "list";
+  const selectedRequestId = routeRequestId?.toString() || null;
+  // A ticket in the URL always means split: List and Kanban have no notion of a
+  // selected ticket, so honouring the stored layout would drop the selection.
+  const layout: THelpdeskAgentLayout = selectedRequestId ? "split" : storedLayout || "list";
+
+  const handleSelectRequest = (id: string) => navigate(`/${wSlug}/helpdesk/${id}`, { replace: true });
+  // Leaving split drops the ticket from the URL, otherwise the route would
+  // force us straight back into it.
+  const handleLayoutChange = (next: THelpdeskAgentLayout) => {
+    setStoredLayout(next);
+    if (selectedRequestId) navigate(`/${wSlug}/helpdesk`, { replace: true });
+  };
 
   const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
   const requests = helpdeskStore.getWorkspaceRequests(wSlug);
@@ -405,7 +416,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setStoredLayout(key)}
+                    onClick={() => handleLayoutChange(key)}
                     aria-pressed={layout === key}
                     className={cn(
                       "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
@@ -457,7 +468,9 @@ const WorkspaceHelpdeskPage = observer(() => {
               Configure
             </button>
           </div>
-        ) : requests.length === 0 && !addingToGroup ? (
+        ) : requests.length === 0 && !addingToGroup && !selectedRequestId ? (
+          // A ticket reached by URL must still render even when the queue comes
+          // back empty (filters, or the ticket living outside the loaded page).
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <MessageSquareText className="mb-4 size-8 text-tertiary" />
             <p className="text-13 font-medium text-primary">No requests found</p>
@@ -485,6 +498,9 @@ const WorkspaceHelpdeskPage = observer(() => {
               hasMore={hasMoreRequests}
               isLoadingMore={isLoadingMore}
               onLoadMore={fetchMore}
+              selectedRequestId={selectedRequestId}
+              onSelectRequest={handleSelectRequest}
+              onClearSelection={() => navigate(`/${wSlug}/helpdesk`, { replace: true })}
             />
           </div>
         ) : layout === "kanban" ? (
