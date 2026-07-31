@@ -200,6 +200,20 @@ class HelpdeskRequestSource(models.TextChoices):
     INTERNAL_FORM = "internal_form", "Internal Form"
 
 
+class HelpdeskRequestPriority(models.TextChoices):
+    """
+    Deliberately the same values as Issue.PRIORITY_CHOICES so a ticket and the
+    work item it is forwarded to speak the same language, and so the frontend
+    reuses PriorityIcon / PriorityDropdown unchanged.
+    """
+
+    URGENT = "urgent", "Urgent"
+    HIGH = "high", "High"
+    MEDIUM = "medium", "Medium"
+    LOW = "low", "Low"
+    NONE = "none", "None"
+
+
 class HelpdeskRequest(WorkspaceBaseModel):
     portal = models.ForeignKey(HelpdeskPortal, on_delete=models.CASCADE, related_name="requests")
     form = models.ForeignKey(HelpdeskForm, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
@@ -214,6 +228,12 @@ class HelpdeskRequest(WorkspaceBaseModel):
     )
     source = models.CharField(
         max_length=50, choices=HelpdeskRequestSource.choices, default=HelpdeskRequestSource.PUBLIC_FORM
+    )
+    priority = models.CharField(
+        max_length=30,
+        choices=HelpdeskRequestPriority.choices,
+        default=HelpdeskRequestPriority.NONE,
+        verbose_name="Helpdesk Request Priority",
     )
     form_responses = models.JSONField(default=dict, blank=True)
     display_id = models.CharField(max_length=64, blank=True, default="")

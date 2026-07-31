@@ -141,10 +141,14 @@ export const coreRoutes: RouteConfigEntry[] = [
           route(":workspaceSlug/helpdesk/settings", "./(all)/[workspaceSlug]/(projects)/helpdesk/settings/page.tsx"),
           route(":workspaceSlug/helpdesk/analytics", "./(all)/[workspaceSlug]/(projects)/helpdesk/analytics/page.tsx"),
           route(":workspaceSlug/helpdesk/customers", "./(all)/[workspaceSlug]/(projects)/helpdesk/customers/page.tsx"),
-          route(
-            ":workspaceSlug/helpdesk/:requestId",
-            "./(all)/[workspaceSlug]/(projects)/helpdesk/[requestId]/page.tsx"
-          ),
+          // Same page as the queue: a ticket URL renders the split view with that
+          // ticket selected, so every existing /helpdesk/<id> link (Copy link,
+          // Open in new tab, notification emails) keeps resolving to it.
+          // Explicit id: the route id is derived from the file path, and this
+          // route deliberately shares its file with the queue route above.
+          route(":workspaceSlug/helpdesk/:requestId", "./(all)/[workspaceSlug]/(projects)/helpdesk/page.tsx", {
+            id: "workspace-helpdesk-request",
+          }),
         ]),
 
         // Archived Projects

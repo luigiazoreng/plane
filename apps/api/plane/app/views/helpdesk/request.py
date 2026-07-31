@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import Prefetch
+from django.db.models import Case, IntegerField, Prefetch, Value, When
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -21,6 +21,7 @@ from .form import get_customer_from_token
 from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, generate_ticket_display_id
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
+from plane.utils.order_queryset import PRIORITY_ORDER
 
 HELPDESK_ARCHIVABLE_STATUS_NAMES = ("resolved", "closed", "completed", "canceled", "cancelled")
 
@@ -47,6 +48,8 @@ class HelpdeskRequestViewSet(BaseViewSet):
         "updated_at",
         "-updated_at",
         "title",
+        "priority",
+        "-priority",
     }
 
     # comma-separated multi-value params -> queryset lookups (Plane convention)
@@ -56,6 +59,7 @@ class HelpdeskRequestViewSet(BaseViewSet):
         "form": "form__in",
         "source": "source__in",
         "assignees": "assignees__in",
+        "priority": "priority__in",
     }
 
     def get_queryset(self):
@@ -88,7 +92,19 @@ class HelpdeskRequestViewSet(BaseViewSet):
         order_by = self.request.query_params.get("order_by", "-created_at")
         if order_by not in self.ALLOWED_ORDER_BY:
             order_by = "-created_at"
-        queryset = queryset.order_by(order_by)
+        if order_by in ("priority", "-priority"):
+            # Sorting on the raw column would order alphabetically
+            # (high < low < medium < none < urgent), which is meaningless for
+            # triage. Rank by severity instead, the same way work items do.
+            queryset = queryset.annotate(
+                priority_order=Case(
+                    *[When(priority=p, then=Value(i)) for i, p in enumerate(PRIORITY_ORDER)],
+                    default=Value(len(PRIORITY_ORDER)),
+                    output_field=IntegerField(),
+                )
+            ).order_by("priority_order" if order_by == "priority" else "-priority_order", "-created_at")
+        else:
+            queryset = queryset.order_by(order_by)
 
         # distinct() guards against duplicate rows when filtering by the assignees M2M
         queryset = queryset.distinct()

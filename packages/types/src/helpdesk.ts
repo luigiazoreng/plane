@@ -4,6 +4,8 @@
  * See the LICENSE file for details.
  */
 
+import type { TIssuePriorities } from "./issues";
+
 export type IHelpdeskAutoAssignmentType = "load_balance" | "round_robin" | "capacity";
 
 export interface IHelpdeskAutoAssignmentConfig {
@@ -116,7 +118,7 @@ export interface IHelpdeskCustomer {
 }
 
 export type THelpdeskRequestSource = "public_form" | "internal_form";
-export type THelpdeskAgentLayout = "list" | "kanban";
+export type THelpdeskAgentLayout = "list" | "kanban" | "split";
 
 export interface IHelpdeskStatus {
   id: string;
@@ -147,6 +149,8 @@ export interface IHelpdeskRequest {
   status_detail: IHelpdeskStatus | null;
   form_detail: IHelpdeskForm | null;
   source: THelpdeskRequestSource;
+  /** Same value set as work items, so PriorityIcon / PriorityDropdown are reused as-is. */
+  priority: TIssuePriorities;
   form_responses: Record<string, unknown>;
   assignees: string[];
   start_date: string | null;
@@ -157,8 +161,15 @@ export interface IHelpdeskRequest {
 
 // --- List filters & display ---
 
-export type THelpdeskGroupBy = "status" | "assignee" | "portal" | "form" | "source" | "none";
-export type THelpdeskOrderBy = "-created_at" | "created_at" | "-updated_at" | "updated_at" | "title";
+export type THelpdeskGroupBy = "status" | "assignee" | "portal" | "form" | "source" | "priority" | "none";
+export type THelpdeskOrderBy =
+  | "-created_at"
+  | "created_at"
+  | "-updated_at"
+  | "updated_at"
+  | "title"
+  | "priority"
+  | "-priority";
 
 export interface IHelpdeskRequestFilters {
   status: string[];
@@ -166,6 +177,7 @@ export interface IHelpdeskRequestFilters {
   portal: string[];
   form: string[];
   source: THelpdeskRequestSource[];
+  priority: TIssuePriorities[];
   /** ["after:YYYY-MM-DD", "before:YYYY-MM-DD"] — same date filter shape used by work items */
   created_at: string[];
 }
