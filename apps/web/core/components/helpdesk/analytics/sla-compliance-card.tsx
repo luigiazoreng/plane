@@ -60,14 +60,14 @@ const SLABar = ({ pct, label, target }: { pct: number | null; label: string; tar
 export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLoading }: Props) {
   if (isLoading || !sla) {
     return (
-      <div className="border-custom-border-200 bg-custom-background-100 flex animate-pulse flex-col justify-between gap-4 rounded-xl border p-5">
+      <div className="flex animate-pulse flex-col justify-between gap-4 rounded-md border border-subtle bg-surface-1 p-4">
         <div className="flex items-center justify-between">
-          <div className="bg-custom-background-80 h-4 w-32 rounded" />
-          <div className="bg-custom-background-80 size-6 rounded-full" />
+          <div className="h-4 w-32 rounded bg-surface-2" />
+          <div className="size-6 rounded-full bg-surface-2" />
         </div>
         <div className="space-y-4 pt-2">
-          <div className="bg-custom-background-80 h-10 rounded-lg" />
-          <div className="bg-custom-background-80 h-10 rounded-lg" />
+          <div className="h-10 rounded-md bg-surface-2" />
+          <div className="h-10 rounded-md bg-surface-2" />
         </div>
       </div>
     );
@@ -75,20 +75,18 @@ export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLo
 
   if (!sla.sla_first_response_hours && !sla.sla_resolution_hours) {
     return (
-      <div className="border-custom-border-200 bg-custom-background-100 flex flex-col justify-between rounded-xl border p-5">
-        <div className="border-custom-border-100 flex items-center justify-between border-b pb-3">
+      <div className="flex min-h-[160px] flex-col justify-between rounded-md border border-subtle bg-surface-1 p-4">
+        <div className="flex items-center justify-between border-b border-subtle pb-3">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="text-custom-text-300 size-4" />
-            <span className="text-xs text-custom-text-100 tracking-wider font-semibold uppercase">SLA Compliance</span>
+            <ShieldCheck className="size-4 text-tertiary" />
+            <span className="text-12 font-medium tracking-wide text-primary uppercase">SLA Compliance</span>
           </div>
         </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-2.5 py-6 text-center">
-          <div className="bg-custom-background-80 text-custom-text-300 flex size-10 items-center justify-center rounded-full">
-            <ShieldAlert className="size-5" />
-          </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
+          <ShieldAlert className="size-6 text-tertiary" />
           <div>
-            <p className="text-xs text-custom-text-200 font-medium">No SLA targets configured</p>
-            <p className="text-custom-text-400 mt-0.5 text-[11px]">Configure SLA targets in portal settings</p>
+            <p className="text-13 font-medium text-secondary">No SLA targets configured</p>
+            <p className="mt-0.5 text-11 text-tertiary">Configure SLA targets in portal settings</p>
           </div>
         </div>
       </div>
@@ -101,19 +99,19 @@ export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLo
       : (sla.first_response_pct ?? sla.resolution_pct ?? null);
 
   return (
-    <div className="border-custom-border-200 bg-custom-background-100 flex flex-col justify-between gap-5 rounded-xl border p-5">
-      <div className="border-custom-border-100 flex items-center justify-between border-b pb-3">
+    <div className="flex flex-col justify-between gap-4 rounded-md border border-subtle bg-surface-1 p-4">
+      <div className="flex items-center justify-between border-b border-subtle pb-3">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="text-emerald-500 size-4" />
-          <span className="text-xs text-custom-text-100 tracking-wider font-semibold uppercase">SLA Performance</span>
+          <ShieldCheck className="size-4 text-success-primary" />
+          <span className="text-12 font-medium tracking-wide text-primary uppercase">SLA Compliance</span>
         </div>
         {overallScore !== null && (
           <span
             className={cn(
-              "text-xs rounded-full px-2 py-0.5 font-semibold",
+              "rounded-full px-2 py-0.5 text-11 font-medium",
               overallScore >= 80
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                ? "bg-success-primary/10 text-success-primary"
+                : "bg-warning-primary/10 text-warning-primary"
             )}
           >
             {overallScore}% Overall
@@ -139,8 +137,8 @@ export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLo
       </div>
 
       {sla.historical_note && (
-        <div className="border-custom-border-100 text-custom-text-400 flex items-start gap-2 border-t pt-3 text-[11px]">
-          <Info className="text-custom-text-300 mt-0.5 size-3.5 shrink-0" />
+        <div className="flex items-start gap-2 border-t border-subtle pt-3 text-11 text-tertiary">
+          <Info className="mt-0.5 size-3.5 shrink-0 text-tertiary" />
           <p>{sla.historical_note}</p>
         </div>
       )}

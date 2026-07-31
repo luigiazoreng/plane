@@ -93,6 +93,11 @@ export const coreRoutes: RouteConfigEntry[] = [
           route(":workspaceSlug/kpi", "./(all)/[workspaceSlug]/(projects)/kpi/page.tsx"),
         ]),
 
+        // Executive Dashboard
+        layout("./(all)/[workspaceSlug]/(projects)/executive/layout.tsx", [
+          route(":workspaceSlug/executive", "./(all)/[workspaceSlug]/(projects)/executive/page.tsx"),
+        ]),
+
         // Browse
         layout("./(all)/[workspaceSlug]/(projects)/browse/[workItem]/layout.tsx", [
           route(":workspaceSlug/browse/:workItem", "./(all)/[workspaceSlug]/(projects)/browse/[workItem]/page.tsx"),
