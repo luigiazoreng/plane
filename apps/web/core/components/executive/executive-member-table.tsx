@@ -8,6 +8,7 @@
 
 import React from "react";
 import { Users } from "lucide-react";
+import { Tooltip } from "@plane/propel/tooltip";
 import { Avatar } from "@plane/ui";
 import { cn, getFileURL } from "@plane/utils";
 import type { IExecutiveMember } from "./helpers";
@@ -41,6 +42,11 @@ export const ExecutiveMemberTable: React.FC<Props> = ({ members }) => {
           <tr className="border-b border-subtle">
             <th className={cn(HEAD, "w-12 text-center")}>#</th>
             <th className={cn(HEAD, "sticky left-0 z-10 text-left")}>Member</th>
+            <th className={cn(HEAD, "text-right")}>
+              <Tooltip tooltipContent="Total items this member is carrying: delivered + pending KPI work items, plus Helpdesk tickets. Informational only -- it never affects the Score column.">
+                <span>Workload</span>
+              </Tooltip>
+            </th>
             <th className={cn(HEAD, "text-center")}>Profile</th>
             <th className={cn(HEAD, "text-right")}>Helpdesk</th>
             <th className={cn(HEAD, "text-right")}>Projects</th>
@@ -66,6 +72,9 @@ export const ExecutiveMemberTable: React.FC<Props> = ({ members }) => {
                     <span className="truncate font-medium text-primary">{member.displayName}</span>
                   </div>
                 </td>
+
+                {/* Workload */}
+                <td className="px-page-x text-right text-secondary tabular-nums">{member.workload}</td>
 
                 {/* Profile tag */}
                 <td className="px-page-x text-center">

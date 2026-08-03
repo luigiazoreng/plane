@@ -50,6 +50,12 @@ export interface IExecutiveMember {
   hdTickets: number | null;
   /** Raw KPI efficiency ratio (0-1). */
   kpiEfficiency: number | null;
+  /**
+   * Total items this member is carrying in the period: delivered + pending KPI
+   * work items, plus Helpdesk tickets. Informational only -- it never feeds
+   * into finalScore, so a heavier workload never lowers the ranking.
+   */
+  workload: number;
 }
 
 // ── Default weights ────────────────────────────────────────────────────────
@@ -179,6 +185,12 @@ function kpiScoredItemCount(member: IKpiMemberAggregate | undefined): number {
   return (member.counts.on_time ?? 0) + (member.counts.early ?? 0) + (member.counts.late ?? 0);
 }
 
+/** All KPI work items assigned to a member, delivered or still open -- unlike kpiScoredItemCount, this includes pending. */
+function kpiTotalItemCount(member: IKpiMemberAggregate | undefined): number {
+  if (!member) return 0;
+  return kpiScoredItemCount(member) + (member.counts.pending ?? 0);
+}
+
 /**
  * Detect whether a user works on Helpdesk, Development, or both.
  * Helpdesk only counts once ticket volume clears MIN_HELPDESK_TICKETS_FOR_PROFILE
@@ -281,6 +293,7 @@ export function buildExecutiveMembers(
       finalScore: computeMemberScore(profile, hdScore, kpiScore, hdAgent?.count ?? 0, kpiScoredItemCount(kpiMember)),
       hdTickets: hdAgent?.count ?? null,
       kpiEfficiency: kpiMember?.efficiency ?? null,
+      workload: kpiTotalItemCount(kpiMember) + (hdAgent?.count ?? 0),
     });
   }
 
@@ -318,6 +331,7 @@ export function buildExecutiveMembersCsvRows(members: IExecutiveMember[]) {
     Rank: idx + 1,
     Member: member.displayName,
     Profile: PROFILE_CONFIG[member.profile].label,
+    Workload: member.workload,
     "Helpdesk score (%)": member.hdScore != null ? member.hdScore.toFixed(1) : "",
     "Helpdesk tickets": member.hdTickets ?? "",
     "Projects efficiency (%)": member.kpiScore != null ? member.kpiScore.toFixed(1) : "",
