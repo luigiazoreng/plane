@@ -10,12 +10,14 @@ import React from "react";
 import { Info } from "lucide-react";
 import { Tooltip } from "@plane/propel/tooltip";
 import { cn } from "@plane/utils";
+import { KpiPeriodSelector } from "@/components/kpi/period-selector";
 import type { IITGeneralIndex } from "./helpers";
+import { EXECUTIVE_PERIODS, type TExecutivePeriod } from "./helpers";
 
 type Props = {
   data: IITGeneralIndex;
-  period: "30d" | "90d";
-  onPeriodChange: (period: "30d" | "90d") => void;
+  period: TExecutivePeriod;
+  onPeriodChange: (period: TExecutivePeriod) => void;
 };
 
 export const ITGeneralIndex: React.FC<Props> = ({ data, period, onPeriodChange }) => {
@@ -65,35 +67,12 @@ export const ITGeneralIndex: React.FC<Props> = ({ data, period, onPeriodChange }
 
         {/* Right side: Period selector + Indicators breakdown */}
         <div className="flex flex-col items-end gap-4">
-          <div
-            className="flex items-center gap-1 rounded-md border border-subtle bg-surface-2 p-0.5"
-            role="group"
-            aria-label="Reporting period"
-          >
-            <button
-              type="button"
-              onClick={() => onPeriodChange("30d")}
-              className={cn(
-                "rounded px-2.5 py-1 text-11 font-medium transition-colors",
-                period === "30d"
-                  ? "shadow-xs bg-surface-1 font-semibold text-primary"
-                  : "text-tertiary hover:text-secondary"
-              )}
-            >
-              30 days
-            </button>
-            <button
-              type="button"
-              onClick={() => onPeriodChange("90d")}
-              className={cn(
-                "rounded px-2.5 py-1 text-11 font-medium transition-colors",
-                period === "90d"
-                  ? "shadow-xs bg-surface-1 font-semibold text-primary"
-                  : "text-tertiary hover:text-secondary"
-              )}
-            >
-              90 days
-            </button>
+          <div className="rounded-md border border-subtle bg-surface-2 p-0.5">
+            <KpiPeriodSelector
+              value={period}
+              onChange={(next) => onPeriodChange(next as TExecutivePeriod)}
+              options={EXECUTIVE_PERIODS}
+            />
           </div>
 
           <dl className="flex flex-wrap gap-x-8 gap-y-3">

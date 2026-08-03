@@ -47,16 +47,21 @@ export class KpiService extends APIService {
 
   // --- Issues scoring ---
 
+  /** Omitting `period` keeps the endpoint's default, which is the whole project history. */
   async getProjectIssues(
     workspaceSlug: string,
     projectId: string,
-    params?: { aggregates_only?: boolean }
+    params?: { aggregates_only?: boolean; period?: TKpiPeriod; start?: string; end?: string }
   ): Promise<IKpiIssueListResponse> {
     return this.get(`${workspaceSlug}/projects/${projectId}/kpi/issues/`, { params }).then((res) => res?.data);
   }
 
-  async getProjectMemberAggregates(workspaceSlug: string, projectId: string): Promise<IKpiMemberAggregateResponse> {
-    return this.get(`${workspaceSlug}/projects/${projectId}/kpi/members/`).then((res) => res?.data);
+  async getProjectMemberAggregates(
+    workspaceSlug: string,
+    projectId: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiMemberAggregateResponse> {
+    return this.get(`${workspaceSlug}/projects/${projectId}/kpi/members/`, { params }).then((res) => res?.data);
   }
 
   async getWorkspaceMemberAggregates(workspaceSlug: string): Promise<IKpiMemberAggregateResponse> {

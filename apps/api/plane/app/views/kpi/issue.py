@@ -210,18 +210,21 @@ def _active_kpi_projects(workspace, user):
     )
 
 
-# Period presets for the workspace panel, in days. "all" disables the filter.
-PERIOD_DAYS = {"30d": 30, "90d": 90, "180d": 180, "365d": 365}
+# Period presets, in days. "all" disables the filter.
+PERIOD_DAYS = {"7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365}
 DEFAULT_PERIOD = "90d"
+PERIOD_ERROR = "Invalid period. Use period=7d|30d|90d|180d|365d|all or start=&end= as YYYY-MM-DD."
 
 
-def _resolve_period(request):
+def _resolve_period(request, default=DEFAULT_PERIOD):
     """Resolve the requested reporting window.
 
-    Accepts either ``?period=30d|90d|180d|365d|all`` or an explicit
+    Accepts either ``?period=7d|30d|90d|180d|365d|all`` or an explicit
     ``?start=YYYY-MM-DD&end=YYYY-MM-DD``. Returns
     ``(key, start_date_or_None, end_date_or_None)``; both dates are None for
-    the "all" window.
+    the "all" window. ``default`` is what an absent ``period`` param means --
+    the project endpoints pass "all" so that callers predating the parameter
+    keep their previous unfiltered behaviour.
     """
     start_param = request.GET.get("start")
     end_param = request.GET.get("end")
@@ -235,7 +238,7 @@ def _resolve_period(request):
             return None, None, None
         return "custom", start, end
 
-    period = request.GET.get("period", DEFAULT_PERIOD)
+    period = request.GET.get("period", default)
     if period == "all":
         return "all", None, None
     if period not in PERIOD_DAYS:
@@ -262,15 +265,25 @@ def _period_filter(start, end):
 
 
 class KpiIssueListEndpoint(BaseAPIView):
-    """List a project's work items with computed Vp/d/p/Vf plus aggregates."""
+    """List a project's work items with computed Vp/d/p/Vf plus aggregates.
+
+    Honours the same ``?period=``/``?start=&end=`` window as the workspace
+    panel; omitting it defaults to ``all`` so existing callers keep the
+    unfiltered, whole-project view they were written against.
+    """
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def get(self, request, slug, project_id):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)
 
+        period_key, start, end = _resolve_period(request, default="all")
+        if period_key is None:
+            return Response({"error": PERIOD_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
+            .filter(_period_filter(start, end))
             .select_related("state", "kpi_attribute", "estimate_point")
             .order_by("-created_at")
         )
@@ -331,6 +344,11 @@ class KpiIssueListEndpoint(BaseAPIView):
                     "counts": counts,
                     "total": len(issues),
                 },
+                "period": {
+                    "key": period_key,
+                    "start": start.isoformat() if start else None,
+                    "end": end.isoformat() if end else None,
+                },
             }
         )
 
@@ -350,8 +368,13 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)
 
+        period_key, start, end = _resolve_period(request, default="all")
+        if period_key is None:
+            return Response({"error": PERIOD_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+
         issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
+            .filter(_period_filter(start, end))
             .select_related("kpi_attribute", "estimate_point")
             .prefetch_related("assignees", "labels")
         )
@@ -375,6 +398,11 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
             {
                 "results": _finalize_member_buckets(buckets, decimals),
                 "unassigned_count": unassigned_count,
+                "period": {
+                    "key": period_key,
+                    "start": start.isoformat() if start else None,
+                    "end": end.isoformat() if end else None,
+                },
             }
         )
 
@@ -457,10 +485,7 @@ class WorkspaceKpiOverviewEndpoint(BaseAPIView):
 
         period_key, start, end = _resolve_period(request)
         if period_key is None:
-            return Response(
-                {"error": "Invalid period. Use period=30d|90d|180d|365d|all or start=&end= as YYYY-MM-DD."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": PERIOD_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
         projects = list(_active_kpi_projects(workspace, request.user))
         project_ids = [project.id for project in projects]

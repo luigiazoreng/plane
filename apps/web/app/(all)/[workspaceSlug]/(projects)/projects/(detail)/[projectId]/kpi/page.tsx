@@ -12,6 +12,7 @@ import { useTheme } from "next-themes";
 import { HelpCircle, Settings } from "lucide-react";
 import { EUserPermissionsLevel } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
+import type { TKpiPeriod } from "@plane/types";
 import { EUserProjectRoles } from "@plane/types";
 import { Spinner } from "@plane/ui";
 import { cn } from "@plane/utils";
@@ -24,6 +25,7 @@ import { KpiCurveChart } from "@/components/kpi/curve-chart";
 import { KpiMathHelpModal } from "@/components/kpi/math-help-modal";
 import { KpiMemberBarChart } from "@/components/kpi/member-bar-chart";
 import { KpiMemberList } from "@/components/kpi/member-list";
+import { KpiPeriodSelector } from "@/components/kpi/period-selector";
 import { KpiStatBar } from "@/components/kpi/stat-bar";
 import { PageHead } from "@/components/core/page-title";
 // hooks
@@ -55,6 +57,8 @@ function ProjectKpiPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPriorityLevel, setSelectedPriorityLevel] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  // The project endpoints default to the whole history; this page opts into a window.
+  const [period, setPeriod] = useState<Exclude<TKpiPeriod, "custom">>("all");
 
   const config = projectConfig[projectId];
   const agg = aggregates[projectId];
@@ -70,8 +74,8 @@ function ProjectKpiPage() {
       fetchProjectConfig(workspaceSlug, projectId),
       // Still fetched for the project-wide StatBar aggregates; the per-issue
       // rows themselves are no longer rendered on this (now read-only) page.
-      fetchProjectIssues(workspaceSlug, projectId, { aggregates_only: true }),
-      fetchProjectMemberAggregates(workspaceSlug, projectId),
+      fetchProjectIssues(workspaceSlug, projectId, { aggregates_only: true, period }),
+      fetchProjectMemberAggregates(workspaceSlug, projectId, { period }),
     ]).finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
@@ -79,6 +83,7 @@ function ProjectKpiPage() {
   }, [
     workspaceSlug,
     projectId,
+    period,
     fetchProjectConfig,
     fetchProjectIssues,
     fetchProjectMemberAggregates,
@@ -141,6 +146,7 @@ function ProjectKpiPage() {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <KpiPeriodSelector value={period} onChange={setPeriod} disabled={loading} />
             <button
               type="button"
               onClick={() => setIsHelpOpen(true)}

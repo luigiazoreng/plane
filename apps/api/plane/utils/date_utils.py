@@ -72,6 +72,28 @@ def get_analytics_date_range(
                 "lte": datetime.combine(today - timedelta(days=91), datetime.max.time()),
             },
         }
+    elif date_filter == "last_6_months":
+        return {
+            "current": {
+                "gte": datetime.combine(today - timedelta(days=180), datetime.min.time()),
+                "lte": datetime.combine(today, datetime.max.time()),
+            },
+            "previous": {
+                "gte": datetime.combine(today - timedelta(days=360), datetime.min.time()),
+                "lte": datetime.combine(today - timedelta(days=181), datetime.max.time()),
+            },
+        }
+    elif date_filter == "last_12_months":
+        return {
+            "current": {
+                "gte": datetime.combine(today - timedelta(days=365), datetime.min.time()),
+                "lte": datetime.combine(today, datetime.max.time()),
+            },
+            "previous": {
+                "gte": datetime.combine(today - timedelta(days=730), datetime.min.time()),
+                "lte": datetime.combine(today - timedelta(days=366), datetime.max.time()),
+            },
+        }
     elif date_filter == "custom" and start_date and end_date:
         try:
             start = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -100,6 +122,8 @@ def get_chart_period_range(
             - "last_7_days": Last 7 days
             - "last_30_days": Last 30 days
             - "last_3_months": Last 90 days
+            - "last_6_months": Last 180 days
+            - "last_12_months": Last 365 days
             Defaults to "last_7_days" if not specified or invalid.
 
     Returns:
@@ -117,6 +141,8 @@ def get_chart_period_range(
         "last_7_days": (today - timedelta(days=7), today),
         "last_30_days": (today - timedelta(days=30), today),
         "last_3_months": (today - timedelta(days=90), today),
+        "last_6_months": (today - timedelta(days=180), today),
+        "last_12_months": (today - timedelta(days=365), today),
     }
 
     return period_ranges.get(date_filter, None)

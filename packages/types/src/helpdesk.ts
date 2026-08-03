@@ -358,7 +358,13 @@ export interface IHelpdeskFormSubmission {
 
 // --- Analytics ---
 
-export type THelpdeskDateFilter = "yesterday" | "last_7_days" | "last_30_days" | "last_3_months";
+export type THelpdeskDateFilter =
+  | "yesterday"
+  | "last_7_days"
+  | "last_30_days"
+  | "last_3_months"
+  | "last_6_months"
+  | "last_12_months";
 
 export interface IHelpdeskKPIMetric {
   current: number | null;

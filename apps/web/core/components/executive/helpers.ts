@@ -9,7 +9,44 @@ import type {
   IHelpdeskAgentChartPoint,
   IKpiOverviewResponse,
   IKpiMemberAggregate,
+  THelpdeskDateFilter,
+  TKpiPeriod,
 } from "@plane/types";
+
+// ── Reporting period ───────────────────────────────────────────────────────
+
+/**
+ * Periods this dashboard can offer. Narrower than the KPI panel's own set:
+ * every period here has to exist on BOTH sides, and Helpdesk analytics has no
+ * unbounded window, so "all" is deliberately absent -- offering it would
+ * silently pair all-time KPI data with a 12-month Helpdesk slice.
+ */
+export const EXECUTIVE_PERIODS = ["7d", "30d", "90d", "180d", "365d"] as const;
+
+export type TExecutivePeriod = (typeof EXECUTIVE_PERIODS)[number];
+
+const HELPDESK_FILTER_BY_PERIOD: Record<TExecutivePeriod, THelpdeskDateFilter> = {
+  "7d": "last_7_days",
+  "30d": "last_30_days",
+  "90d": "last_3_months",
+  "180d": "last_6_months",
+  "365d": "last_12_months",
+};
+
+/** Translate the shared period into the Helpdesk analytics endpoint's own vocabulary. */
+export const helpdeskFilterForPeriod = (period: TExecutivePeriod): THelpdeskDateFilter =>
+  HELPDESK_FILTER_BY_PERIOD[period];
+
+export const PERIOD_LABELS: Record<TExecutivePeriod, string> = {
+  "7d": "7 days",
+  "30d": "30 days",
+  "90d": "90 days",
+  "180d": "6 months",
+  "365d": "12 months",
+};
+
+/** The executive periods are all valid KPI periods; this just narrows the type. */
+export const kpiPeriodForPeriod = (period: TExecutivePeriod): Exclude<TKpiPeriod, "custom"> => period;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

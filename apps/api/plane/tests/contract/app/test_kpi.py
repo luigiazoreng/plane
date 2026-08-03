@@ -808,3 +808,74 @@ class TestKpiWorkspaceOverview:
         assert body["unified"]["kpi"] is None
         assert body["unified"]["scored_items"] == 0
         assert body["unified"]["project_count"] == 0
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+class TestProjectKpiPeriodFilter:
+    """The project endpoints accept the same ?period= window as the workspace panel."""
+
+    @staticmethod
+    def _issues_url(workspace, project):
+        return reverse("kpi-issues", kwargs={"slug": workspace.slug, "project_id": project.id})
+
+    @staticmethod
+    def _members_url(workspace, project):
+        return reverse("kpi-member-aggregates", kwargs={"slug": workspace.slug, "project_id": project.id})
+
+    @pytest.fixture
+    def recent_and_old(self, project, workspace, state, create_user):
+        """One item delivered 5 days ago, one delivered 200 days ago."""
+        recent_target, recent_completed = _delivered(days_ago=5)
+        recent = _make_issue(
+            project, workspace, state, create_user,
+            name="Recent", priority="high", target_date=recent_target, completed_at=recent_completed,
+        )
+        old_target, old_completed = _delivered(days_ago=200)
+        old = _make_issue(
+            project, workspace, state, create_user,
+            name="Old", priority="high", target_date=old_target, completed_at=old_completed,
+        )
+        return recent, old
+
+    def test_defaults_to_all_time(self, session_client, workspace, project, recent_and_old):
+        # No ?period= must keep the pre-existing whole-history behaviour.
+        body = session_client.get(self._issues_url(workspace, project)).json()
+        assert {r["name"] for r in body["results"]} == {"Recent", "Old"}
+        assert body["period"]["key"] == "all"
+        assert body["period"]["start"] is None
+
+    def test_period_excludes_items_delivered_before_the_window(
+        self, session_client, workspace, project, recent_and_old
+    ):
+        body = session_client.get(self._issues_url(workspace, project), {"period": "30d"}).json()
+        assert {r["name"] for r in body["results"]} == {"Recent"}
+        assert body["aggregates"]["total"] == 1
+        assert body["period"]["key"] == "30d"
+        assert body["period"]["start"] is not None
+
+    def test_wider_period_includes_both(self, session_client, workspace, project, recent_and_old):
+        body = session_client.get(self._issues_url(workspace, project), {"period": "365d"}).json()
+        assert {r["name"] for r in body["results"]} == {"Recent", "Old"}
+
+    def test_member_aggregates_honour_the_same_window(
+        self, session_client, workspace, project, state, create_user, recent_and_old
+    ):
+        recent, old = recent_and_old
+        for issue in (recent, old):
+            IssueAssignee.objects.create(
+                issue=issue, assignee=create_user, project=project, workspace=workspace
+            )
+
+        all_time = session_client.get(self._members_url(workspace, project)).json()
+        windowed = session_client.get(self._members_url(workspace, project), {"period": "30d"}).json()
+
+        # high priority, on time -> Vp 27 per item.
+        assert all_time["results"][0]["sum_vp"] == pytest.approx(54)
+        assert windowed["results"][0]["sum_vp"] == pytest.approx(27)
+        assert windowed["period"]["key"] == "30d"
+
+    def test_invalid_period_is_rejected(self, session_client, workspace, project):
+        response = session_client.get(self._issues_url(workspace, project), {"period": "42d"})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Invalid period" in response.json()["error"]

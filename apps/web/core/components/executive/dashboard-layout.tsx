@@ -24,7 +24,14 @@ import { KpiScoreBarChart } from "@/components/kpi/score-bar-chart";
 import { ITGeneralIndex } from "./it-general-index";
 import { SectorHealth } from "./sector-health";
 import { ExecutiveMemberTable } from "./executive-member-table";
-import { computeITGeneralIndex, buildExecutiveMembers } from "./helpers";
+import {
+  computeITGeneralIndex,
+  buildExecutiveMembers,
+  helpdeskFilterForPeriod,
+  kpiPeriodForPeriod,
+  PERIOD_LABELS,
+  type TExecutivePeriod,
+} from "./helpers";
 import { useExecutiveExport } from "./export-context";
 
 type Props = {
@@ -63,12 +70,10 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
 
   // ── Local state ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<"30d" | "90d">("30d");
+  const [period, setPeriod] = useState<TExecutivePeriod>("30d");
 
   const hdFilters: IHelpdeskAnalyticsFilters = useMemo(
-    () => ({
-      date_filter: period === "30d" ? "last_30_days" : "last_3_months",
-    }),
+    () => ({ date_filter: helpdeskFilterForPeriod(period) }),
     [period]
   );
 
@@ -81,7 +86,10 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     let mounted = true;
     setLoading(true);
 
-    Promise.all([fetchWorkspaceOverview(workspaceSlug, { period }), fetchAnalytics(workspaceSlug, hdFilters)]).finally(
+    Promise.all([
+      fetchWorkspaceOverview(workspaceSlug, { period: kpiPeriodForPeriod(period) }),
+      fetchAnalytics(workspaceSlug, hdFilters),
+    ]).finally(
       () => {
         if (mounted) setLoading(false);
       }
@@ -128,7 +136,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     );
   }
 
-  const periodDaysLabel = period === "30d" ? "30 days" : "90 days";
+  const periodDaysLabel = PERIOD_LABELS[period];
 
   // ── Render ───────────────────────────────────────────────────
   return (

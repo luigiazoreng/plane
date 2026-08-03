@@ -17,14 +17,14 @@
 import writeXlsxFile from "write-excel-file/browser";
 import type { Cell, Row, Sheet } from "write-excel-file/browser";
 import type { IHelpdeskAnalyticsResponse, IKpiOverviewResponse, TKpiIssueStatus } from "@plane/types";
-import type { IExecutiveMember, IITGeneralIndex } from "./helpers";
-import { PROFILE_CONFIG } from "./helpers";
+import type { IExecutiveMember, IITGeneralIndex, TExecutivePeriod } from "./helpers";
+import { PERIOD_LABELS, PROFILE_CONFIG } from "./helpers";
 
 // ── Payload ────────────────────────────────────────────────────────────────
 
 export interface IExecutiveExportPayload {
   workspaceSlug: string;
-  period: "30d" | "90d";
+  period: TExecutivePeriod;
   itIndex: IITGeneralIndex;
   members: IExecutiveMember[];
   kpi: IKpiOverviewResponse | undefined;
@@ -168,7 +168,7 @@ const COUNT_LABELS: Record<TKpiIssueStatus, string> = {
 const countHeaders = (): Row => COUNT_KEYS.map((k) => thNum(COUNT_LABELS[k]));
 const countCells = (counts: Record<TKpiIssueStatus, number>): Row => COUNT_KEYS.map((k) => num(counts[k]));
 
-const periodLabel = (period: "30d" | "90d") => (period === "30d" ? "Last 30 days" : "Last 90 days");
+const periodLabel = (period: TExecutivePeriod) => `Last ${PERIOD_LABELS[period]}`;
 
 /** A sheet's title block: heading plus the period it covers. */
 const titleBlock = (heading: string, subtitle: string, cols: number[]): Row[] => {

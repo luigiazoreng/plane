@@ -101,7 +101,7 @@ export interface IKpiMemberAggregateResponse {
 
 // ── Workspace overview ───────────────────────────────────────────────────────
 
-export type TKpiPeriod = "30d" | "90d" | "180d" | "365d" | "all" | "custom";
+export type TKpiPeriod = "7d" | "30d" | "90d" | "180d" | "365d" | "all" | "custom";
 
 export interface IKpiPeriod {
   key: TKpiPeriod;
