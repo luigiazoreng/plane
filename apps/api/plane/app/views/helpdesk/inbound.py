@@ -76,7 +76,7 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
             # SendGrid numbers attachment parts attachment1..attachmentN.
             uploaded_files = list(request.FILES.values())
 
-            process_inbound_email(
+            new_comment = process_inbound_email(
                 from_str=from_str,
                 headers_str=headers_str,
                 text_body=text_body,
@@ -86,7 +86,12 @@ class PublicHelpdeskInboundEmailEndpoint(APIView):
                 spf_field=data.get("SPF"),
             )
 
-            return Response({"success": True}, status=status.HTTP_200_OK)
+            # A no-op (duplicate, unauthorized, etc.) raises DiscardEmailException
+            # and never reaches this line, so getting here always means a new
+            # HelpdeskRequestComment was created -- 201, not 200.
+            return Response(
+                {"success": True, "comment_id": str(new_comment.id)}, status=status.HTTP_201_CREATED
+            )
             
         except DiscardEmailException as e:
             return self._discard(e.detail, **e.log_context)

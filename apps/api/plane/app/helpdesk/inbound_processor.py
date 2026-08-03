@@ -12,6 +12,7 @@ from plane.app.helpdesk.attachments import (
     store_inbound_attachment,
     synthesize_content,
     bind_assets,
+    COMMENT_ENTITY,
 )
 from plane.app.helpdesk.sender_authenticity import (
     PASS,
@@ -210,12 +211,24 @@ def process_inbound_email(
         raise DiscardEmailException("duplicate", {"email_message_id": message_id, "hd_request_id": str(hd_request.id)})
 
     if stored_assets:
-        bind_assets(new_comment, stored_assets)
+        bind_assets(
+            [asset.id for asset in stored_assets],
+            workspace_id=hd_request.workspace_id,
+            entity_type=COMMENT_ENTITY,
+            entity_identifier=new_comment.id,
+        )
+
+    # Mirrors the same check in the agent-facing comment viewset -- an email
+    # reply is a real first response and must count toward the SLA exactly
+    # like one typed in the app, or every agent who works from their inbox
+    # would show as never having responded.
+    if hd_request.first_responded_at is None and new_comment.actor is not None:
+        HelpdeskRequest.objects.filter(id=hd_request.id).update(first_responded_at=new_comment.created_at)
 
     try:
         if actor is None and customer is None:
-            pass 
-        elif hd_request.status.group == "closed" or hd_request.status.group == "resolved":
+            pass
+        elif hd_request.status and (hd_request.status.group == "closed" or hd_request.status.group == "resolved"):
             open_status = hd_request.portal.statuses.filter(group="open").first()
             if open_status:
                 hd_request.status = open_status

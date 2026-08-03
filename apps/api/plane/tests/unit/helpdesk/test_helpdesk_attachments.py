@@ -246,7 +246,7 @@ class TestInboundAttachments(APITestCase):
     @override_settings(HELPDESK_INBOUND_MAX_BODY_SIZE=10)
     def test_oversized_payload_is_dropped_without_being_parsed(self):
         """200, not 413 -- a retry would be exactly as large."""
-        with mock.patch("plane.app.views.helpdesk.inbound.store_inbound_attachment") as store:
+        with mock.patch("plane.app.helpdesk.inbound_processor.store_inbound_attachment") as store:
             response = self._post(
                 {
                     "headers": f"In-Reply-To: {self.parent_message_id}",
@@ -260,7 +260,7 @@ class TestInboundAttachments(APITestCase):
 
     def test_unauthorized_sender_never_reaches_storage(self):
         """Uploading before authorizing would make this a storage-filling vector."""
-        with mock.patch("plane.app.views.helpdesk.inbound.store_inbound_attachment") as store:
+        with mock.patch("plane.app.helpdesk.inbound_processor.store_inbound_attachment") as store:
             response = self._post(
                 {
                     "headers": f"In-Reply-To: {self.parent_message_id}",

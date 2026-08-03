@@ -38,15 +38,15 @@ def contains_url(value: str) -> bool:
     Returns:
         bool: True if the string contains a URL, False otherwise
     """
-    # Prevent ReDoS by limiting input length
+    # Prevent ReDoS by limiting input length. This already bounds every line to
+    # at most 1000 characters too (a line cannot be longer than the whole
+    # value), so no further per-line truncation is needed -- an earlier version
+    # truncated lines over 500 characters to their first 500, which silently
+    # dropped URLs appearing later in a long line instead of protecting anything.
     if len(value) > 1000:  # Reasonable limit for URL detection
         return False
 
-    # Additional safety: truncate very long lines that might contain URLs
-    lines = value.split("\n")
-    for line in lines:
-        if len(line) > 500:  # Process only reasonable length lines
-            line = line[:500]
+    for line in value.split("\n"):
         if URL_PATTERN.search(line):
             return True
 

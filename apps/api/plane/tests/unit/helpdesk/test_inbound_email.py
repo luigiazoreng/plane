@@ -667,7 +667,7 @@ class TestInboundSenderAuthenticity(APITestCase):
         órfãos até o sweep diário.
         """
         with mock.patch(
-            "plane.app.views.helpdesk.inbound.store_inbound_attachment"
+            "plane.app.helpdesk.inbound_processor.store_inbound_attachment"
         ) as store:
             response = self._post(
                 {
@@ -702,7 +702,7 @@ class TestInboundSenderAuthenticity(APITestCase):
         produz linha nos Email logs por construção (ver o comentário no view).
         """
         with mock.patch(
-            "plane.app.views.helpdesk.inbound.store_inbound_attachment"
+            "plane.app.helpdesk.inbound_processor.store_inbound_attachment"
         ) as store:
             response = self._post(
                 {

@@ -5,7 +5,15 @@
  */
 
 import { useMemo, useState } from "react";
-import type { IHelpdeskRequest, IHelpdeskRequestActivity, IHelpdeskRequestComment, IHelpdeskStatus, IHelpdeskMacro, TIssuePriorities } from "@plane/types";
+import type {
+  IHelpdeskRequest,
+  IHelpdeskRequestActivity,
+  IHelpdeskRequestComment,
+  IHelpdeskStatus,
+  IHelpdeskMacro,
+  IHelpdeskTeam,
+  TIssuePriorities,
+} from "@plane/types";
 import { cn, convertBytesToSize, getFileURL } from "@plane/utils";
 import { ArrowLeft, ChevronDown, Clock, Paperclip, Star, Activity } from "lucide-react";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
@@ -134,7 +142,7 @@ export function ConversationPanel({
               >
                 <Clock className="size-4" />
               </Popover.Button>
-              <Popover.Panel className="absolute right-0 top-full z-20 mt-1.5 w-44 rounded-md border border-subtle bg-surface-1 p-1 shadow-md">
+              <Popover.Panel className="shadow-md absolute top-full right-0 z-20 mt-1.5 w-44 rounded-md border border-subtle bg-surface-1 p-1">
                 {({ close }: { close: () => void }) => (
                   <div className="flex flex-col gap-0.5 text-12">
                     <button
@@ -232,11 +240,14 @@ export function ConversationPanel({
           <Popover className="relative">
             <Popover.Button
               type="button"
-              className="inline-flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 text-secondary hover:border-strong transition-colors"
+              className="inline-flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 text-secondary transition-colors hover:border-strong"
             >
               {request.team_detail ? (
                 <>
-                  <span className="size-2 rounded-full" style={{ backgroundColor: request.team_detail.color || "#3B82F6" }} />
+                  <span
+                    className="size-2 rounded-full"
+                    style={{ backgroundColor: request.team_detail.color || "#3B82F6" }}
+                  />
                   <span>{request.team_detail.name}</span>
                 </>
               ) : team ? (
@@ -246,9 +257,9 @@ export function ConversationPanel({
               )}
               <ChevronDown className="size-3 text-tertiary" />
             </Popover.Button>
-            <Popover.Panel className="absolute left-0 top-full z-20 mt-1 w-48 rounded-md border border-subtle bg-surface-1 p-1 shadow-md">
+            <Popover.Panel className="shadow-md absolute top-full left-0 z-20 mt-1 w-48 rounded-md border border-subtle bg-surface-1 p-1">
               {({ close }: { close: () => void }) => (
-                <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto text-12">
+                <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto text-12">
                   <button
                     type="button"
                     onClick={() => {
@@ -335,7 +346,10 @@ export function ConversationPanel({
               {activities.map((act) => {
                 const actorName = act.actor_detail?.display_name || act.actor_detail?.name || "Sistema";
                 return (
-                  <div key={act.id} className="flex items-center gap-2.5 rounded-md border border-subtle bg-surface-2 px-3 py-2 text-12 text-primary">
+                  <div
+                    key={act.id}
+                    className="flex items-center gap-2.5 rounded-md border border-subtle bg-surface-2 px-3 py-2 text-12 text-primary"
+                  >
                     <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-layer-2 text-tertiary">
                       <Activity className="size-3" />
                     </span>
@@ -345,53 +359,50 @@ export function ConversationPanel({
                         {act.verb === "commented"
                           ? "adicionou uma resposta"
                           : act.verb === "internal_note"
-                          ? "adicionou uma nota interna"
-                          : act.verb === "added"
-                          ? `adicionou ${act.field}`
-                          : act.verb === "removed"
-                          ? `removeu ${act.field}`
-                          : `alterou ${act.field}`}
+                            ? "adicionou uma nota interna"
+                            : act.verb === "added"
+                              ? `adicionou ${act.field}`
+                              : act.verb === "removed"
+                                ? `removeu ${act.field}`
+                                : `alterou ${act.field}`}
                       </span>
                       {act.old_value && act.new_value && (
-                        <span className="text-secondary font-mono text-11">
+                        <span className="font-mono text-11 text-secondary">
                           ({act.old_value} &rarr; {act.new_value})
                         </span>
                       )}
                     </div>
-                    <span className="shrink-0 text-11 text-tertiary">
-                      {new Date(act.created_at).toLocaleString()}
-                    </span>
+                    <span className="shrink-0 text-11 text-tertiary">{new Date(act.created_at).toLocaleString()}</span>
                   </div>
                 );
               })}
             </div>
           )
+        ) : customerHistory.length === 0 ? (
+          <TabEmpty title="History" body="Nenhum ticket anterior encontrado para este cliente." />
         ) : (
-          customerHistory.length === 0 ? (
-            <TabEmpty title="History" body="Nenhum ticket anterior encontrado para este cliente." />
-          ) : (
-            <div className="mx-auto flex max-w-[760px] flex-col gap-2">
-              {customerHistory.map((hist) => {
-                const histStatus = hist.status ? statusMap[hist.status] : undefined;
-                return (
-                  <div key={hist.id} className="flex items-center justify-between gap-3 rounded-md border border-subtle bg-surface-2 px-3 py-2.5 text-13">
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      {hist.display_id && (
-                        <span className="font-mono shrink-0 text-11 text-tertiary">{hist.display_id}</span>
-                      )}
-                      <span className="truncate font-medium text-primary">{hist.title}</span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3">
-                      {histStatus ? <HelpdeskStatusPill status={histStatus} /> : null}
-                      <span className="text-11 text-tertiary">
-                        {new Date(hist.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
+          <div className="mx-auto flex max-w-[760px] flex-col gap-2">
+            {customerHistory.map((hist) => {
+              const histStatus = hist.status ? statusMap[hist.status] : undefined;
+              return (
+                <div
+                  key={hist.id}
+                  className="flex items-center justify-between gap-3 rounded-md border border-subtle bg-surface-2 px-3 py-2.5 text-13"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {hist.display_id && (
+                      <span className="font-mono shrink-0 text-11 text-tertiary">{hist.display_id}</span>
+                    )}
+                    <span className="truncate font-medium text-primary">{hist.title}</span>
                   </div>
-                );
-              })}
-            </div>
-          )
+                  <div className="flex shrink-0 items-center gap-3">
+                    {histStatus ? <HelpdeskStatusPill status={histStatus} /> : null}
+                    <span className="text-11 text-tertiary">{new Date(hist.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
