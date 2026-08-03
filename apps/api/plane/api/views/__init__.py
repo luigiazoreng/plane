@@ -16,6 +16,8 @@ from .state import (
 
 from .issue import (
     WorkspaceIssueAPIEndpoint,
+    WorkspaceIssueListAPIEndpoint,
+    WorkItemCountAPIEndpoint,
     IssueListCreateAPIEndpoint,
     IssueDetailAPIEndpoint,
     LabelListCreateAPIEndpoint,
