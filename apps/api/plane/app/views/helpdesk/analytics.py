@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Avg, Count, ExpressionWrapper, F, Min, fields
+from django.db.models import Avg, Count, ExpressionWrapper, F, Min, Q, fields
 from django.db.models.functions import Coalesce, TruncDate, TruncMonth
 from rest_framework import status as http_status
 from rest_framework.response import Response
@@ -240,8 +240,12 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         ]
 
         # Top agents: count resolved tickets in the current period using the same
-        # ref_date logic (COALESCE(request__start_date, DATE(request__created_at))).
-        top_agents = list(
+        # ref_date logic (COALESCE(request__start_date, DATE(request__created_at))),
+        # plus each agent's own SLA compliance -- ticket VOLUME alone isn't a quality
+        # signal (an agent who closed 1 ticket isn't "worse" than one who closed 24;
+        # see the Executive Dashboard's Team Performance table, which uses this
+        # per-agent SLA % rather than raw count as its Helpdesk quality score).
+        top_agents_qs = (
             HelpdeskRequestAssignee.objects.filter(
                 request__workspace__slug=slug,
                 request__archived_at__isnull=True,
@@ -257,18 +261,69 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                 req_ref_date__gte=current_range["gte"],
                 req_ref_date__lte=current_range["lte"],
             )
-            .values("assignee_id", "assignee__display_name")
-            .annotate(count=Count("request_id", distinct=True))
-            .order_by("-count")[:10]
         )
-        top_agents_formatted = [
-            {
-                "agent_id": str(row["assignee_id"]),
-                "display_name": row["assignee__display_name"] or "",
-                "count": row["count"],
-            }
-            for row in top_agents
-        ]
+
+        response_sla_threshold = (
+            timedelta(hours=portal.sla_first_response_hours) if portal and portal.sla_first_response_hours else None
+        )
+        resolution_sla_threshold = (
+            timedelta(hours=portal.sla_resolution_hours) if portal and portal.sla_resolution_hours else None
+        )
+
+        agent_annotations = {"count": Count("request_id", distinct=True)}
+        if response_sla_threshold is not None:
+            top_agents_qs = top_agents_qs.annotate(
+                response_duration=ExpressionWrapper(
+                    F("request__first_responded_at") - F("request__created_at"),
+                    output_field=fields.DurationField(),
+                )
+            )
+            agent_annotations["responded_count"] = Count(
+                "request_id", filter=Q(request__first_responded_at__isnull=False), distinct=True
+            )
+            agent_annotations["responded_within_sla_count"] = Count(
+                "request_id",
+                filter=Q(request__first_responded_at__isnull=False, response_duration__lte=response_sla_threshold),
+                distinct=True,
+            )
+        if resolution_sla_threshold is not None:
+            top_agents_qs = top_agents_qs.annotate(
+                resolution_duration=ExpressionWrapper(
+                    F("request__resolved_at") - F("request__created_at"),
+                    output_field=fields.DurationField(),
+                )
+            )
+            agent_annotations["resolved_count"] = Count(
+                "request_id", filter=Q(request__resolved_at__isnull=False), distinct=True
+            )
+            agent_annotations["resolved_within_sla_count"] = Count(
+                "request_id",
+                filter=Q(request__resolved_at__isnull=False, resolution_duration__lte=resolution_sla_threshold),
+                distinct=True,
+            )
+
+        top_agents = list(
+            top_agents_qs.values("assignee_id", "assignee__display_name").annotate(**agent_annotations).order_by(
+                "-count"
+            )[:10]
+        )
+        top_agents_formatted = []
+        for row in top_agents:
+            sla_first_response_pct = None
+            if response_sla_threshold is not None and row.get("responded_count"):
+                sla_first_response_pct = round(row["responded_within_sla_count"] / row["responded_count"] * 100, 1)
+            sla_resolution_pct = None
+            if resolution_sla_threshold is not None and row.get("resolved_count"):
+                sla_resolution_pct = round(row["resolved_within_sla_count"] / row["resolved_count"] * 100, 1)
+            top_agents_formatted.append(
+                {
+                    "agent_id": str(row["assignee_id"]),
+                    "display_name": row["assignee__display_name"] or "",
+                    "count": row["count"],
+                    "sla_first_response_pct": sla_first_response_pct,
+                    "sla_resolution_pct": sla_resolution_pct,
+                }
+            )
 
         def format_date(val):
             if val is None:

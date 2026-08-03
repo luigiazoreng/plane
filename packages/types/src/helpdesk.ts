@@ -410,6 +410,10 @@ export interface IHelpdeskAgentChartPoint {
   agent_id: string;
   display_name: string;
   count: number;
+  /** % of this agent's resolved tickets that met the portal's first-response SLA, or null if no SLA is configured. */
+  sla_first_response_pct: number | null;
+  /** % of this agent's resolved tickets that met the portal's resolution SLA, or null if no SLA is configured. */
+  sla_resolution_pct: number | null;
 }
 
 export interface IHelpdeskCharts {

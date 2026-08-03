@@ -40,7 +40,7 @@ export interface IExecutiveMember {
   displayName: string;
   avatarUrl: string | null;
   profile: TMemberProfile;
-  /** Helpdesk score 0-100, or null if not applicable. */
+  /** Helpdesk SLA-compliance score 0-100, or null if not applicable/no SLA configured. */
   hdScore: number | null;
   /** KPI efficiency score 0-100, or null if not applicable. */
   kpiScore: number | null;
@@ -146,34 +146,53 @@ function normalizeResolutionTime(hd: IHelpdeskAnalyticsResponse | undefined): nu
 // ── Member profile detection ───────────────────────────────────────────────
 
 /**
- * Normalize helpdesk agent scores to 0-100 scale.
- * The agent with the most resolved tickets gets 100.
+ * Minimum resolved tickets in the period for Helpdesk work to count toward a
+ * member's profile/score at all. Below this, one or two incidental tickets
+ * would otherwise tag someone "hybrid" and let a tiny, noisy sample drag down
+ * an otherwise-solid KPI score (see computeMemberScore's volume weighting --
+ * this threshold keeps genuinely incidental helpdesk work out of the blend
+ * entirely, rather than relying on the weighting alone to dilute it).
  */
-export function normalizeHelpdeskScores(agents: IHelpdeskAgentChartPoint[]): Map<string, number> {
-  const map = new Map<string, number>();
-  if (agents.length === 0) return map;
+const MIN_HELPDESK_TICKETS_FOR_PROFILE = 3;
 
-  const maxCount = Math.max(...agents.map((a) => a.count));
-  if (maxCount === 0) return map;
-
+/**
+ * Helpdesk quality score per agent: their own SLA compliance (average of
+ * first-response and resolution SLA %, whichever are available), NOT ticket
+ * volume. Resolving 1 ticket within SLA is a perfect score; resolving 24
+ * tickets late is not "better" just because there are more of them.
+ */
+export function computeHelpdeskQualityScores(agents: IHelpdeskAgentChartPoint[]): Map<string, number | null> {
+  const map = new Map<string, number | null>();
   for (const agent of agents) {
-    map.set(agent.agent_id, Math.round((agent.count / maxCount) * 1000) / 10);
+    const parts = [agent.sla_first_response_pct, agent.sla_resolution_pct].filter((v): v is number => v != null);
+    map.set(
+      agent.agent_id,
+      parts.length > 0 ? Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10 : null
+    );
   }
   return map;
 }
 
+/** Scored KPI work items for a member: delivered items only (matches the KPI engine's Vp/Vf rule -- pending work isn't "scored"). */
+function kpiScoredItemCount(member: IKpiMemberAggregate | undefined): number {
+  if (!member) return 0;
+  return (member.counts.on_time ?? 0) + (member.counts.early ?? 0) + (member.counts.late ?? 0);
+}
+
 /**
  * Detect whether a user works on Helpdesk, Development, or both.
+ * Helpdesk only counts once ticket volume clears MIN_HELPDESK_TICKETS_FOR_PROFILE
+ * -- a couple of incidental tickets don't make someone "Hybrid".
  */
 export function detectMemberProfile(
   userId: string,
   kpiMemberIds: Set<string>,
-  hdAgentIds: Set<string>
+  hdTicketCounts: Map<string, number>
 ): TMemberProfile {
   const inKpi = kpiMemberIds.has(userId);
-  const inHd = hdAgentIds.has(userId);
-  if (inKpi && inHd) return "hybrid";
-  if (inHd) return "helpdesk";
+  const hasMeaningfulHelpdeskVolume = (hdTicketCounts.get(userId) ?? 0) >= MIN_HELPDESK_TICKETS_FOR_PROFILE;
+  if (inKpi && hasMeaningfulHelpdeskVolume) return "hybrid";
+  if (hasMeaningfulHelpdeskVolume) return "helpdesk";
   return "development";
 }
 
@@ -182,18 +201,34 @@ export function detectMemberProfile(
  *
  * - Helpdesk-only: 100% HD score
  * - Development-only: 100% KPI score
- * - Hybrid: 50/50
+ * - Hybrid: blended, weighted by each side's actual work volume (resolved
+ *   tickets vs scored KPI items) rather than a flat 50/50 -- someone whose
+ *   measured work is mostly Projects with a handful of Helpdesk tickets on
+ *   the side gets scored mostly on Projects, not punished equally on both.
+ *   When one side's score is unavailable (e.g. no SLA configured), all
+ *   weight goes to the other side instead of defaulting the missing side to 0.
  */
-export function computeMemberScore(profile: TMemberProfile, hdScore: number | null, kpiScore: number | null): number {
+export function computeMemberScore(
+  profile: TMemberProfile,
+  hdScore: number | null,
+  kpiScore: number | null,
+  hdVolume = 0,
+  kpiVolume = 0
+): number {
   switch (profile) {
     case "helpdesk":
       return hdScore ?? 0;
     case "development":
       return kpiScore ?? 0;
     case "hybrid": {
-      const hd = hdScore ?? 0;
-      const kpi = kpiScore ?? 0;
-      return Math.round((hd * 0.5 + kpi * 0.5) * 10) / 10;
+      if (hdScore == null && kpiScore == null) return 0;
+      if (hdScore == null) return Math.round(kpiScore! * 10) / 10;
+      if (kpiScore == null) return Math.round(hdScore * 10) / 10;
+
+      const totalVolume = hdVolume + kpiVolume;
+      const hdWeight = totalVolume > 0 ? hdVolume / totalVolume : 0.5;
+      const kpiWeight = 1 - hdWeight;
+      return Math.round((hdScore * hdWeight + kpiScore * kpiWeight) * 10) / 10;
     }
   }
 }
@@ -206,8 +241,9 @@ export function buildExecutiveMembers(
   kpiMembers: IKpiMemberAggregate[],
   hdAgents: IHelpdeskAgentChartPoint[]
 ): IExecutiveMember[] {
-  const hdScoreMap = normalizeHelpdeskScores(hdAgents);
+  const hdQualityMap = computeHelpdeskQualityScores(hdAgents);
   const kpiMemberIds = new Set(kpiMembers.map((m) => m.user_id));
+  const hdTicketCounts = new Map(hdAgents.map((a) => [a.agent_id, a.count]));
   const hdAgentIds = new Set(hdAgents.map((a) => a.agent_id));
 
   // Collect all unique user IDs.
@@ -228,12 +264,12 @@ export function buildExecutiveMembers(
   const results: IExecutiveMember[] = [];
 
   for (const userId of allUserIds) {
-    const profile = detectMemberProfile(userId, kpiMemberIds, hdAgentIds);
+    const profile = detectMemberProfile(userId, kpiMemberIds, hdTicketCounts);
     const kpiMember = kpiMap.get(userId);
     const hdAgent = hdMap.get(userId);
 
     const kpiScore = kpiMember?.efficiency != null ? Math.round(kpiMember.efficiency * 1000) / 10 : null;
-    const hdScore = hdScoreMap.get(userId) ?? null;
+    const hdScore = hdQualityMap.get(userId) ?? null;
 
     results.push({
       userId,
@@ -242,7 +278,7 @@ export function buildExecutiveMembers(
       profile,
       hdScore,
       kpiScore,
-      finalScore: computeMemberScore(profile, hdScore, kpiScore),
+      finalScore: computeMemberScore(profile, hdScore, kpiScore, hdAgent?.count ?? 0, kpiScoredItemCount(kpiMember)),
       hdTickets: hdAgent?.count ?? null,
       kpiEfficiency: kpiMember?.efficiency ?? null,
     });

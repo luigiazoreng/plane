@@ -142,7 +142,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
       <div>
         <SectionHeader
           title="Team Performance"
-          hint="Scores evaluated by profile: Helpdesk ticket volume, Engineering efficiency, or Hybrid blend"
+          hint="Scores evaluated by profile: Helpdesk SLA compliance, Engineering efficiency, or a volume-weighted Hybrid blend"
         />
         <div className="px-page-x py-4">
           <ExecutiveMemberTable members={executiveMembers} />
