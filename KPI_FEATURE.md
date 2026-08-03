@@ -96,7 +96,7 @@ O motor **não** cria uma entidade de tarefa própria. Ele pontua os `Issue` já
 
 > Decisão tomada em 2026-07-23. Define como a tela de workspace consolida os KPIs dos projetos.
 
-- **`Vf` não é comparável entre projetos.** `tables.difficulty` é keyed por *EstimatePoint id* — cada
+- **`Vf` não é comparável entre projetos.** `tables.difficulty` é keyed por _EstimatePoint id_ — cada
   projeto define a própria escala de pontos — e `priority.points`/`b`/`k`/`penalty_mode` também podem
   divergir por `KpiConfig` de projeto. Somar `Vf` deixaria o projeto com a tabela mais "inflada"
   dominar o número consolidado, e a distorção seria invisível.
@@ -299,18 +299,18 @@ Defaults iniciais (seed). Priority é keyed pelos valores de `Issue.priority` do
 
 Padrão idêntico ao Helpdesk: URLs em `apps/api/plane/app/urls/kpi.py`, registrado em `urls/__init__.py`; serializers em `app/serializers/kpi.py`.
 
-| Método  | Rota                                                                         | Descrição                                                                                |
-| ------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| GET/PUT | `workspaces/<slug>/kpi/config/`                                              | Config default do workspace (project=null).                                              |
-| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/config/`                                | Config do projeto (cria/edita; herda do workspace se ausente).                           |
-| GET     | `workspaces/<slug>/projects/<id>/kpi/issues/`                                | Lista issues do projeto com `Vp`, `d`, `p`, `Vf` calculados + agregados de projeto.      |
-| GET     | `workspaces/<slug>/projects/<id>/kpi/members/`                               | Agregação por membro (Vp/Vf divididos igualmente entre assignees) + `unassigned_count`.  |
-| GET     | `workspaces/<slug>/kpi/members/`                                             | Idem, entre os projetos com KPI ativo do workspace que o requester integra.              |
+| Método  | Rota                                                                         | Descrição                                                                                                   |
+| ------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| GET/PUT | `workspaces/<slug>/kpi/config/`                                              | Config default do workspace (project=null).                                                                 |
+| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/config/`                                | Config do projeto (cria/edita; herda do workspace se ausente).                                              |
+| GET     | `workspaces/<slug>/projects/<id>/kpi/issues/`                                | Lista issues do projeto com `Vp`, `d`, `p`, `Vf` calculados + agregados de projeto.                         |
+| GET     | `workspaces/<slug>/projects/<id>/kpi/members/`                               | Agregação por membro (Vp/Vf divididos igualmente entre assignees) + `unassigned_count`.                     |
+| GET     | `workspaces/<slug>/kpi/members/`                                             | Idem, entre os projetos com KPI ativo do workspace que o requester integra.                                 |
 | GET     | `workspaces/<slug>/kpi/overview/`                                            | Painel consolidado: `unified` (KPI único) + `projects` + `members`. Aceita `period`/`start`/`end` (ver D8). |
-| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/attributes/`          | Lê/define atributos KPI laterais e `type_override` da issue.                             |
-| PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/estimate/`            | Compatibilidade: define `difficulty_estimate_point`, sem alterar `Issue.estimate_point`. |
-| PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/repetitive-estimate/` | Define `repetitive_estimate_point`.                                                      |
-| POST    | `workspaces/<slug>/projects/<id>/kpi/preview/`                               | Recalcula `p(d)`/`Vf` para um payload arbitrário (curva/preview, sem persistir).         |
+| GET/PUT | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/attributes/`          | Lê/define atributos KPI laterais e `type_override` da issue.                                                |
+| PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/estimate/`            | Compatibilidade: define `difficulty_estimate_point`, sem alterar `Issue.estimate_point`.                    |
+| PUT     | `workspaces/<slug>/projects/<id>/kpi/issues/<issue_id>/repetitive-estimate/` | Define `repetitive_estimate_point`.                                                                         |
+| POST    | `workspaces/<slug>/projects/<id>/kpi/preview/`                               | Recalcula `p(d)`/`Vf` para um payload arbitrário (curva/preview, sem persistir).                            |
 
 Agregados retornados na listagem: `sum(Vp)`, `sum(Vf)`, `eficiencia = Vf_total / Vp_total`, contagem por status (no prazo / antecipada / atrasada / pendente).
 
@@ -549,6 +549,28 @@ Config padrão, `k = 0.5`.
 - **Pendente:** `pytest plane/tests/contract/app/test_kpi.py` (11 testes novos em
   `TestKpiWorkspaceOverview` + 2 de regressão de escopo) — o host ficou sem memória e o container da
   API foi morto (exit 137) antes da suíte rodar.
+
+### 2026-08-03 — Justiça no ranking por membro: Vp pendente não conta mais
+
+- **Problema:** desde o D8, `_accumulate_member_buckets` (`app/views/kpi/issue.py`) somava o `Vp`
+  de um issue ao balde do membro assim que o issue existia (mesmo pendente/não entregue), mas só
+  somava `Vf` quando entregue. Isso era assimétrico com o próprio bloco `projects`/`unified` do
+  mesmo endpoint (que já ignora issues pendentes por completo). Resultado prático: quem carrega
+  mais trabalho aberto atribuído aparece como "menos eficiente" que um colega com menos trabalho
+  aberto, **mesmo entregando na mesma qualidade** — a quantidade de backlog, por si só, derrubava
+  o score.
+- **Fix:** `_accumulate_member_buckets` agora só soma `Vp`/`Vf` de um issue quando ele foi
+  entregue (`calc["d"] is not None`), igual à regra que `KpiIssueListEndpoint` e o bloco
+  `projects`/`unified` já usavam. `counts["pending"]` continua incrementando normalmente (o
+  volume de trabalho aberto continua visível na UI), só deixou de alimentar a conta de
+  eficiência. Usado pelos três endpoints que compartilham o helper:
+  `KpiMemberAggregateEndpoint`, `WorkspaceKpiMemberAggregateEndpoint` e o bloco `members` de
+  `WorkspaceKpiOverviewEndpoint` — corrige os três de uma vez.
+- **Teste:** `test_pending_issue_counts_vp_not_vf` renomeado para
+  `test_pending_issue_contributes_to_counts_not_vp_or_vf` e reescrito para esperar
+  `sum_vp == 0` (era `27`) num issue pendente. Sem migração.
+- **Gates:** `pytest plane/tests/contract/app/test_kpi.py plane/tests/unit/kpi/` — **52 passed**
+  (container `api` local, `docker compose -f docker-compose-local.yml exec api pytest ...`).
 
 ## Critérios de Aceitação
 

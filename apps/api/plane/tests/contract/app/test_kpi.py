@@ -400,7 +400,12 @@ class TestKpiMemberAggregates:
         assert body["results"] == []
         assert body["unassigned_count"] == 1
 
-    def test_pending_issue_counts_vp_not_vf(self, session_client, workspace, project, state, create_user):
+    def test_pending_issue_contributes_to_counts_not_vp_or_vf(
+        self, session_client, workspace, project, state, create_user
+    ):
+        # Pending (undelivered) work must not affect a member's Vp/Vf -- carrying
+        # more open work than a teammate must not by itself look "less efficient".
+        # It still shows up in counts["pending"] so workload stays visible.
         issue = _make_issue(project, workspace, state, create_user, priority="high", target_date=date(2026, 1, 15))
         IssueAssignee.objects.create(issue=issue, assignee=create_user, project=project, workspace=workspace)
 
@@ -409,7 +414,7 @@ class TestKpiMemberAggregates:
         body = response.json()
         assert len(body["results"]) == 1
         row = body["results"][0]
-        assert row["sum_vp"] == pytest.approx(27)
+        assert row["sum_vp"] == 0
         assert row["sum_vf"] == 0
         assert row["counts"]["pending"] == 1
 

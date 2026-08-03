@@ -138,14 +138,22 @@ def _accumulate_member_buckets(issue, calc, row_status, buckets):
     every member's score matches the project-wide total. Returns False when the
     issue has no assignee (the caller counts those separately) -- a mixed
     "Unassigned" row would distort a ranking of real people.
+
+    Only delivered items (``calc["d"] is not None``) contribute to Vp/Vf here,
+    matching the project-level rule in KpiIssueListEndpoint /
+    WorkspaceKpiOverviewEndpoint. A member's raw open-work volume must not by
+    itself lower their efficiency -- only their delivered work's Vf/Vp ratio
+    does. Pending items still count toward `counts["pending"]` so the workload
+    stays visible, it just no longer feeds the score.
     """
     assignees = list(issue.assignees.all())
     if not assignees:
         return False
 
     n = len(assignees)
-    vp_share = calc["Vp"] / n
-    vf_share = (calc["Vf"] / n) if calc["Vf"] is not None else None
+    delivered = calc["d"] is not None
+    vp_share = calc["Vp"] / n if delivered else 0.0
+    vf_share = (calc["Vf"] / n) if delivered and calc["Vf"] is not None else None
 
     for user in assignees:
         bucket = buckets.setdefault(
@@ -435,12 +443,12 @@ class WorkspaceKpiOverviewEndpoint(BaseAPIView):
     One pass over the issues feeds all three blocks -- per project, per member
     and the unified summary -- so the panel costs a single scan.
 
-    Note the deliberate asymmetry inherited from the project-level endpoints:
-    ``projects``/``unified`` count only delivered items in their Vp/Vf totals
-    (matching ``KpiIssueListEndpoint``), while ``members`` also credits the Vp
-    of open work (matching ``KpiMemberAggregateEndpoint``). So a member's Vp may
-    exceed the Vp of the projects they work on -- that is the existing contract
-    of each block, kept intact here.
+    ``projects``/``unified`` and ``members`` now agree: all three blocks count
+    only delivered items in Vp/Vf (see ``_accumulate_member_buckets``). A
+    member's raw open-work volume never lowers their efficiency by itself --
+    carrying a larger backlog than a teammate must not make someone look less
+    efficient than someone who simply has less assigned to them. Open work
+    still surfaces via ``counts["pending"]``, just not via Vp/Vf.
     """
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
