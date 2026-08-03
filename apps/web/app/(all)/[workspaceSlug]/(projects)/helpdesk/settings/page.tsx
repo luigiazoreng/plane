@@ -502,7 +502,7 @@ const HelpdeskSettingsPage = observer(() => {
       if (isDirtyFields && selectedForm) {
         // Deletions
         for (const id of deletedFieldIds) {
-          saves.push(helpdeskStore.deleteFormField(wSlug, selectedForm.id, id));
+          saves.push(helpdeskStore.deleteFormField(wSlug, id, selectedForm.id));
         }
 
         const finalFields = [...(fieldsDraft ?? [])];
