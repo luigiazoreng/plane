@@ -9,7 +9,7 @@ import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Settings } from "lucide-react";
+import { HelpCircle, Settings } from "lucide-react";
 import { EUserPermissionsLevel } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 import { EUserProjectRoles } from "@plane/types";
@@ -21,6 +21,7 @@ import lightEmptyState from "@/app/assets/empty-state/disabled-feature/views-lig
 // components
 import { DetailedEmptyState } from "@/components/empty-state/detailed-empty-state-root";
 import { KpiCurveChart } from "@/components/kpi/curve-chart";
+import { KpiMathHelpModal } from "@/components/kpi/math-help-modal";
 import { KpiMemberBarChart } from "@/components/kpi/member-bar-chart";
 import { KpiMemberList } from "@/components/kpi/member-list";
 import { KpiStatBar } from "@/components/kpi/stat-bar";
@@ -53,6 +54,7 @@ function ProjectKpiPage() {
 
   const [loading, setLoading] = useState(true);
   const [selectedPriorityLevel, setSelectedPriorityLevel] = useState<string | null>(null);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const config = projectConfig[projectId];
   const agg = aggregates[projectId];
@@ -138,13 +140,23 @@ function ProjectKpiPage() {
               {config.inherited && " · inherited config"}
             </span>
           </div>
-          <Link
-            href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
-            className="flex items-center gap-1.5 rounded text-12 font-medium text-secondary transition-colors hover:text-primary"
-          >
-            <Settings className="size-3.5" />
-            Settings
-          </Link>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(true)}
+              className="flex items-center gap-1.5 text-12 font-medium text-tertiary transition-colors hover:text-secondary"
+            >
+              <HelpCircle className="size-3.5" />
+              How it works
+            </button>
+            <Link
+              href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
+              className="flex items-center gap-1.5 rounded text-12 font-medium text-secondary transition-colors hover:text-primary"
+            >
+              <Settings className="size-3.5" />
+              Settings
+            </Link>
+          </div>
         </div>
 
         {/* Member scoring + charts */}
@@ -191,6 +203,7 @@ function ProjectKpiPage() {
           </div>
         </div>
       </div>
+      <KpiMathHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
     </>
   );
 }

@@ -127,7 +127,10 @@ function WorkspaceKpiPage() {
           </div>
         )}
 
-        <SectionHeader title="By member" hint="Scores split equally between a work item's assignees" />
+        <SectionHeader
+          title="By member"
+          hint="Scores split equally between assignees · Efficiency is comparable between members; Σ Vp / Σ Vf are not"
+        />
         <div className="flex flex-col lg:flex-row">
           <div className="horizontal-scrollbar scrollbar-lg min-w-0 flex-1 overflow-x-auto">
             <KpiMemberList results={overview?.members ?? []} unassignedCount={overview?.unassigned_count ?? 0} />

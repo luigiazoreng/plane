@@ -310,6 +310,21 @@ export const PROFILE_CONFIG: Record<TMemberProfile, { label: string; color: stri
   },
 };
 
+// ── CSV export ─────────────────────────────────────────────────────────────
+
+/** Flatten the Team Performance table into plain rows for CSV export. */
+export function buildExecutiveMembersCsvRows(members: IExecutiveMember[]) {
+  return members.map((member, idx) => ({
+    Rank: idx + 1,
+    Member: member.displayName,
+    Profile: PROFILE_CONFIG[member.profile].label,
+    "Helpdesk score (%)": member.hdScore != null ? member.hdScore.toFixed(1) : "",
+    "Helpdesk tickets": member.hdTickets ?? "",
+    "Projects efficiency (%)": member.kpiScore != null ? member.kpiScore.toFixed(1) : "",
+    "Final score": member.finalScore.toFixed(1),
+  }));
+}
+
 // ── Health status helpers ──────────────────────────────────────────────────
 
 export type THealthStatus = "healthy" | "warning" | "critical" | "unknown";

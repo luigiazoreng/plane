@@ -45,15 +45,27 @@ export const KpiProjectList = (props: Props) => {
       <thead>
         <tr className="border-b border-subtle">
           <th className={cn(HEAD, "sticky left-0 z-10 text-left")}>Project</th>
-          <th className={cn(HEAD, "text-right")}>Efficiency</th>
+          <th className={cn(HEAD, "text-right")}>
+            <Tooltip tooltipContent="Σ Vf ÷ Σ Vp. Independent of volume and point scale — this is the number that's comparable between projects.">
+              <span>Efficiency</span>
+            </Tooltip>
+          </th>
           <th className={cn(HEAD, "text-right")}>
             <Tooltip tooltipContent="This project's share of the unified KPI: efficiency × items ÷ total items.">
               <span>Contribution</span>
             </Tooltip>
           </th>
           <th className={cn(HEAD, "text-right")}>Scored</th>
-          <th className={cn(HEAD, "text-right")}>Σ Vp</th>
-          <th className={cn(HEAD, "text-right")}>Σ Vf</th>
+          <th className={cn(HEAD, "text-right")}>
+            <Tooltip tooltipContent="Raw total planned value of this project's delivered work items. Scales with volume delivered — not comparable between projects.">
+              <span>Σ Vp</span>
+            </Tooltip>
+          </th>
+          <th className={cn(HEAD, "text-right")}>
+            <Tooltip tooltipContent="Raw total final score after delay penalties. Also scales with delivered volume — compare Efficiency instead, not this number, between projects.">
+              <span>Σ Vf</span>
+            </Tooltip>
+          </th>
           <th className={cn(HEAD, "text-left")}>Status</th>
         </tr>
       </thead>

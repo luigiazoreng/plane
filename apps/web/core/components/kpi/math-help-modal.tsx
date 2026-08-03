@@ -94,20 +94,44 @@ export const KpiMathHelpModal = (props: Props) => {
               If a work item has multiple assignees, this final score is divided equally among them in the member
               rankings.
             </p>
+            <p className="mt-3 text-13 leading-relaxed text-secondary">
+              Only <strong>delivered</strong> work items (marked done) contribute Vp/Vf at all. A work item that is
+              still open — even if overdue — never lowers a project's or a member's score. It only shows up in the{" "}
+              <strong>Pending</strong> count, so open workload stays visible without affecting the numbers above it.
+            </p>
           </section>
 
           <section>
-            <h3 className="text-15 mb-2 font-medium text-primary">4. Project & Workspace Efficiency</h3>
+            <h3 className="text-15 mb-2 font-medium text-primary">4. Project, Workspace & Member Efficiency</h3>
             <p className="text-13 leading-relaxed text-secondary">
-              Efficiency measures how well a project team is meeting their estimates and deadlines. It is independent of
-              the project's point scale, making it comparable across different projects.
+              Efficiency measures how well a project team — or an individual member — is meeting their estimates and
+              deadlines. It is independent of the point scale, making it the one figure that's comparable across
+              different projects and different people.
             </p>
             <div className="font-mono mt-3 rounded-md border border-subtle bg-layer-1 p-3 text-13 text-secondary">
-              Project Efficiency = Σ Vf / Σ Vp
+              Efficiency = Σ Vf / Σ Vp
             </div>
             <p className="mt-3 text-13 leading-relaxed text-secondary">
               The <strong>Unified Workspace KPI</strong> is the average of all active project efficiencies, weighted by
               the number of scored work items each project contributed.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-15 mb-2 font-medium text-primary">5. Why Σ Vp / Σ Vf aren't comparable</h3>
+            <p className="text-13 leading-relaxed text-secondary">
+              Σ Vp and Σ Vf are <strong>raw totals</strong> — they add up every delivered work item's contribution, so
+              they scale with how much a project or a member delivered, not with how well. Someone who delivers 100
+              work items will naturally have a bigger Σ Vf than someone who delivered 15, even if the second person's
+              work was flawless and the first person's was frequently late.
+            </p>
+            <p className="mt-3 text-13 leading-relaxed text-secondary">
+              The penalty is still real — a late item's Vf is discounted relative to its own Vp by the delay
+              multiplier <strong>p</strong> above — but that discount is applied per item, then summed. A large enough
+              volume of discounted items can still add up to a bigger raw total than a small volume of full-value
+              ones. <strong>Efficiency</strong> is what removes the volume effect: it is the one number meant to be
+              compared between two projects or two people. Use Σ Vp / Σ Vf only to gauge magnitude of work, never as a
+              head-to-head comparison.
             </p>
           </section>
         </div>

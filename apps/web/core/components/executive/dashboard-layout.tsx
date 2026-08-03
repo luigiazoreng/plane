@@ -6,8 +6,10 @@
 
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
+import { Download } from "lucide-react";
+import { download, generateCsv, mkConfig } from "export-to-csv";
 import { Spinner } from "@plane/ui";
 import type { IHelpdeskAnalyticsFilters } from "@plane/types";
 // hooks
@@ -24,16 +26,27 @@ import { KpiScoreBarChart } from "@/components/kpi/score-bar-chart";
 import { ITGeneralIndex } from "./it-general-index";
 import { SectorHealth } from "./sector-health";
 import { ExecutiveMemberTable } from "./executive-member-table";
-import { computeITGeneralIndex, buildExecutiveMembers } from "./helpers";
+import { computeITGeneralIndex, buildExecutiveMembers, buildExecutiveMembersCsvRows } from "./helpers";
 
 type Props = {
   workspaceSlug: string;
 };
 
-const SectionHeader = ({ title, hint }: { title: string; hint?: string }) => (
-  <div className="flex h-11 shrink-0 items-center gap-2 border-b border-subtle bg-surface-1 px-page-x">
-    <h3 className="text-13 font-medium text-primary">{title}</h3>
-    {hint && <span className="truncate text-12 text-tertiary">{hint}</span>}
+const SectionHeader = ({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: React.ReactNode;
+}) => (
+  <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-subtle bg-surface-1 px-page-x">
+    <div className="flex min-w-0 items-center gap-2">
+      <h3 className="text-13 font-medium text-primary">{title}</h3>
+      {hint && <span className="truncate text-12 text-tertiary">{hint}</span>}
+    </div>
+    {action}
   </div>
 );
 
@@ -62,7 +75,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
 
   // ── Local state ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<"30d" | "90d">("90d");
+  const [period, setPeriod] = useState<"30d" | "90d">("30d");
 
   const hdFilters: IHelpdeskAnalyticsFilters = useMemo(
     () => ({
@@ -110,6 +123,17 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     [overview]
   );
 
+  const handleExportCsv = useCallback(() => {
+    const rows = buildExecutiveMembersCsvRows(executiveMembers);
+    const csvConfig = mkConfig({
+      fieldSeparator: ",",
+      filename: `${workspaceSlug}-executive-team-performance-${period}`,
+      decimalSeparator: ".",
+      useKeysAsHeaders: true,
+    });
+    download(csvConfig)(generateCsv(csvConfig)(rows));
+  }, [executiveMembers, workspaceSlug, period]);
+
   // ── Loading state ────────────────────────────────────────────
   if (loading && (!overview || !helpdeskData)) {
     return (
@@ -143,6 +167,17 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
         <SectionHeader
           title="Team Performance"
           hint="Scores evaluated by profile: Helpdesk SLA compliance, Engineering efficiency, or a volume-weighted Hybrid blend"
+          action={
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={executiveMembers.length === 0}
+              className="hide-on-print flex shrink-0 items-center gap-1.5 text-12 font-medium text-tertiary transition-colors hover:text-secondary disabled:pointer-events-none disabled:opacity-50"
+            >
+              <Download className="size-3.5" />
+              Export to CSV
+            </button>
+          }
         />
         <div className="px-page-x py-4">
           <ExecutiveMemberTable members={executiveMembers} />
