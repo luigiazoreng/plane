@@ -20,6 +20,10 @@ type Props = {
 
 const fmt = (value: number | null) => (value == null ? "—" : `${value.toFixed(1)}%`);
 
+/** Raw KPI point totals, rendered as "Vf / Vp" -- integers stay bare, fractions get 2 decimals. */
+const fmtPoints = (value: number | null) =>
+  value == null ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
+
 const HEAD = "h-11 bg-layer-1 px-page-x text-11 font-medium text-tertiary";
 
 export const ExecutiveMemberTable: React.FC<Props> = ({ members }) => {
@@ -48,8 +52,13 @@ export const ExecutiveMemberTable: React.FC<Props> = ({ members }) => {
               </Tooltip>
             </th>
             <th className={cn(HEAD, "text-center")}>Profile</th>
-            <th className={cn(HEAD, "text-right")}>Helpdesk</th>
-            <th className={cn(HEAD, "text-right")}>Projects</th>
+            <th className={cn(HEAD, "text-right")}>
+              <Tooltip tooltipContent="Raw KPI point totals behind the Projects Efficiency %: final value (after delay penalties) over planned value. Both scale with delivered volume, so compare the % — not these totals — between members.">
+                <span>Σ Vf / Σ Vp</span>
+              </Tooltip>
+            </th>
+            <th className={cn(HEAD, "text-right")}>Helpdesk Efficiency</th>
+            <th className={cn(HEAD, "text-right")}>Projects Efficiency</th>
             <th className={cn(HEAD, "text-right")}>Score</th>
           </tr>
         </thead>
@@ -87,6 +96,19 @@ export const ExecutiveMemberTable: React.FC<Props> = ({ members }) => {
                   >
                     {profileCfg.label}
                   </span>
+                </td>
+
+                {/* Raw KPI point totals behind the Projects Efficiency % */}
+                <td className="px-page-x text-right text-tertiary tabular-nums">
+                  {member.sumVp == null && member.sumVf == null ? (
+                    "—"
+                  ) : (
+                    <>
+                      <span className="text-secondary">{fmtPoints(member.sumVf)}</span>
+                      {" / "}
+                      {fmtPoints(member.sumVp)}
+                    </>
+                  )}
                 </td>
 
                 {/* HD Score */}

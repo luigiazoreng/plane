@@ -50,12 +50,23 @@ export interface IExecutiveMember {
   hdTickets: number | null;
   /** Raw KPI efficiency ratio (0-1). */
   kpiEfficiency: number | null;
+  /** Raw sum of planned value across this member's delivered work items. */
+  sumVp: number | null;
+  /** Raw sum of final value (after delay penalties) across the same items. */
+  sumVf: number | null;
   /**
    * Total items this member is carrying in the period: delivered + pending KPI
    * work items, plus Helpdesk tickets. Informational only -- it never feeds
    * into finalScore, so a heavier workload never lowers the ranking.
    */
   workload: number;
+  /** Delivered KPI work items -- the volume side of the Hybrid score blend. */
+  kpiScoredItems: number;
+  /** Still-open KPI work items. Counted in workload, never in Vp/Vf. */
+  kpiPendingItems: number;
+  /** The two raw SLA percentages hdScore averages, kept so exports can show the inputs. */
+  hdSlaFirstResponse: number | null;
+  hdSlaResolution: number | null;
 }
 
 // ── Default weights ────────────────────────────────────────────────────────
@@ -282,6 +293,7 @@ export function buildExecutiveMembers(
 
     const kpiScore = kpiMember?.efficiency != null ? Math.round(kpiMember.efficiency * 1000) / 10 : null;
     const hdScore = hdQualityMap.get(userId) ?? null;
+    const scoredItems = kpiScoredItemCount(kpiMember);
 
     results.push({
       userId,
@@ -290,10 +302,16 @@ export function buildExecutiveMembers(
       profile,
       hdScore,
       kpiScore,
-      finalScore: computeMemberScore(profile, hdScore, kpiScore, hdAgent?.count ?? 0, kpiScoredItemCount(kpiMember)),
+      finalScore: computeMemberScore(profile, hdScore, kpiScore, hdAgent?.count ?? 0, scoredItems),
       hdTickets: hdAgent?.count ?? null,
       kpiEfficiency: kpiMember?.efficiency ?? null,
+      sumVp: kpiMember?.sum_vp ?? null,
+      sumVf: kpiMember?.sum_vf ?? null,
       workload: kpiTotalItemCount(kpiMember) + (hdAgent?.count ?? 0),
+      kpiScoredItems: scoredItems,
+      kpiPendingItems: kpiMember?.counts.pending ?? 0,
+      hdSlaFirstResponse: hdAgent?.sla_first_response_pct ?? null,
+      hdSlaResolution: hdAgent?.sla_resolution_pct ?? null,
     });
   }
 
@@ -322,22 +340,6 @@ export const PROFILE_CONFIG: Record<TMemberProfile, { label: string; color: stri
     bg: "bg-teal-500/10",
   },
 };
-
-// ── CSV export ─────────────────────────────────────────────────────────────
-
-/** Flatten the Team Performance table into plain rows for CSV export. */
-export function buildExecutiveMembersCsvRows(members: IExecutiveMember[]) {
-  return members.map((member, idx) => ({
-    Rank: idx + 1,
-    Member: member.displayName,
-    Profile: PROFILE_CONFIG[member.profile].label,
-    Workload: member.workload,
-    "Helpdesk score (%)": member.hdScore != null ? member.hdScore.toFixed(1) : "",
-    "Helpdesk tickets": member.hdTickets ?? "",
-    "Projects efficiency (%)": member.kpiScore != null ? member.kpiScore.toFixed(1) : "",
-    "Final score": member.finalScore.toFixed(1),
-  }));
-}
 
 // ── Health status helpers ──────────────────────────────────────────────────
 

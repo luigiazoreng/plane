@@ -147,15 +147,21 @@ export const ExecutiveHelpModal = (props: Props) => {
               column, so carrying more work never lowers anyone&apos;s ranking.
             </p>
             <p className="mt-4 text-13 leading-relaxed text-secondary">
-              <strong>Helpdesk column</strong> — this is a quality score, not a volume score: the average of the
-              agent&apos;s own SLA First Response % and SLA Resolution % (whichever are available). Resolving 1 ticket
-              within SLA scores the same as resolving 20 within SLA; resolving more tickets late doesn&apos;t score
-              higher just because there are more of them. The number in parentheses is the raw ticket count, shown for
-              context only — it does not affect this score.
+              <strong>Σ Vf / Σ Vp column</strong> — the raw KPI point totals behind the Projects Efficiency %: final
+              value (after delay penalties) over planned value, across the member&apos;s delivered work items. The
+              percentage is the ratio of exactly these two numbers. Both totals scale with delivered volume, so
+              compare the percentage between members, never these totals.
             </p>
             <p className="mt-3 text-13 leading-relaxed text-secondary">
-              <strong>Projects column</strong> — the member&apos;s KPI Efficiency (Σ Vf / Σ Vp of their own delivered
-              work items), identical to the Efficiency figure on the KPI page.
+              <strong>Helpdesk Efficiency column</strong> — this is a quality score, not a volume score: the average
+              of the agent&apos;s own SLA First Response % and SLA Resolution % (whichever are available). Resolving 1
+              ticket within SLA scores the same as resolving 20 within SLA; resolving more tickets late doesn&apos;t
+              score higher just because there are more of them. The number in parentheses is the raw ticket count,
+              shown for context only — it does not affect this score.
+            </p>
+            <p className="mt-3 text-13 leading-relaxed text-secondary">
+              <strong>Projects Efficiency column</strong> — the member&apos;s KPI Efficiency (Σ Vf / Σ Vp of their own
+              delivered work items), identical to the Efficiency figure on the KPI page.
             </p>
             <p className="mt-3 text-13 leading-relaxed text-secondary">
               <strong>Score column</strong> (final, sortable rank):
@@ -175,11 +181,27 @@ export const ExecutiveHelpModal = (props: Props) => {
               Projects, not punished equally on both sides. If one side has no score at all (e.g. no SLA configured),
               all the weight goes to the other side instead of treating the missing side as a zero.
             </p>
-            <p className="mt-3 text-13 leading-relaxed text-secondary">
-              <strong>Export to CSV</strong> (next to the section title) downloads exactly this table — Rank, Member,
-              Profile, Helpdesk score, Helpdesk tickets, Projects efficiency, and Final score — for the currently
-              selected period.
+          </section>
+
+          <section>
+            <h3 className="text-15 mb-2 font-medium text-primary">4. Exporting</h3>
+            <p className="text-13 leading-relaxed text-secondary">
+              The <strong>Export</strong> button in the page header offers two formats, both scoped to the currently
+              selected period:
             </p>
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-13 text-secondary">
+              <li>
+                <strong>Export to PDF</strong>: prints the dashboard exactly as rendered, for sharing a snapshot.
+              </li>
+              <li>
+                <strong>Export to Excel</strong>: a multi-sheet workbook with the underlying data rather than the
+                visuals — <em>Overview</em> (index components, weights and contributions), <em>Sector Health</em>,{" "}
+                <em>Team Performance</em> (including each member&apos;s own score formula), <em>KPI by Project</em>,{" "}
+                <em>KPI by Member</em>, <em>Helpdesk Summary</em>, <em>Helpdesk Agents</em>,{" "}
+                <em>Helpdesk Trends</em>, and a <em>Methodology</em> sheet documenting every formula on this page and
+                on the KPI page.
+              </li>
+            </ul>
           </section>
         </div>
       </div>
