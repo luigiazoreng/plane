@@ -40,21 +40,63 @@ const POINTS_FORMAT = "0.00";
 /** Weights ARE stored as fractions, so the real percent format applies. */
 const WEIGHT_FORMAT = "0%";
 
+// ── Theme ──────────────────────────────────────────────────────────────────
+
+const COLOR = {
+  title: "#0F172A",
+  headerBg: "#1E293B",
+  headerText: "#FFFFFF",
+  sectionBg: "#E2E8F0",
+  band: "#F6F8FB",
+  totalBg: "#FEF3C7",
+  legendLabelBg: "#F1F5F9",
+  border: "#CBD5E1",
+  muted: "#475569",
+  subtle: "#64748B",
+};
+
+const HEIGHT = { title: 24, subtitle: 15, section: 22, header: 34 };
+
 // ── Cell helpers ───────────────────────────────────────────────────────────
 
-const title = (value: string): Cell => ({ value, type: String, fontWeight: "bold", fontSize: 14 });
-const section = (value: string): Cell => ({ value, type: String, fontWeight: "bold", fontSize: 12 });
-const th = (value: string): Cell => ({
+const title = (value: string): Cell => ({
   value,
   type: String,
   fontWeight: "bold",
-  backgroundColor: "#EEF2F7",
-  borderColor: "#CBD5E1",
-  wrap: true,
-  alignVertical: "bottom",
+  fontSize: 15,
+  textColor: COLOR.title,
+  height: HEIGHT.title,
+  alignVertical: "center",
 });
+const section = (value: string): Cell => ({
+  value,
+  type: String,
+  fontWeight: "bold",
+  fontSize: 12,
+  textColor: COLOR.title,
+  backgroundColor: COLOR.sectionBg,
+  height: HEIGHT.section,
+  alignVertical: "center",
+});
+/** Table header cell. Numeric columns get `align: "right"` to sit over their values. */
+const th = (value: string, align: "left" | "right" = "left"): Cell => ({
+  value,
+  type: String,
+  fontWeight: "bold",
+  textColor: COLOR.headerText,
+  backgroundColor: COLOR.headerBg,
+  borderColor: COLOR.border,
+  wrap: true,
+  align,
+  alignVertical: "bottom",
+  height: HEIGHT.header,
+});
+const thNum = (value: string): Cell => th(value, "right");
+/** Row label in a key/value table. */
+const key = (value: string): Cell => ({ value, type: String, fontWeight: "bold", textColor: COLOR.title });
 const str = (value: string | null | undefined): Cell => (value == null ? null : { value, type: String });
-const note = (value: string): Cell => ({ value, type: String, wrap: true, alignVertical: "top", textColor: "#475569" });
+const dim = (value: string | null | undefined): Cell =>
+  value == null ? null : { value, type: String, textColor: COLOR.muted };
 const num = (value: number | null | undefined, format?: string): Cell =>
   value == null ? null : { value, type: Number, format };
 const pct = (value: number | null | undefined): Cell => num(value, PCT_FORMAT);
@@ -69,7 +111,41 @@ const blank: Row = [];
 /** Excel caps sheet names at 31 chars and rejects : \ / ? * [ ] */
 const sheetName = (name: string) => name.replace(/[:\\/?*[\]]/g, "-").slice(0, 31);
 
-const widths = (...values: number[]) => values.map((width) => ({ width }));
+const widths = (values: number[]) => values.map((width) => ({ width }));
+
+/** Copy a cell with extra style properties merged in. `null` becomes a styled empty cell. */
+const styled = (cell: Cell, extra: Record<string, unknown>): Cell => {
+  const base = cell !== null && cell !== undefined && typeof cell === "object" ? cell : { value: cell ?? null };
+  return { ...base, ...extra } as Cell;
+};
+
+/** Shade alternating data rows so wide tables stay readable across the page. */
+const band = (row: Row, index: number): Row =>
+  index % 2 === 0 ? row : row.map((cell) => styled(cell, { backgroundColor: COLOR.band }));
+
+/**
+ * Build a row from [cell, columnSpan] pairs. write-excel-file requires the
+ * positions a merged cell covers to be present and null, so they are padded in.
+ */
+const spanned = (parts: [Cell, number][]): Row => {
+  const row: Row = [];
+  for (const [cell, span] of parts) {
+    row.push(span > 1 ? styled(cell, { columnSpan: span }) : cell);
+    for (let i = 1; i < span; i += 1) row.push(null);
+  }
+  return row;
+};
+
+/**
+ * Merged cells do NOT auto-fit their row height in Excel, so wrapped prose in a
+ * merged cell would be clipped. Estimate the height from the text length and the
+ * merged width instead (Excel width units are roughly one character each).
+ */
+const wrappedHeight = (text: string, widthInChars: number): number => {
+  const perLine = Math.max(20, widthInChars * 0.98);
+  const lines = Math.max(1, Math.ceil(text.length / perLine));
+  return Math.min(150, 15 + (lines - 1) * 12.5);
+};
 
 /** 0 -> "A", 25 -> "Z", 26 -> "AA" */
 function colLetter(index: number): string {
@@ -89,20 +165,97 @@ const COUNT_LABELS: Record<TKpiIssueStatus, string> = {
   late: "Late",
   pending: "Pending",
 };
-const countHeaders = (): Row => COUNT_KEYS.map((key) => th(COUNT_LABELS[key]));
-const countCells = (counts: Record<TKpiIssueStatus, number>): Row => COUNT_KEYS.map((key) => num(counts[key]));
+const countHeaders = (): Row => COUNT_KEYS.map((k) => thNum(COUNT_LABELS[k]));
+const countCells = (counts: Record<TKpiIssueStatus, number>): Row => COUNT_KEYS.map((k) => num(counts[k]));
 
 const periodLabel = (period: "30d" | "90d") => (period === "30d" ? "Last 30 days" : "Last 90 days");
 
-/** Legend block appended under every sheet, so each one explains itself. */
-const legend = (entries: [string, string][]): Row[] => [
-  blank,
-  [section("How to read this sheet")],
-  [th("Column / figure"), th("Meaning — and, where it is computed, the live formula in that cell")],
-  ...entries.map(([label, meaning]): Row => [str(label), note(meaning)]),
-];
+/** A sheet's title block: heading plus the period it covers. */
+const titleBlock = (heading: string, subtitle: string, cols: number[]): Row[] => {
+  const totalWidth = cols.reduce((a, b) => a + b, 0);
+  return [
+    spanned([[title(heading), cols.length]]),
+    spanned([
+      [
+        styled(dim(subtitle), {
+          // Merged cells never auto-fit their height, so a long subtitle has to
+          // be measured here or Excel would clip it to a single line.
+          height: Math.max(HEIGHT.subtitle, wrappedHeight(subtitle, totalWidth)),
+          fontStyle: "italic",
+          wrap: true,
+          alignVertical: "top",
+        }),
+        cols.length,
+      ],
+    ]),
+    blank,
+  ];
+};
+
+/**
+ * Legend block appended to every sheet, so each one explains itself.
+ *
+ * The prose is merged across the full sheet width -- otherwise it lands in a
+ * column sized for numbers and wraps into a comically tall row.
+ */
+const legend = (entries: [string, string][], cols: number[]): Row[] => {
+  const labelSpan = Math.min(2, Math.max(1, cols.length - 1));
+  const labelWidth = cols.slice(0, labelSpan).reduce((a, b) => a + b, 0);
+
+  // Merge across just enough columns for a readable line, rather than the whole
+  // sheet -- on the wide sheets that would stretch prose over 240 characters.
+  const TARGET_TEXT_WIDTH = 100;
+  let textSpan = 0;
+  let textWidth = 0;
+  while (labelSpan + textSpan < cols.length && textWidth < TARGET_TEXT_WIDTH) {
+    textWidth += cols[labelSpan + textSpan];
+    textSpan += 1;
+  }
+
+  return [
+    blank,
+    spanned([[section("How to read this sheet"), cols.length]]),
+    spanned([
+      [th("Column / figure"), labelSpan],
+      [th("What it means — and the live formula, where the cell computes one"), textSpan],
+    ]),
+    ...entries.map(([label, meaning]): Row => {
+      const height = Math.max(wrappedHeight(meaning, textWidth), wrappedHeight(label, labelWidth));
+      return spanned([
+        [
+          {
+            value: label,
+            type: String,
+            fontWeight: "bold",
+            textColor: COLOR.title,
+            backgroundColor: COLOR.legendLabelBg,
+            wrap: true,
+            alignVertical: "top",
+            borderColor: COLOR.border,
+            height,
+          },
+          labelSpan,
+        ],
+        [
+          {
+            value: meaning,
+            type: String,
+            textColor: COLOR.muted,
+            wrap: true,
+            alignVertical: "top",
+            borderColor: COLOR.border,
+            height,
+          },
+          textSpan,
+        ],
+      ]);
+    }),
+  ];
+};
 
 // ── Sheet 1: Overview (IT General Index) ───────────────────────────────────
+
+const OVERVIEW_COLS = [40, 13, 15, 16, 16, 62];
 
 function buildOverviewSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const { itIndex, kpi, period, workspaceSlug } = payload;
@@ -110,23 +263,25 @@ function buildOverviewSheet(payload: IExecutiveExportPayload): Sheet<never> {
   // Rows are 1-indexed in Excel. Track where the component block lands so the
   // formulas below can reference it.
   const header: Row[] = [
-    [title("Executive Dashboard — IT General Index")],
-    [str("Workspace"), str(workspaceSlug)],
-    [str("Period"), str(periodLabel(period))],
-    [str("KPI window"), str(kpi ? `${kpi.period.start ?? "—"} → ${kpi.period.end ?? "—"}` : "—")],
-    [str("Generated at"), { value: new Date(), type: Date, format: "yyyy-mm-dd hh:mm" }],
+    ...titleBlock(
+      "Executive Dashboard — IT General Index",
+      `${workspaceSlug} · ${periodLabel(period)}`,
+      OVERVIEW_COLS
+    ),
+    [key("KPI window"), dim(kpi ? `${kpi.period.start ?? "—"} → ${kpi.period.end ?? "—"}` : "—")],
+    [key("Generated at"), { value: new Date(), type: Date, format: "yyyy-mm-dd hh:mm", textColor: COLOR.muted }],
     [
-      str("Missing indicators"),
-      str(itIndex.missing.length > 0 ? `${itIndex.missing.join(", ")} (weights redistributed)` : "None"),
+      key("Missing indicators"),
+      dim(itIndex.missing.length > 0 ? `${itIndex.missing.join(", ")} (weights redistributed)` : "None"),
     ],
     blank,
-    [section("Index components")],
+    spanned([[section("Index components"), OVERVIEW_COLS.length]]),
     [
       th("Indicator"),
-      th("Value (%)"),
-      th("Default weight"),
-      th("Effective weight"),
-      th("Contribution (%)"),
+      thNum("Value (%)"),
+      thNum("Default weight"),
+      thNum("Effective weight"),
+      thNum("Contribution (%)"),
       th("Source of the value"),
     ],
   ];
@@ -147,35 +302,42 @@ function buildOverviewSheet(payload: IExecutiveExportPayload): Sheet<never> {
 
   const componentRows = itIndex.components.map((component, idx): Row => {
     const r = firstRow + idx;
-    return [
-      str(component.label),
-      pct(component.value),
-      num(component.weight, WEIGHT_FORMAT),
-      // Missing indicators get 0 weight; the rest share the available total.
-      fx(`IF(B${r}="",0,C${r}/$C$${availableRow})`, WEIGHT_FORMAT),
-      fxPct(`IF(B${r}="",0,B${r}*D${r})`),
-      str(sources[component.key]),
-    ];
+    return band(
+      [
+        key(component.label),
+        pct(component.value),
+        num(component.weight, WEIGHT_FORMAT),
+        // Missing indicators get 0 weight; the rest share the available total.
+        fx(`IF(B${r}="",0,C${r}/$C$${availableRow})`, WEIGHT_FORMAT),
+        fxPct(`IF(B${r}="",0,B${r}*D${r})`),
+        dim(sources[component.key]),
+      ],
+      idx
+    );
   });
 
   const data: Row[] = [
     ...header,
     ...componentRows,
     [
-      str("Available weight (Σ of weights that have a value)"),
+      dim("Available weight (Σ of weights that have a value)"),
       null,
       fx(`SUMIF(B${firstRow}:B${lastRow},"<>",C${firstRow}:C${lastRow})`, WEIGHT_FORMAT),
       fx(`SUM(D${firstRow}:D${lastRow})`, WEIGHT_FORMAT),
       null,
-      str("Redistribution base — effective weights always sum back to 100%"),
+      dim("Redistribution base — effective weights always sum back to 100%"),
     ],
     [
-      { value: "IT GENERAL INDEX", type: String, fontWeight: "bold" },
-      null,
-      null,
-      null,
-      fx(`SUM(E${firstRow}:E${lastRow})`, PCT_FORMAT),
-      str("= Σ (value × effective weight)"),
+      { value: "IT GENERAL INDEX", type: String, fontWeight: "bold", backgroundColor: COLOR.totalBg, height: 22 },
+      styled(null, { backgroundColor: COLOR.totalBg }),
+      styled(null, { backgroundColor: COLOR.totalBg }),
+      styled(null, { backgroundColor: COLOR.totalBg }),
+      styled(fx(`SUM(E${firstRow}:E${lastRow})`, PCT_FORMAT), {
+        backgroundColor: COLOR.totalBg,
+        fontWeight: "bold",
+        fontSize: 12,
+      }),
+      styled(dim("= Σ (value × effective weight)"), { backgroundColor: COLOR.totalBg }),
     ],
     ...legend([
       ["Value (%)", "Raw indicator, normalized to 0-100. Edit one and the whole index below recalculates."],
@@ -194,24 +356,29 @@ function buildOverviewSheet(payload: IExecutiveExportPayload): Sheet<never> {
         "Resolution Speed",
         "Average resolution time mapped linearly: 0h = 100%, 48h or more = 0%. Computed on the Sector Health sheet.",
       ],
-    ]),
+    ], OVERVIEW_COLS),
   ];
 
-  return { sheet: sheetName("Overview"), data, columns: widths(46, 14, 15, 16, 17, 70) };
+  return {
+    sheet: sheetName("Overview"),
+    data,
+    columns: widths(OVERVIEW_COLS),
+    stickyRowsCount: header.length,
+  };
 }
 
 // ── Sheet 2: Sector Health ─────────────────────────────────────────────────
+
+const SECTOR_COLS = [32, 14, 96];
 
 function buildSectorHealthSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const { helpdesk, kpi } = payload;
   const unified = kpi?.unified;
 
   const head: Row[] = [
-    [title("Sector Health")],
-    [str("Period"), str(periodLabel(payload.period))],
-    blank,
-    [section("Helpdesk & Support")],
-    [th("Metric"), th("Value"), th("Definition")],
+    ...titleBlock("Sector Health", periodLabel(payload.period), SECTOR_COLS),
+    spanned([[section("Helpdesk & Support"), SECTOR_COLS.length]]),
+    [th("Metric"), thNum("Value"), th("Definition")],
   ];
 
   // Track the rows the derived Helpdesk metrics depend on.
@@ -278,7 +445,11 @@ function buildSectorHealthSheet(payload: IExecutiveExportPayload): Sheet<never> 
     ],
   ];
 
-  const engHead: Row[] = [blank, [section("Engineering & Projects")], [th("Metric"), th("Value"), th("Definition")]];
+  const engHead: Row[] = [
+    blank,
+    spanned([[section("Engineering & Projects"), SECTOR_COLS.length]]),
+    [th("Metric"), thNum("Value"), th("Definition")],
+  ];
   const engFirst = hdFirst + helpdeskRows.length + engHead.length;
   const sumVpRow = engFirst + 7;
   const sumVfRow = engFirst + 8;
@@ -333,50 +504,74 @@ function buildSectorHealthSheet(payload: IExecutiveExportPayload): Sheet<never> 
     ],
   ];
 
+  // Bold the metric name, mute the definition, and band alternating rows.
+  const styleKv = (rows: Row[]): Row[] =>
+    rows.map((row, idx) =>
+      band(
+        row.map((cell, col) => {
+          if (col === 0) return styled(cell, { fontWeight: "bold", textColor: COLOR.title });
+          if (col === 2) return styled(cell, { textColor: COLOR.muted });
+          return cell;
+        }),
+        idx
+      )
+    );
+
   const data: Row[] = [
     ...head,
-    ...helpdeskRows,
+    ...styleKv(helpdeskRows),
     ...engHead,
-    ...engineeringRows,
-    ...legend([
-      ["Plain values", "Raw figures returned by the API — these are the inputs you can edit."],
-      ["Formula cells", "Resolved, Backlog Health, Resolution Speed, Scored items and both badges are computed live."],
+    ...styleKv(engineeringRows),
+    ...legend(
       [
-        "Why two efficiency numbers",
-        "'Efficiency' is the item-weighted mean of per-project efficiencies (each project scored on its own point scale, then averaged by item count). 'Raw Σ Vf / Σ Vp' pools every project's points into one ratio, which mixes incompatible scales. The dashboard and the index always use the first.",
+        ["Plain values", "Raw figures returned by the API — these are the inputs you can edit."],
+        [
+          "Formula cells",
+          "Resolved, Backlog Health, Resolution Speed, Scored items and both badges are computed live.",
+        ],
+        [
+          "Why two efficiency numbers",
+          "'Efficiency' is the item-weighted mean of per-project efficiencies (each project scored on its own point scale, then averaged by item count). 'Raw Σ Vf / Σ Vp' pools every project's points into one ratio, which mixes incompatible scales. The dashboard and the index always use the first.",
+        ],
       ],
-    ]),
+      SECTOR_COLS
+    ),
   ];
 
-  return { sheet: sheetName("Sector Health"), data, columns: widths(34, 14, 96) };
+  return {
+    sheet: sheetName("Sector Health"),
+    data,
+    columns: widths(SECTOR_COLS),
+    stickyRowsCount: head.length,
+  };
 }
 
 // ── Sheet 3: Team Performance ──────────────────────────────────────────────
 
+const TEAM_COLS = [7, 22, 13, 10, 10, 15, 12, 12, 13, 15, 14, 16, 11, 10, 90];
+
 function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const head: Row[] = [
-    [title("Team Performance")],
-    [str("Period"), str(periodLabel(payload.period))],
+    ...titleBlock(
+      "Team Performance",
+      `${periodLabel(payload.period)} · plain cells are raw API inputs, every other column is a live formula`,
+      TEAM_COLS
+    ),
     [
-      str("Note"),
-      str("Grey columns are raw inputs from the API. Every other column is a live formula — click a cell to see it."),
-    ],
-    blank,
-    [
-      th("Rank"),
+      thNum("Rank"),
       th("Member"),
       th("Profile"),
-      th("Σ Vf"),
-      th("Σ Vp"),
-      th("Projects Efficiency (%)"),
-      th("Delivered items"),
-      th("Pending items"),
-      th("Helpdesk tickets"),
-      th("SLA first response (%)"),
-      th("SLA resolution (%)"),
-      th("Helpdesk Efficiency (%)"),
-      th("Workload"),
-      th("Score"),
+      thNum("Σ Vf"),
+      thNum("Σ Vp"),
+      thNum("Projects Efficiency (%)"),
+      thNum("Delivered items"),
+      thNum("Pending items"),
+      thNum("Helpdesk tickets"),
+      thNum("SLA first response (%)"),
+      thNum("SLA resolution (%)"),
+      thNum("Helpdesk Efficiency (%)"),
+      thNum("Workload"),
+      thNum("Score"),
       th("Score formula for this row"),
     ],
   ];
@@ -410,23 +605,26 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
       explanation = `=Helpdesk×(tickets÷(tickets+delivered)) + Projects×(delivered÷(tickets+delivered)) — the blend follows actual work volume, so the side where this person does more work counts more.`;
     }
 
-    return [
-      num(idx + 1),
-      str(member.displayName),
-      str(PROFILE_CONFIG[member.profile].label),
-      pts(member.sumVf),
-      pts(member.sumVp),
-      fxPct(projEff),
-      num(member.kpiScoredItems),
-      num(member.kpiPendingItems),
-      num(member.hdTickets),
-      pct(member.hdSlaFirstResponse),
-      pct(member.hdSlaResolution),
-      fxPct(hdEff),
-      fx(workload),
-      fxPct(score),
-      str(explanation),
-    ];
+    return band(
+      [
+        num(idx + 1),
+        key(member.displayName),
+        dim(PROFILE_CONFIG[member.profile].label),
+        pts(member.sumVf),
+        pts(member.sumVp),
+        fxPct(projEff),
+        num(member.kpiScoredItems),
+        num(member.kpiPendingItems),
+        num(member.hdTickets),
+        pct(member.hdSlaFirstResponse),
+        pct(member.hdSlaResolution),
+        fxPct(hdEff),
+        fx(workload),
+        styled(fxPct(score), { fontWeight: "bold" }),
+        dim(explanation),
+      ],
+      idx
+    );
   });
 
   const data: Row[] = [
@@ -455,34 +653,37 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
         "Why Σ Vf isn't the ranking",
         "Σ Vf is a raw total: delivering 100 items beats delivering 15 on that number even if the second person was never late. The per-item delay penalty is real, but it is applied per item and then summed, so volume still dominates the total. Efficiency removes the volume effect.",
       ],
-    ]),
+    ], TEAM_COLS),
   ];
 
   return {
     sheet: sheetName("Team Performance"),
     data,
-    columns: widths(7, 24, 13, 11, 11, 20, 15, 14, 16, 20, 18, 21, 12, 11, 96),
+    columns: widths(TEAM_COLS),
+    stickyRowsCount: head.length,
+    // Keep rank + name anchored while scrolling through the metric columns.
+    stickyColumnsCount: 2,
   };
 }
 
 // ── Sheet 4: KPI by project ────────────────────────────────────────────────
 
+const PROJECT_COLS = [28, 12, 10, 10, 14, 12, 16, 10, 9, 8, 10, 14, 8, 22];
+
 function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const projects = payload.kpi?.projects ?? [];
 
   const head: Row[] = [
-    [title("KPI by Project")],
-    [str("Period"), str(periodLabel(payload.period))],
-    blank,
+    ...titleBlock("KPI by Project", periodLabel(payload.period), PROJECT_COLS),
     ([
       th("Project"),
       th("Identifier"),
-      th("Σ Vp"),
-      th("Σ Vf"),
-      th("Efficiency (%)"),
-      th("Scored items"),
-      th("Contribution (%)"),
-    ] as Row).concat(countHeaders(), [th("Penalty mode"), th("k"), th("Config")]),
+      thNum("Σ Vp"),
+      thNum("Σ Vf"),
+      thNum("Efficiency (%)"),
+      thNum("Scored items"),
+      thNum("Contribution (%)"),
+    ] as Row).concat(countHeaders(), [th("Penalty mode"), thNum("k"), th("Config")]),
   ];
 
   const firstRow = head.length + 1;
@@ -492,19 +693,22 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const projectRows = projects.map((project, idx): Row => {
     const r = firstRow + idx;
     // C=ΣVp D=ΣVf E=efficiency F=scored G=contribution
-    return ([
-      str(project.name),
-      str(project.identifier),
-      pts(project.sum_vp),
-      pts(project.sum_vf),
-      fxPct(`IF(C${r}=0,"",D${r}/C${r}*100)`),
-      num(project.scored_items),
-      fxPct(`IF(OR(E${r}="",$F$${totalRow}=0),"",E${r}*F${r}/$F$${totalRow})`),
-    ] as Row).concat(countCells(project.counts), [
-      str(project.penalty_mode),
-      num(project.k),
-      str(project.inherited_config ? "Inherited from workspace" : "Project-specific"),
-    ]);
+    return band(
+      ([
+        key(project.name),
+        dim(project.identifier),
+        pts(project.sum_vp),
+        pts(project.sum_vf),
+        fxPct(`IF(C${r}=0,"",D${r}/C${r}*100)`),
+        num(project.scored_items),
+        fxPct(`IF(OR(E${r}="",$F$${totalRow}=0),"",E${r}*F${r}/$F$${totalRow})`),
+      ] as Row).concat(countCells(project.counts), [
+        dim(project.penalty_mode),
+        num(project.k),
+        dim(project.inherited_config ? "Inherited from workspace" : "Project-specific"),
+      ]),
+      idx
+    );
   });
 
   // With no projects there is nothing to total, and a TOTAL row would land on
@@ -521,10 +725,12 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
             fxPct(`SUM(G${firstRow}:G${lastRow})`),
             fx(`SUM(F${firstRow}:F${lastRow})`),
             fxPct(`SUM(G${firstRow}:G${lastRow})`),
-          ] as Row).concat(
-            COUNT_KEYS.map((_, i) => fx(`SUM(${colLetter(7 + i)}${firstRow}:${colLetter(7 + i)}${lastRow})`)),
-            [null, null, null]
-          ),
+          ] as Row)
+            .concat(
+              COUNT_KEYS.map((_, i) => fx(`SUM(${colLetter(7 + i)}${firstRow}:${colLetter(7 + i)}${lastRow})`)),
+              [null, null, null]
+            )
+            .map((cell) => styled(cell, { backgroundColor: COLOR.totalBg, fontWeight: "bold" })),
         ];
 
   const data: Row[] = [
@@ -546,29 +752,34 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
       ],
       ["Penalty mode / k", "The project's KPI configuration: how fast a late item loses value, and the smoothing factor."],
       ["Config", "Whether the project uses its own KPI configuration or inherits the workspace default."],
-    ]),
+    ], PROJECT_COLS),
   ];
 
   return {
     sheet: sheetName("KPI by Project"),
     data,
-    columns: widths(30, 12, 11, 11, 16, 13, 18, 10, 9, 8, 10, 15, 8, 24),
+    columns: widths(PROJECT_COLS),
+    stickyRowsCount: head.length,
+    stickyColumnsCount: 2,
   };
 }
 
 // ── Sheet 5: KPI by member ─────────────────────────────────────────────────
 
+const MEMBER_COLS = [24, 10, 10, 14, 10, 9, 8, 10, 14, 11];
+
 function buildKpiMemberSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const members = payload.kpi?.members ?? [];
 
   const head: Row[] = [
-    [title("KPI by Member")],
-    [str("Period"), str(periodLabel(payload.period))],
-    [str("Note"), str("A work item's Vp and Vf are split equally between its assignees, so totals can be fractional.")],
-    blank,
-    ([th("Member"), th("Σ Vp"), th("Σ Vf"), th("Efficiency (%)")] as Row).concat(countHeaders(), [
-      th("Delivered items"),
-      th("Total items"),
+    ...titleBlock(
+      "KPI by Member",
+      `${periodLabel(payload.period)} · Vp and Vf are split equally between a work item's assignees, so totals can be fractional`,
+      MEMBER_COLS
+    ),
+    ([th("Member"), thNum("Σ Vp"), thNum("Σ Vf"), thNum("Efficiency (%)")] as Row).concat(countHeaders(), [
+      thNum("Delivered items"),
+      thNum("Total items"),
     ]),
   ];
 
@@ -577,19 +788,22 @@ function buildKpiMemberSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const memberRows = members.map((member, idx): Row => {
     const r = firstRow + idx;
     // B=ΣVp C=ΣVf D=eff E=on_time F=early G=late H=pending I=delivered J=total
-    return ([
-      str(member.display_name),
-      pts(member.sum_vp),
-      pts(member.sum_vf),
-      fxPct(`IF(B${r}=0,"",C${r}/B${r}*100)`),
-    ] as Row).concat(countCells(member.counts), [fx(`E${r}+F${r}+G${r}`), fx(`I${r}+H${r}`)]);
+    return band(
+      ([
+        key(member.display_name),
+        pts(member.sum_vp),
+        pts(member.sum_vf),
+        fxPct(`IF(B${r}=0,"",C${r}/B${r}*100)`),
+      ] as Row).concat(countCells(member.counts), [fx(`E${r}+F${r}+G${r}`), fx(`I${r}+H${r}`)]),
+      idx
+    );
   });
 
   const data: Row[] = [
     ...head,
     ...memberRows,
     blank,
-    [str("Unassigned scored items"), num(payload.kpi?.unassigned_count)],
+    [key("Unassigned scored items"), num(payload.kpi?.unassigned_count)],
     ...legend([
       [
         "Efficiency (%)",
@@ -604,13 +818,21 @@ function buildKpiMemberSheet(payload: IExecutiveExportPayload): Sheet<never> {
         "Unassigned scored items",
         "Delivered work items with no assignee. They count toward the project and workspace figures but appear against no member.",
       ],
-    ]),
+    ], MEMBER_COLS),
   ];
 
-  return { sheet: sheetName("KPI by Member"), data, columns: widths(26, 11, 11, 16, 10, 9, 8, 10, 16, 12) };
+  return {
+    sheet: sheetName("KPI by Member"),
+    data,
+    columns: widths(MEMBER_COLS),
+    stickyRowsCount: head.length,
+    stickyColumnsCount: 1,
+  };
 }
 
 // ── Sheet 6: Helpdesk summary ──────────────────────────────────────────────
+
+const HD_SUMMARY_COLS = [30, 13, 13, 88];
 
 function buildHelpdeskSummarySheet(payload: IExecutiveExportPayload): Sheet<never> {
   const hd = payload.helpdesk;
@@ -625,44 +847,47 @@ function buildHelpdeskSummarySheet(payload: IExecutiveExportPayload): Sheet<neve
   ];
 
   const head: Row[] = [
-    [title("Helpdesk Analytics — Summary")],
-    [str("Period"), str(periodLabel(payload.period))],
-    blank,
-    [section("Key metrics vs. the previous period of the same length")],
-    [th("Metric"), th("Current"), th("Previous"), th("Change (%)")],
+    ...titleBlock("Helpdesk Analytics — Summary", periodLabel(payload.period), HD_SUMMARY_COLS),
+    spanned([[section("Key metrics vs. the previous period of the same length"), HD_SUMMARY_COLS.length]]),
+    [th("Metric"), thNum("Current"), thNum("Previous"), thNum("Change (%)")],
   ];
 
   const firstMetricRow = head.length + 1;
 
   const data: Row[] = [
     ...head,
-    ...metricRows.map(({ label, key, format }, idx): Row => {
+    ...metricRows.map(({ label, key: metricKey, format }, idx): Row => {
       const r = firstMetricRow + idx;
-      const metric = kpis?.[key];
-      return [
-        str(label),
-        num(metric?.current, format),
-        num(metric?.previous, format),
-        fxPct(`IF(OR(C${r}="",C${r}=0),"",(B${r}-C${r})/C${r}*100)`),
-      ];
+      const metric = kpis?.[metricKey];
+      return band(
+        [
+          key(label),
+          num(metric?.current, format),
+          num(metric?.previous, format),
+          fxPct(`IF(OR(C${r}="",C${r}=0),"",(B${r}-C${r})/C${r}*100)`),
+        ],
+        idx
+      );
     }),
     blank,
-    [section("SLA compliance")],
-    [th("Metric"), th("Value"), th("Notes")],
-    [str("First response (%)"), pct(hd?.sla.first_response_pct), str("Share of tickets meeting the response SLA")],
-    [str("Resolution (%)"), pct(hd?.sla.resolution_pct), str("Share of tickets meeting the resolution SLA")],
-    [str("First response target (h)"), num(hd?.sla.sla_first_response_hours), str("The threshold being measured against")],
-    [str("Resolution target (h)"), num(hd?.sla.sla_resolution_hours), str("The threshold being measured against")],
-    [str("Scope"), str(hd?.sla.scope), str("portal / workspace_default / ambiguous — which configuration was applied")],
-    [str("Historical cutoff"), str(hd?.sla.historical_cutoff), str(hd?.sla.historical_note)],
+    spanned([[section("SLA compliance"), HD_SUMMARY_COLS.length]]),
+    [th("Metric"), thNum("Value"), th("Notes")],
+    ...[
+      [key("First response (%)"), pct(hd?.sla.first_response_pct), dim("Share of tickets meeting the response SLA")],
+      [key("Resolution (%)"), pct(hd?.sla.resolution_pct), dim("Share of tickets meeting the resolution SLA")],
+      [key("First response target (h)"), num(hd?.sla.sla_first_response_hours), dim("The threshold being measured against")],
+      [key("Resolution target (h)"), num(hd?.sla.sla_resolution_hours), dim("The threshold being measured against")],
+      [key("Scope"), dim(hd?.sla.scope), dim("portal / workspace_default / ambiguous — which configuration was applied")],
+      [key("Historical cutoff"), dim(hd?.sla.historical_cutoff), dim(hd?.sla.historical_note)],
+    ].map((row, idx) => band(row, idx)),
     blank,
-    [section("Requests by status")],
-    [th("Status"), th("Count")],
-    ...(hd?.charts.by_status ?? []).map((point): Row => [str(point.status_name), num(point.count)]),
+    spanned([[section("Requests by status"), HD_SUMMARY_COLS.length]]),
+    [th("Status"), thNum("Count")],
+    ...(hd?.charts.by_status ?? []).map((point, idx): Row => band([key(point.status_name), num(point.count)], idx)),
     blank,
-    [section("Requests by source")],
-    [th("Source"), th("Count")],
-    ...(hd?.charts.by_source ?? []).map((point): Row => [str(point.source), num(point.count)]),
+    spanned([[section("Requests by source"), HD_SUMMARY_COLS.length]]),
+    [th("Source"), thNum("Count")],
+    ...(hd?.charts.by_source ?? []).map((point, idx): Row => band([key(point.source), num(point.count)], idx)),
     ...legend([
       [
         "Change (%)",
@@ -680,22 +905,33 @@ function buildHelpdeskSummarySheet(payload: IExecutiveExportPayload): Sheet<neve
         "Historical cutoff",
         "Tickets created before this date predate SLA tracking and are excluded from the percentages.",
       ],
-    ]),
+    ], HD_SUMMARY_COLS),
   ];
 
-  return { sheet: sheetName("Helpdesk Summary"), data, columns: widths(30, 14, 14, 92) };
+  return {
+    sheet: sheetName("Helpdesk Summary"),
+    data,
+    columns: widths(HD_SUMMARY_COLS),
+    stickyRowsCount: head.length,
+  };
 }
 
 // ── Sheet 7: Helpdesk agents ───────────────────────────────────────────────
+
+const HD_AGENT_COLS = [24, 10, 20, 18, 22];
 
 function buildHelpdeskAgentsSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const agents = payload.helpdesk?.charts.top_agents ?? [];
 
   const head: Row[] = [
-    [title("Helpdesk — Agent Performance")],
-    [str("Period"), str(periodLabel(payload.period))],
-    blank,
-    [th("Agent"), th("Tickets"), th("SLA first response (%)"), th("SLA resolution (%)"), th("Helpdesk Efficiency (%)")],
+    ...titleBlock("Helpdesk — Agent Performance", periodLabel(payload.period), HD_AGENT_COLS),
+    [
+      th("Agent"),
+      thNum("Tickets"),
+      thNum("SLA first response (%)"),
+      thNum("SLA resolution (%)"),
+      thNum("Helpdesk Efficiency (%)"),
+    ],
   ];
 
   const firstRow = head.length + 1;
@@ -704,13 +940,16 @@ function buildHelpdeskAgentsSheet(payload: IExecutiveExportPayload): Sheet<never
     ...head,
     ...agents.map((agent, idx): Row => {
       const r = firstRow + idx;
-      return [
-        str(agent.display_name),
-        num(agent.count),
-        pct(agent.sla_first_response_pct),
-        pct(agent.sla_resolution_pct),
-        fxPct(`IF(COUNT(C${r}:D${r})=0,"",AVERAGE(C${r}:D${r}))`),
-      ];
+      return band(
+        [
+          key(agent.display_name),
+          num(agent.count),
+          pct(agent.sla_first_response_pct),
+          pct(agent.sla_resolution_pct),
+          styled(fxPct(`IF(COUNT(C${r}:D${r})=0,"",AVERAGE(C${r}:D${r}))`), { fontWeight: "bold" }),
+        ],
+        idx
+      );
     }),
     ...legend([
       [
@@ -725,13 +964,20 @@ function buildHelpdeskAgentsSheet(payload: IExecutiveExportPayload): Sheet<never
         "Where volume does matter",
         "Only in the Hybrid blend on the Team Performance sheet, where ticket count decides how much of a person's score comes from Helpdesk versus Projects — not how good that score is.",
       ],
-    ]),
+    ], HD_AGENT_COLS),
   ];
 
-  return { sheet: sheetName("Helpdesk Agents"), data, columns: widths(26, 10, 22, 20, 24) };
+  return {
+    sheet: sheetName("Helpdesk Agents"),
+    data,
+    columns: widths(HD_AGENT_COLS),
+    stickyRowsCount: head.length,
+  };
 }
 
 // ── Sheet 8: Helpdesk trends ───────────────────────────────────────────────
+
+const TRENDS_COLS = [16, 18, 20];
 
 function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const charts = payload.helpdesk?.charts;
@@ -749,10 +995,8 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
   }
 
   const head: Row[] = [
-    [title("Helpdesk — Trends")],
-    [str("Period"), str(periodLabel(payload.period))],
-    blank,
-    [th("Date"), th("Requests created"), th("Avg resolution (h)")],
+    ...titleBlock("Helpdesk — Trends", periodLabel(payload.period), TRENDS_COLS),
+    [th("Date"), thNum("Requests created"), thNum("Avg resolution (h)")],
   ];
 
   const firstRow = head.length + 1;
@@ -761,16 +1005,20 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
 
   const data: Row[] = [
     ...head,
-    ...entries.map(([date, point]): Row => [str(date), num(point.count), num(point.avgHours, POINTS_FORMAT)]),
+    ...entries.map(([date, point], idx): Row =>
+      band([key(date), num(point.count), num(point.avgHours, POINTS_FORMAT)], idx)
+    ),
     // Skipped when there is no data, so the totals never reference themselves.
     ...(entries.length === 0
       ? []
       : [
-          blank,
           [
-            { value: "TOTAL / AVERAGE", type: String, fontWeight: "bold" } as Cell,
-            fx(`SUM(B${firstRow}:B${lastRow})`),
-            fx(`IF(COUNT(C${firstRow}:C${lastRow})=0,"",AVERAGE(C${firstRow}:C${lastRow}))`, POINTS_FORMAT),
+            { value: "TOTAL / AVERAGE", type: String, fontWeight: "bold", backgroundColor: COLOR.totalBg } as Cell,
+            styled(fx(`SUM(B${firstRow}:B${lastRow})`), { backgroundColor: COLOR.totalBg, fontWeight: "bold" }),
+            styled(fx(`IF(COUNT(C${firstRow}:C${lastRow})=0,"",AVERAGE(C${firstRow}:C${lastRow}))`, POINTS_FORMAT), {
+              backgroundColor: COLOR.totalBg,
+              fontWeight: "bold",
+            }),
           ],
         ]),
     ...legend([
@@ -783,13 +1031,20 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
         "Using this sheet",
         "Select the two columns and insert a line chart to reproduce the two trend charts on the dashboard.",
       ],
-    ]),
+    ], TRENDS_COLS),
   ];
 
-  return { sheet: sheetName("Helpdesk Trends"), data, columns: widths(16, 18, 20) };
+  return {
+    sheet: sheetName("Helpdesk Trends"),
+    data,
+    columns: widths(TRENDS_COLS),
+    stickyRowsCount: head.length,
+  };
 }
 
 // ── Sheet 9: Methodology ───────────────────────────────────────────────────
+
+const METHOD_COLS = [24, 58, 92];
 
 function buildMethodologySheet(): Sheet<never> {
   const rows: [string, string, string][] = [
@@ -877,19 +1132,43 @@ function buildMethodologySheet(): Sheet<never> {
     ],
   ];
 
-  const data: Row[] = [
-    [title("Methodology — every formula used in this workbook")],
-    [
-      note(
-        "Cells in the other sheets are live Excel formulas wherever a figure is derived. Edit an input and the dependent figures recalculate; click any derived cell to read its formula in the formula bar."
-      ),
-    ],
-    blank,
+  const head: Row[] = [
+    ...titleBlock(
+      "Methodology — every formula used in this workbook",
+      "Figures in the other sheets are live Excel formulas wherever they are derived: edit an input and the dependent cells recalculate, or click any derived cell to read its formula in the formula bar.",
+      METHOD_COLS
+    ),
     [th("Concept"), th("Formula"), th("What it means and why")],
-    ...rows.map(([concept, formula, meaning]): Row => [str(concept), note(formula), note(meaning)]),
   ];
 
-  return { sheet: sheetName("Methodology"), data, columns: widths(24, 62, 96) };
+  const data: Row[] = [
+    ...head,
+    ...rows.map(([concept, formula, meaning], idx): Row => {
+      // Wrapped prose in a merged-free cell auto-fits, but the two columns can
+      // disagree on how many lines they need -- take the taller of the two.
+      const height = Math.max(wrappedHeight(formula, METHOD_COLS[1]), wrappedHeight(meaning, METHOD_COLS[2]));
+      return band(
+        [
+          styled(key(concept), { wrap: true, alignVertical: "top", height, borderColor: COLOR.border }),
+          styled(dim(formula), {
+            wrap: true,
+            alignVertical: "top",
+            fontFamily: "Consolas",
+            borderColor: COLOR.border,
+          }),
+          styled(dim(meaning), { wrap: true, alignVertical: "top", borderColor: COLOR.border }),
+        ],
+        idx
+      );
+    }),
+  ];
+
+  return {
+    sheet: sheetName("Methodology"),
+    data,
+    columns: widths(METHOD_COLS),
+    stickyRowsCount: head.length,
+  };
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────
@@ -911,7 +1190,7 @@ export function buildExecutiveSheets(payload: IExecutiveExportPayload): Sheet<ne
 
 export async function exportExecutiveExcel(payload: IExecutiveExportPayload): Promise<void> {
   const stamp = new Date().toISOString().slice(0, 10);
-  await writeXlsxFile(buildExecutiveSheets(payload)).toFile(
+  await writeXlsxFile(buildExecutiveSheets(payload), { fontFamily: "Calibri", fontSize: 11 }).toFile(
     `${payload.workspaceSlug}-executive-dashboard-${payload.period}-${stamp}.xlsx`
   );
 }
