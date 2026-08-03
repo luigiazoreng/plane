@@ -36,16 +36,16 @@ export const RequestsOverTimeChart = observer(function RequestsOverTimeChart({ d
   );
 
   if (isLoading) {
-    return <div className="bg-custom-background-80 h-[260px] w-full animate-pulse rounded-lg" />;
+    return <div className="bg-layer-2 h-[260px] w-full animate-pulse rounded-lg" />;
   }
 
   if (!chartData.length) {
     return (
-      <div className="border-custom-border-100 bg-custom-background-90 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
-        <div className="bg-custom-background-80 text-custom-text-400 flex size-10 items-center justify-center rounded-full">
+      <div className="border-subtle bg-layer-2 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
+        <div className="bg-layer-3 text-tertiary flex size-10 items-center justify-center rounded-full">
           <CalendarX className="size-5" />
         </div>
-        <p className="text-xs text-custom-text-300 font-medium">No request data for this period</p>
+        <p className="text-xs text-secondary font-medium">No request data for this period</p>
       </div>
     );
   }

@@ -18,23 +18,21 @@ const SLABar = ({ pct, label, target }: { pct: number | null; label: string; tar
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-custom-text-200 font-medium">{label}</span>
+        <span className="text-xs text-secondary font-medium">{label}</span>
         {target && (
-          <span className="bg-custom-background-80 text-custom-text-300 rounded px-1.5 py-0.5 text-[11px] font-medium">
-            {target}
-          </span>
+          <span className="bg-layer-2 text-tertiary rounded px-1.5 py-0.5 text-[11px] font-medium">{target}</span>
         )}
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="bg-custom-background-80 h-2 w-full overflow-hidden rounded-full">
+        <div className="bg-layer-2 h-2 w-full overflow-hidden rounded-full">
           <div
             className={cn(
               "h-2 rounded-full transition-all duration-500",
-              isHealthy && "bg-emerald-500",
-              isWarning && "bg-amber-500",
-              isCritical && "bg-rose-500",
-              pct === null && "bg-custom-background-80"
+              isHealthy && "bg-success-primary",
+              isWarning && "bg-warning-primary",
+              isCritical && "bg-danger-primary",
+              pct === null && "bg-layer-2"
             )}
             style={{
               width: pct !== null && pct !== undefined ? `${Math.min(pct, 100)}%` : "0%",
@@ -44,10 +42,10 @@ const SLABar = ({ pct, label, target }: { pct: number | null; label: string; tar
         <span
           className={cn(
             "text-base min-w-[44px] text-right font-bold",
-            isHealthy && "text-emerald-600 dark:text-emerald-400",
-            isWarning && "text-amber-600 dark:text-amber-400",
-            isCritical && "text-rose-600 dark:text-rose-400",
-            pct === null && "text-custom-text-400"
+            isHealthy && "text-success-primary",
+            isWarning && "text-warning-primary",
+            isCritical && "text-danger-primary",
+            pct === null && "text-tertiary"
           )}
         >
           {pct !== null && pct !== undefined ? `${pct}%` : "—"}
@@ -60,14 +58,14 @@ const SLABar = ({ pct, label, target }: { pct: number | null; label: string; tar
 export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLoading }: Props) {
   if (isLoading || !sla) {
     return (
-      <div className="flex animate-pulse flex-col justify-between gap-4 rounded-md border border-subtle bg-surface-1 p-4">
+      <div className="flex animate-pulse flex-col justify-between gap-4 rounded-md border border-subtle bg-layer-1 p-4">
         <div className="flex items-center justify-between">
-          <div className="h-4 w-32 rounded bg-surface-2" />
-          <div className="size-6 rounded-full bg-surface-2" />
+          <div className="h-4 w-32 rounded bg-layer-2" />
+          <div className="size-6 rounded-full bg-layer-2" />
         </div>
         <div className="space-y-4 pt-2">
-          <div className="h-10 rounded-md bg-surface-2" />
-          <div className="h-10 rounded-md bg-surface-2" />
+          <div className="h-10 rounded-md bg-layer-2" />
+          <div className="h-10 rounded-md bg-layer-2" />
         </div>
       </div>
     );
@@ -75,7 +73,7 @@ export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLo
 
   if (!sla.sla_first_response_hours && !sla.sla_resolution_hours) {
     return (
-      <div className="flex min-h-[160px] flex-col justify-between rounded-md border border-subtle bg-surface-1 p-4">
+      <div className="flex min-h-[160px] flex-col justify-between rounded-md border border-subtle bg-layer-1 p-4">
         <div className="flex items-center justify-between border-b border-subtle pb-3">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4 text-tertiary" />
@@ -99,7 +97,7 @@ export const SLAComplianceCard = observer(function SLAComplianceCard({ sla, isLo
       : (sla.first_response_pct ?? sla.resolution_pct ?? null);
 
   return (
-    <div className="flex flex-col justify-between gap-4 rounded-md border border-subtle bg-surface-1 p-4">
+    <div className="flex flex-col justify-between gap-4 rounded-md border border-subtle bg-layer-1 p-4">
       <div className="flex items-center justify-between border-b border-subtle pb-3">
         <div className="flex items-center gap-2">
           <ShieldCheck className="size-4 text-success-primary" />

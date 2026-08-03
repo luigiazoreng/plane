@@ -31,13 +31,13 @@ const AnalyticsCardWrapper = ({
   subtitle?: string;
   children: React.ReactNode;
 }) => (
-  <div className="border-custom-border-200 bg-custom-background-100 flex flex-col justify-between gap-4 rounded-xl border p-5 transition-all duration-200">
-    <div className="border-custom-border-100 flex items-center justify-between border-b pb-3">
+  <div className="flex flex-col justify-between gap-4 rounded-md border border-subtle bg-layer-1 p-4 transition-all duration-200">
+    <div className="flex items-center justify-between border-b border-subtle pb-3">
       <div className="flex items-center gap-2">
-        {Icon && <Icon className="text-custom-text-300 size-4" />}
-        <h3 className="text-xs text-custom-text-100 tracking-wider font-semibold uppercase">{title}</h3>
+        {Icon && <Icon className="size-4 text-tertiary" />}
+        <h3 className="text-11 font-semibold uppercase tracking-wider text-primary">{title}</h3>
       </div>
-      {subtitle && <span className="text-custom-text-400 text-[11px] font-medium">{subtitle}</span>}
+      {subtitle && <span className="text-11 font-medium text-tertiary">{subtitle}</span>}
     </div>
     <div className="flex-1">{children}</div>
   </div>
@@ -78,7 +78,7 @@ export const HelpdeskAnalyticsView = observer(function HelpdeskAnalyticsView({ a
           </AnalyticsCardWrapper>
         </div>
 
-        <AnalyticsCardWrapper title="Top Performing Agents" icon={Trophy} subtitle="Resolved requests count">
+        <AnalyticsCardWrapper title="Top Performing Agents" icon={Trophy} subtitle="Resolved count">
           <TopAgentsChart data={analytics?.charts.top_agents} isLoading={isLoading} />
         </AnalyticsCardWrapper>
       </div>

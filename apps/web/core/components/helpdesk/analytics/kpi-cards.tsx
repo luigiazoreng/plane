@@ -22,7 +22,7 @@ type KPICardProps = {
 };
 
 const KPICard = ({ title, value, icon: Icon, iconBgColor, iconTextColor, pctChange, suffix }: KPICardProps) => (
-  <div className="flex flex-col justify-between gap-3 rounded-md border border-subtle bg-surface-1 p-4 transition-all duration-200">
+  <div className="flex flex-col justify-between gap-3 rounded-md border border-subtle bg-layer-1 p-4 transition-all duration-200">
     <div className="flex items-start justify-between gap-2">
       <div className="flex items-center gap-2">
         <div className={cn("flex size-7 items-center justify-center rounded-md", iconBgColor, iconTextColor)}>
@@ -53,14 +53,14 @@ const KPICard = ({ title, value, icon: Icon, iconBgColor, iconTextColor, pctChan
 );
 
 const KPICardSkeleton = () => (
-  <div className="flex animate-pulse flex-col justify-between gap-3 rounded-md border border-subtle bg-surface-1 p-4">
+  <div className="flex animate-pulse flex-col justify-between gap-3 rounded-md border border-subtle bg-layer-1 p-4">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <div className="size-7 rounded-md bg-surface-2" />
-        <div className="h-3 w-16 rounded bg-surface-2" />
+        <div className="size-7 rounded-md bg-layer-2" />
+        <div className="h-3 w-16 rounded bg-layer-2" />
       </div>
     </div>
-    <div className="h-6 w-12 rounded-md bg-surface-2" />
+    <div className="h-6 w-12 rounded-md bg-layer-2" />
   </div>
 );
 
@@ -82,22 +82,22 @@ export const KpiCards = observer(function KpiCards({ kpis, isLoading }: Props) {
         value={kpis.total_requests.current}
         pctChange={kpis.total_requests.pct_change}
         icon={Inbox}
-        iconBgColor="bg-blue-500/10"
-        iconTextColor="text-blue-600 dark:text-blue-400"
+        iconBgColor="bg-accent-primary/10"
+        iconTextColor="text-accent-primary"
       />
       <KPICard
         title="Open"
         value={kpis.open_requests.current}
         icon={Clock}
-        iconBgColor="bg-orange-500/10"
-        iconTextColor="text-orange-600 dark:text-orange-400"
+        iconBgColor="bg-warning-primary/10"
+        iconTextColor="text-warning-primary"
       />
       <KPICard
         title="Resolved"
         value={kpis.resolved_requests.current}
         icon={CheckCircle2}
-        iconBgColor="bg-emerald-500/10"
-        iconTextColor="text-emerald-600 dark:text-emerald-400"
+        iconBgColor="bg-success-primary/10"
+        iconTextColor="text-success-primary"
       />
       <KPICard
         title="Avg first response"
@@ -108,8 +108,8 @@ export const KpiCards = observer(function KpiCards({ kpis, isLoading }: Props) {
         }
         suffix="hours"
         icon={Zap}
-        iconBgColor="bg-amber-500/10"
-        iconTextColor="text-amber-600 dark:text-amber-400"
+        iconBgColor="bg-label-yellow-bg"
+        iconTextColor="text-label-yellow-icon"
       />
       <KPICard
         title="Avg resolution"
@@ -120,8 +120,8 @@ export const KpiCards = observer(function KpiCards({ kpis, isLoading }: Props) {
         }
         suffix="hours"
         icon={Timer}
-        iconBgColor="bg-purple-500/10"
-        iconTextColor="text-purple-600 dark:text-purple-400"
+        iconBgColor="bg-label-indigo-bg"
+        iconTextColor="text-label-indigo-icon"
       />
     </div>
   );
