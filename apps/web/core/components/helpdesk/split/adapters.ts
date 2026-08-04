@@ -7,22 +7,15 @@
 /**
  * Adapters for the triage (split) view.
  *
- * The design this view implements shows fields the Helpdesk API does not expose
- * yet: priority, tags, team, unread state and per-customer aggregates. Rather
- * than scatter placeholders through the components, every one of those reads
- * goes through a function here that currently returns null/empty. The UI already
- * renders the real shell and simply omits the chip when the adapter yields
- * nothing, so wiring the backend later means editing only this file.
- *
- * Anything derivable from data we DO have is computed for real below (SLA,
- * channel, classification) — those are not placeholders.
+ * Originally every field the design needed but the API didn't yet expose
+ * (priority, tags, team, unread state, per-customer aggregates) was routed
+ * through a stub here returning null/empty, so wiring the backend later meant
+ * editing only this file. Priority, tags, team and unread/bookmark state have
+ * since landed on the backend and are computed for real below. Only the
+ * per-customer aggregate (`getCustomerStats`) remains a stub.
  */
 
 import type { IHelpdeskPortal, IHelpdeskRequest, TIssuePriorities } from "@plane/types";
-
-/* ------------------------------------------------------------------ *
- * Pending backend — these return empty until the API grows the fields.
- * ------------------------------------------------------------------ */
 
 /** Tags for the Classification panel, derived from labels M2M on the request. */
 export type THelpdeskLabelDetail = { id: string; name: string; color: string };
@@ -57,6 +50,10 @@ export type THelpdeskCustomerStats = {
   resolved: number;
   firstContactAt: string | null;
 };
+
+/* ------------------------------------------------------------------ *
+ * Pending backend — returns empty until the API grows the field.
+ * ------------------------------------------------------------------ */
 
 /** TODO(backend): aggregate endpoint keyed by customer/contact_email. */
 export function getCustomerStats(_request: IHelpdeskRequest): THelpdeskCustomerStats | null {

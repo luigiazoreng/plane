@@ -15,6 +15,7 @@ import type {
   IHelpdeskRequestIssue,
   IHelpdeskStatus,
   IHelpdeskTeam,
+  IIssueLabel,
   TIssue,
   TIssuePriorities,
 } from "@plane/types";
@@ -22,7 +23,7 @@ import { Popover } from "@headlessui/react";
 import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
 import { cn, generateWorkItemLink } from "@plane/utils";
-import { ArrowUpRight, ChevronDown, ExternalLink, Plus, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, ExternalLink, Plus, X } from "lucide-react";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { INTAKE_STATUS_META } from "@/components/helpdesk/intake-status";
@@ -37,6 +38,7 @@ import {
   getRequestTags,
   getRequestTeam,
 } from "./adapters";
+import type { THelpdeskLabelDetail } from "./adapters";
 
 type TDetailPanelProps = {
   workspaceSlug: string;
@@ -48,6 +50,8 @@ type TDetailPanelProps = {
   onPriorityChange: (priority: TIssuePriorities) => void;
   teams?: IHelpdeskTeam[];
   onTeamChange?: (teamId: string | null) => void;
+  labels: IIssueLabel[];
+  onLabelsChange: (labelIds: string[]) => void;
   intakeLinks: IHelpdeskRequestIntakeIssue[];
   isLoadingIntakeLinks: boolean;
   onForward: () => void;
@@ -72,6 +76,8 @@ export function DetailPanel({
   onPriorityChange,
   teams = [],
   onTeamChange,
+  labels,
+  onLabelsChange,
   intakeLinks,
   isLoadingIntakeLinks,
   onForward,
@@ -120,11 +126,14 @@ export function DetailPanel({
           <Popover className="relative">
             <Popover.Button
               type="button"
-              className="inline-flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 text-secondary hover:border-strong transition-colors"
+              className="inline-flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 text-secondary transition-colors hover:border-strong"
             >
               {request.team_detail ? (
                 <>
-                  <span className="size-2 rounded-full" style={{ backgroundColor: request.team_detail.color || "#3B82F6" }} />
+                  <span
+                    className="size-2 rounded-full"
+                    style={{ backgroundColor: request.team_detail.color || "#3B82F6" }}
+                  />
                   <span>{request.team_detail.name}</span>
                 </>
               ) : team ? (
@@ -134,9 +143,9 @@ export function DetailPanel({
               )}
               <ChevronDown className="size-3 text-tertiary" />
             </Popover.Button>
-            <Popover.Panel className="absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-subtle bg-surface-1 p-1 shadow-md">
+            <Popover.Panel className="shadow-md absolute top-full right-0 z-20 mt-1 w-48 rounded-md border border-subtle bg-surface-1 p-1">
               {({ close }: { close: () => void }) => (
-                <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto text-12">
+                <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto text-12">
                   <button
                     type="button"
                     onClick={() => {
@@ -243,24 +252,7 @@ export function DetailPanel({
           ))
         )}
         <Row label="Tags">
-          {tags.length === 0 ? (
-            <Empty />
-          ) : (
-            <div className="flex flex-wrap justify-end gap-1">
-              {tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="inline-flex h-5 items-center gap-1 rounded-md bg-layer-2 px-2 text-11 text-secondary"
-                >
-                  <span
-                    className="inline-block size-2 shrink-0 rounded-full"
-                    style={{ background: tag.color || "var(--border-color-subtle)" }}
-                  />
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
+          <TagsEditor tags={tags} labels={labels} onChange={onLabelsChange} />
         </Row>
       </Section>
 
@@ -435,6 +427,80 @@ function Spinner() {
   return (
     <div className="flex justify-center py-4">
       <div className="size-6 animate-spin rounded-full border-b-2 border-accent-strong" />
+    </div>
+  );
+}
+
+function TagsEditor({
+  tags,
+  labels,
+  onChange,
+}: {
+  tags: THelpdeskLabelDetail[];
+  labels: IIssueLabel[];
+  onChange: (labelIds: string[]) => void;
+}) {
+  const selectedIds = tags.map((t) => t.id);
+
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1">
+      {tags.map((tag) => (
+        <span
+          key={tag.id}
+          className="group inline-flex h-5 items-center gap-1 rounded-md bg-layer-2 py-0.5 pr-1 pl-2 text-11 text-secondary"
+        >
+          <span
+            className="inline-block size-2 shrink-0 rounded-full"
+            style={{ background: tag.color || "var(--border-color-subtle)" }}
+          />
+          {tag.name}
+          <button
+            type="button"
+            onClick={() => onChange(selectedIds.filter((id) => id !== tag.id))}
+            title="Remove tag"
+            className="rounded-sm p-0.5 text-tertiary opacity-0 transition-opacity group-hover:opacity-100 hover:bg-danger-subtle hover:text-danger-primary"
+          >
+            <X className="size-2.5" />
+          </button>
+        </span>
+      ))}
+      <Popover className="relative">
+        <Popover.Button
+          type="button"
+          title="Add tag"
+          className="inline-flex size-5 items-center justify-center rounded-md border border-dashed border-subtle text-tertiary transition-colors hover:border-strong hover:text-secondary"
+        >
+          <Plus className="size-3" />
+        </Popover.Button>
+        <Popover.Panel className="shadow-md absolute top-full right-0 z-20 mt-1 w-48 rounded-md border border-subtle bg-surface-1 p-1">
+          <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto text-12">
+            {labels.length === 0 ? (
+              <p className="px-2.5 py-1.5 text-tertiary">Nenhuma tag no workspace</p>
+            ) : (
+              labels.map((label) => {
+                const isSelected = selectedIds.includes(label.id);
+                return (
+                  <button
+                    key={label.id}
+                    type="button"
+                    onClick={() =>
+                      onChange(isSelected ? selectedIds.filter((id) => id !== label.id) : [...selectedIds, label.id])
+                    }
+                    className="flex items-center gap-2 rounded px-2.5 py-1.5 text-left text-primary hover:bg-layer-2"
+                  >
+                    <span
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: label.color || "#3B82F6" }}
+                    />
+                    <span className="flex-1 truncate">{label.name}</span>
+                    {isSelected && <Check className="size-3.5 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </Popover.Panel>
+      </Popover>
     </div>
   );
 }

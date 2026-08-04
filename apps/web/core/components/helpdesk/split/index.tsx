@@ -21,6 +21,7 @@ import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attac
 import { ForwardToIntakeModal } from "@/components/helpdesk/forward-to-intake-modal";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { useIssues } from "@/hooks/store/use-issues";
+import { useLabel } from "@/hooks/store/use-label";
 import { useProject } from "@/hooks/store/use-project";
 import { ConversationPanel } from "./conversation-panel";
 import { DetailPanel } from "./detail-panel";
@@ -68,6 +69,7 @@ export const HelpdeskSplitView = observer(
     const helpdeskStore = useHelpdesk();
     const { issueMap } = useIssues();
     const { getProjectById, getProjectIdentifierById, workspaceProjectIds } = useProject();
+    const { getWorkspaceLabels, fetchWorkspaceLabels } = useLabel();
 
     const [composerMode, setComposerMode] = useState<TComposerMode>("reply");
     const [draft, setDraft] = useState("");
@@ -133,6 +135,15 @@ export const HelpdeskSplitView = observer(
       helpdeskStore.fetchTeams(workspaceSlug);
       helpdeskStore.markRequestRead(workspaceSlug, rId);
     }, [workspaceSlug, selectedRequestId, helpdeskStore]);
+
+    // Tags reuse the workspace-wide label set (labels on a request are validated
+    // against workspace_id, not project_id, since tickets aren't project-scoped).
+    useEffect(() => {
+      if (!workspaceSlug) return;
+      if (!getWorkspaceLabels(workspaceSlug)) fetchWorkspaceLabels(workspaceSlug);
+    }, [workspaceSlug, getWorkspaceLabels, fetchWorkspaceLabels]);
+
+    const workspaceLabels = getWorkspaceLabels(workspaceSlug) ?? [];
 
     // Drafts are per-ticket in the agent's head; clear when switching rows so a
     // reply meant for one customer cannot be sent to another.
@@ -253,6 +264,18 @@ export const HelpdeskSplitView = observer(
           applyRequestUpdate(await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { team: teamId }));
         } catch (_error) {
           setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update team" });
+        }
+      },
+      [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
+    );
+
+    const handleLabelsChange = useCallback(
+      async (labelIds: string[]) => {
+        if (!selectedRequestId) return;
+        try {
+          applyRequestUpdate(await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { labels: labelIds }));
+        } catch (_error) {
+          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update tags" });
         }
       },
       [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
@@ -389,6 +412,8 @@ export const HelpdeskSplitView = observer(
                 onPriorityChange={handlePriorityChange}
                 teams={teams}
                 onTeamChange={handleTeamChange}
+                labels={workspaceLabels}
+                onLabelsChange={handleLabelsChange}
                 intakeLinks={intakeLinks}
                 isLoadingIntakeLinks={intakeLinksState.isLoading}
                 onForward={() => setIsForwardModalOpen(true)}
