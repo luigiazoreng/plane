@@ -182,6 +182,13 @@ export type IEditorProps = {
   value?: string | null;
   extendedEditorProps: IEditorPropsExtended;
   workItemIdentifier?: string | null;
+  /** Called for every dropped/pasted file (or every image, when
+   * treatImagesAsAttachments is set) that should become an attachment
+   * instead of being inserted into the document body. */
+  onAttachmentFile?: (file: File) => void;
+  /** When true, images dropped/pasted into the editor are routed to
+   * onAttachmentFile instead of being embedded inline. */
+  treatImagesAsAttachments?: boolean;
 };
 
 export type ILiteTextEditorProps = IEditorProps;

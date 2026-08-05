@@ -26,6 +26,9 @@ const HelpdeskPublicFormPage = observer(() => {
   const [successEmail, setSuccessEmail] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedRequestId, setSubmittedRequestId] = useState<string | null>(null);
+  // Asset ids collected from paste/drop inside the description editor —
+  // separate from the field_type "attachment" values, merged at submit.
+  const [additionalAttachmentIds, setAdditionalAttachmentIds] = useState<string[]>([]);
 
   const pSlug = publicSlug?.toString() || "";
   const fSlug = formSlug?.toString() || "";
@@ -51,12 +54,17 @@ const HelpdeskPublicFormPage = observer(() => {
     load();
   }, [fSlug, navigate, pSlug]);
 
+  // entity_type is always explicit here: the asset endpoint defaults to
+  // HELPDESK_COMMENT_ATTACHMENT when omitted, which would silently mislabel
+  // every attachment coming from this submission form (both the description
+  // editor's paste/drop and the dedicated attachment field share this
+  // transport). See stage-b1-build-backend.md "Contrato para o frontend".
   const attachmentTransport = useMemo(
     () => ({
       getCredentials: (data: { name: string; type: string; size: number }) =>
         publicHelpdeskService.getAssetUploadCredentials(
           pSlug,
-          data,
+          { ...data, entity_type: "HELPDESK_REQUEST_ATTACHMENT" },
           publicStore.customerToken || undefined
         ),
       markUploaded: (assetId: string) =>
@@ -113,14 +121,18 @@ const HelpdeskPublicFormPage = observer(() => {
           }
         }
       }
+      // Merge in whatever was pasted/dropped inside the description editor —
+      // deduped in case the same asset id ever shows up in both sources.
+      const dedupedAssetIds = Array.from(new Set([...asset_ids, ...additionalAttachmentIds]));
 
       const response = await publicStore.submitPublicForm(pSlug, form.slug, {
         ...fieldValues,
-        asset_ids,
+        asset_ids: dedupedAssetIds,
         contact_email: publicStore.customerToken ? undefined : contactEmail,
       });
 
       setSuccessEmail(contactEmail);
+      setAdditionalAttachmentIds([]);
       setToast({
         type: TOAST_TYPE.SUCCESS,
         title: "Success",
@@ -225,6 +237,7 @@ const HelpdeskPublicFormPage = observer(() => {
             values={fieldValues}
             onValueChange={handleValueChange}
             attachmentTransport={attachmentTransport}
+            onAdditionalAttachmentIds={setAdditionalAttachmentIds}
           />
 
           <div className="flex items-center justify-end gap-3 border-t border-subtle pt-6">

@@ -47,6 +47,14 @@ def _validate_upload_payload(data, size_limit):
 
     ``size_limit`` is the portal's effective ceiling, already resolved against
     the instance limit by HelpdeskPortal.effective_max_attachment_size().
+
+    ``entity_type`` defaults to COMMENT_ENTITY when the caller omits it. Any
+    caller uploading on behalf of a ticket *request* (the description editor,
+    the dedicated attachment field on the submission form) MUST pass
+    ``entity_type: "HELPDESK_REQUEST_ATTACHMENT"`` explicitly -- relying on
+    the default silently mislabels the asset as a comment attachment, which
+    corrupts the request's attachment listing without raising any error. See
+    plane/tests/contract/app/test_helpdesk.py::TestUploadCredentials.
     """
     name = sanitize_filename(data.get("name")) or "unnamed"
     file_type = data.get("type", "application/octet-stream")

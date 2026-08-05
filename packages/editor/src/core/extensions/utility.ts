@@ -55,14 +55,26 @@ export type UtilityExtensionStorage = {
   isTouchDevice: boolean;
 };
 
-type Props = Pick<IEditorProps, "disabledExtensions" | "flaggedExtensions" | "getEditorMetaData"> & {
+type Props = Pick<
+  IEditorProps,
+  "disabledExtensions" | "flaggedExtensions" | "getEditorMetaData" | "onAttachmentFile" | "treatImagesAsAttachments"
+> & {
   fileHandler: TFileHandler;
   isEditable: boolean;
   isTouchDevice: boolean;
 };
 
 export const UtilityExtension = (props: Props) => {
-  const { disabledExtensions, flaggedExtensions, fileHandler, getEditorMetaData, isEditable, isTouchDevice } = props;
+  const {
+    disabledExtensions,
+    flaggedExtensions,
+    fileHandler,
+    getEditorMetaData,
+    isEditable,
+    isTouchDevice,
+    onAttachmentFile,
+    treatImagesAsAttachments,
+  } = props;
   const { restore } = fileHandler;
 
   return Extension.create<Record<string, unknown>, UtilityExtensionStorage>({
@@ -85,6 +97,8 @@ export const UtilityExtension = (props: Props) => {
           disabledExtensions,
           flaggedExtensions,
           editor: this.editor,
+          onAttachmentFile,
+          treatImagesAsAttachments,
         }),
       ];
     },

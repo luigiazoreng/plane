@@ -138,3 +138,15 @@ Decidir também se restringe a values de properties com `kpi_role IS NOT NULL` o
 **Found in**: 2026-07-22-helpdesk-inbound-dkim-spoofing
 **Sources**: fix-plan.md (D8), plan-review.md
 **Last updated**: 2026-07-22
+
+---
+
+## 2026-08-04 helpdesk_email_task-XSS — comment.content renderizado em email HTML sem sanitização
+**File**: `apps/api/plane/bgtasks/helpdesk_email_task.py:147`
+**Problem**: A task de outbound email do helpdesk renderiza `comment.content` diretamente no HTML do email enviado ao cliente/agente, sem sanitização ou escape. Um comentário malicioso (HTML/script injetado) pode virar XSS no cliente de email do destinatário ou permitir email injection. Diferente do fluxo de `HelpdeskRequest.description`, que a partir da feature "editor rich text + anexos" (2026-08-04-helpdesk-editor-anexos-ticket) passou a validar com `validate_html_content()` (nh3) no serializer.
+**Why deferred**: É um bug pré-existente no fluxo de COMENTÁRIOS do helpdesk, fora do escopo da feature HELPDESK-38/41/47 (que toca apenas `description` de ticket, não comentários). Regra 25 (não corrigir bug pré-existente fora da área modificada). Já registrado como `spawn_task` (task_id: `task_47403c8e`) para o dev decidir se roda como fix separado.
+**Found in**: 2026-08-04-helpdesk-editor-anexos-ticket
+**Sources**: final-plan.md (seção "Out-of-scope observation"), stage-a-plan.md (seção "Risks")
+**Last updated**: 2026-08-04
+
+---

@@ -6,6 +6,7 @@ from plane.app.serializers.helpdesk import (
     HelpdeskPortalSerializer,
     HelpdeskRequestCommentAdminSerializer,
     HelpdeskRequestCommentSerializer,
+    HelpdeskRequestSerializer,
 )
 from plane.db.models import HelpdeskPortal, HelpdeskRequest, HelpdeskRequestComment
 from plane.tests.factories import WorkspaceFactory
@@ -199,3 +200,57 @@ class TestSenderVerificationExposure(TestCase):
     def test_c2_admin_serializer_exposes_sender_verification(self):
         data = HelpdeskRequestCommentAdminSerializer(self.comment).data
         self.assertEqual(data["sender_verification"], "unverified")
+
+
+class TestHelpdeskRequestDescriptionSanitization(TestCase):
+    """Step 6 (feat 2026-08-04-helpdesk-editor-anexos-ticket): a partir desta
+    feature, HelpdeskRequest.description passa a carregar HTML de verdade (o
+    rich text editor), não mais plain text de um <textarea>. Espelha
+    IssueSerializer.validate (apps/api/plane/app/serializers/issue.py:136).
+    """
+
+    def setUp(self):
+        self.workspace = WorkspaceFactory.create()
+        self.portal = HelpdeskPortal.objects.create(
+            workspace=self.workspace, public_slug="portal-sanitization"
+        )
+
+    def _payload(self, description, **overrides):
+        payload = {
+            "workspace": self.workspace.id,
+            "portal": self.portal.id,
+            "title": "Ticket",
+            "description": description,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_sanitizes_script_tag_in_description(self):
+        serializer = HelpdeskRequestSerializer(
+            data=self._payload("<p>hello</p><script>alert('xss')</script>")
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        instance = serializer.save(workspace=self.workspace, portal=self.portal)
+
+        self.assertNotIn("<script", instance.description)
+        self.assertIn("hello", instance.description)
+
+    def test_rejects_oversized_description_html(self):
+        # validate_html_content's MAX_SIZE is 10MB (content_validator.py).
+        oversized = "<p>" + ("a" * (10 * 1024 * 1024 + 1)) + "</p>"
+        serializer = HelpdeskRequestSerializer(data=self._payload(oversized))
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("description", serializer.errors)
+
+    def test_allows_plain_text_description_unchanged(self):
+        """Tickets antigos/criados via API sem HTML continuam funcionando."""
+        serializer = HelpdeskRequestSerializer(
+            data=self._payload("Plain text description, no HTML at all.")
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        instance = serializer.save(workspace=self.workspace, portal=self.portal)
+
+        self.assertEqual(instance.description, "Plain text description, no HTML at all.")

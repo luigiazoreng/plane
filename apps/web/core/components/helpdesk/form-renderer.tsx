@@ -10,6 +10,7 @@ import type { IHelpdeskFormField } from "@plane/types";
 import { AttachmentPicker } from "./attachments/attachment-picker";
 import { PendingAttachmentChips } from "./attachments/attachment-chips";
 import { useAttachmentUpload, type TAttachmentTransport } from "./attachments/use-attachment-upload";
+import { HelpdeskDescriptionEditor } from "./description-editor";
 
 function resolveCascadeOptions(
   field: IHelpdeskFormField,
@@ -38,9 +39,21 @@ type FieldRendererProps = {
   values: Record<string, unknown>;
   disabled?: boolean;
   attachmentTransport?: TAttachmentTransport;
+  /** Reports asset ids collected from paste/drop inside the description
+   * editor, so the parent form can merge them into asset_ids at submit. */
+  onAdditionalAttachmentIds?: (assetIds: string[]) => void;
 };
 
-function FieldInput({ field, value, onChange, fieldMap, values, disabled, attachmentTransport }: FieldRendererProps) {
+function FieldInput({
+  field,
+  value,
+  onChange,
+  fieldMap,
+  values,
+  disabled,
+  attachmentTransport,
+  onAdditionalAttachmentIds,
+}: FieldRendererProps) {
   switch (field.field_type) {
     case "system_title":
     case "short_text":
@@ -56,7 +69,16 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled, attach
       );
     case "system_description":
     case "long_text":
-      return (
+      return attachmentTransport ? (
+        <HelpdeskDescriptionEditor
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          attachmentTransport={attachmentTransport}
+          onAdditionalAttachmentIds={onAdditionalAttachmentIds}
+          disabled={disabled}
+          placeholder={field.placeholder}
+        />
+      ) : (
         <textarea
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
@@ -205,6 +227,9 @@ type HelpdeskFormRendererProps = {
   onValueChange?: (key: string, value: unknown) => void;
   isPreview?: boolean;
   attachmentTransport?: TAttachmentTransport;
+  /** Reports asset ids collected from paste/drop inside the description
+   * editor, so the parent form can merge them into asset_ids at submit. */
+  onAdditionalAttachmentIds?: (assetIds: string[]) => void;
 };
 
 export function HelpdeskFormRenderer({
@@ -213,6 +238,7 @@ export function HelpdeskFormRenderer({
   onValueChange,
   isPreview = false,
   attachmentTransport,
+  onAdditionalAttachmentIds,
 }: HelpdeskFormRendererProps) {
   const ordered = fields.slice().sort((a, b) => a.sequence - b.sequence);
   const fieldMap: Record<string, IHelpdeskFormField> = {};
@@ -233,6 +259,7 @@ export function HelpdeskFormRenderer({
             values={values}
             disabled={isPreview}
             attachmentTransport={attachmentTransport}
+            onAdditionalAttachmentIds={onAdditionalAttachmentIds}
           />
           {field.field_type !== "checkbox" && field.help_text ? (
             <p className="text-xs text-text-400 mt-1">{field.help_text}</p>

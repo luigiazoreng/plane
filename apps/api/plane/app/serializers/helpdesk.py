@@ -28,6 +28,7 @@ from plane.app.serializers.base import BaseSerializer
 from plane.app.serializers.user import UserLiteSerializer
 from plane.app.helpdesk.attachments import COMMENT_ENTITY, REQUEST_ENTITY, assets_for
 from plane.app.helpdesk.auto_assignment import normalize_helpdesk_auto_assignment_config
+from plane.utils.content_validator import validate_html_content
 
 READ_ONLY_BASE = ["workspace", "created_at", "updated_at", "created_by", "updated_by", "deleted_at"]
 
@@ -288,6 +289,17 @@ class HelpdeskRequestSerializer(BaseSerializer):
         target = data.get("target_date")
         if start and target and start > target:
             raise serializers.ValidationError("Start date cannot exceed target date.")
+
+        # description now carries real HTML from the rich text editor (it used
+        # to be plain text from a <textarea>) -- sanitize it the same way
+        # IssueSerializer sanitizes description_html.
+        if data.get("description"):
+            is_valid, error_msg, sanitized_html = validate_html_content(data["description"])
+            if not is_valid:
+                raise serializers.ValidationError({"description": error_msg})
+            if sanitized_html is not None:
+                data["description"] = sanitized_html
+
         return data
 
     def create(self, validated_data):

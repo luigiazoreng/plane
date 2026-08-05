@@ -15,10 +15,12 @@ type Props = {
   disabledExtensions?: TExtensions[];
   flaggedExtensions?: TExtensions[];
   editor: Editor;
+  onAttachmentFile?: (file: File) => void;
+  treatImagesAsAttachments?: boolean;
 };
 
 export const DropHandlerPlugin = (props: Props): Plugin => {
-  const { disabledExtensions, flaggedExtensions, editor } = props;
+  const { disabledExtensions, flaggedExtensions, editor, onAttachmentFile, treatImagesAsAttachments } = props;
 
   return new Plugin({
     key: new PluginKey("drop-handler-plugin"),
@@ -45,6 +47,8 @@ export const DropHandlerPlugin = (props: Props): Plugin => {
               files: acceptedFiles,
               initialPos: pos,
               event: "drop",
+              onAttachmentFile,
+              treatImagesAsAttachments,
             });
           }
           return true;
@@ -79,6 +83,8 @@ export const DropHandlerPlugin = (props: Props): Plugin => {
                 files: acceptedFiles,
                 initialPos: pos,
                 event: "drop",
+                onAttachmentFile,
+                treatImagesAsAttachments,
               });
             }
             return true;
@@ -98,10 +104,20 @@ type InsertFilesSafelyArgs = {
   files: File[];
   initialPos: number;
   type?: Extract<TEditorCommands, "attachment" | "image">;
+  /** Called for every file (or every image, when treatImagesAsAttachments is set)
+   * that should become a ticket/comment attachment instead of being inserted
+   * into the document body. */
+  onAttachmentFile?: (file: File) => void;
+  /** When true, images are routed to onAttachmentFile instead of being
+   * inserted inline via insertImageComponent -- used by surfaces (e.g. the
+   * Helpdesk description editor) where pasted/dropped images must always
+   * become attachments, never embedded content. */
+  treatImagesAsAttachments?: boolean;
 };
 
 export const insertFilesSafely = async (args: InsertFilesSafelyArgs) => {
-  const { disabledExtensions, editor, event, files, initialPos, type } = args;
+  const { disabledExtensions, editor, event, files, initialPos, type, onAttachmentFile, treatImagesAsAttachments } =
+    args;
   let pos = initialPos;
 
   for (const file of files) {
@@ -120,13 +136,16 @@ export const insertFilesSafely = async (args: InsertFilesSafelyArgs) => {
         else if (ACCEPTED_ATTACHMENT_MIME_TYPES.includes(file.type)) fileType = "attachment";
       }
       // insert file depending on the type at the current position
-      if (fileType === "image" && !disabledExtensions?.includes("image")) {
+      if (fileType === "image" && treatImagesAsAttachments) {
+        onAttachmentFile?.(file);
+      } else if (fileType === "image" && !disabledExtensions?.includes("image")) {
         editor.commands.insertImageComponent({
           file,
           pos,
           event,
         });
       } else if (fileType === "attachment") {
+        onAttachmentFile?.(file);
       }
     } catch (error) {
       console.error(`Error while ${event}ing file:`, error);

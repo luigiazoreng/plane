@@ -50,6 +50,8 @@ export const useEditor = (props: TEditorHookProps) => {
     tabIndex,
     provider,
     value,
+    onAttachmentFile,
+    treatImagesAsAttachments,
   } = props;
 
   const editor = useTiptapEditor(
@@ -80,6 +82,8 @@ export const useEditor = (props: TEditorHookProps) => {
           showPlaceholderOnEmpty,
           tabIndex,
           provider,
+          onAttachmentFile,
+          treatImagesAsAttachments,
         }),
         ...extensions,
       ],

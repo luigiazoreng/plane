@@ -8,7 +8,7 @@ from django.conf import settings
 from django.urls import reverse
 from rest_framework import status
 
-from plane.db.models import User, WorkspaceMember
+from plane.db.models import FileAsset, User, WorkspaceMember
 from plane.db.models.helpdesk import (
     HelpdeskCustomer,
     HelpdeskForm,
@@ -606,3 +606,57 @@ class TestHelpdeskRequestPriorityAPI:
             "low",
             "none",
         ]
+
+
+@pytest.mark.contract
+class TestUploadCredentials:
+    """entity_type do FileAsset criado por HelpdeskAssetEndpoint.post.
+
+    Bloqueador do plano (feat 2026-08-04-helpdesk-editor-anexos-ticket): o
+    default do endpoint é COMMENT_ENTITY. Callers de formulário de request
+    (editor de descrição, campo de anexo dedicado) DEVEM passar entity_type
+    explícito, senão o anexo vira silenciosamente um anexo de comentário.
+    Estes testes documentam esse contrato para o frontend (Stage B2).
+    """
+
+    def _payload(self, **overrides):
+        payload = {"name": "screenshot.png", "type": "image/png", "size": 1024}
+        payload.update(overrides)
+        return payload
+
+    @pytest.mark.django_db
+    def test_defaults_to_comment_entity_when_unspecified(self, session_client, workspace):
+        response = session_client.post(
+            reverse("helpdesk-asset", kwargs={"slug": workspace.slug}),
+            self._payload(),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        asset_id = response.data["asset_id"]
+        asset = FileAsset.objects.get(id=asset_id)
+        assert asset.entity_type == FileAsset.EntityTypeContext.HELPDESK_COMMENT_ATTACHMENT
+
+    @pytest.mark.django_db
+    def test_accepts_explicit_request_entity_type(self, session_client, workspace):
+        response = session_client.post(
+            reverse("helpdesk-asset", kwargs={"slug": workspace.slug}),
+            self._payload(entity_type=FileAsset.EntityTypeContext.HELPDESK_REQUEST_ATTACHMENT),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        asset_id = response.data["asset_id"]
+        asset = FileAsset.objects.get(id=asset_id)
+        assert asset.entity_type == FileAsset.EntityTypeContext.HELPDESK_REQUEST_ATTACHMENT
+
+    @pytest.mark.django_db
+    def test_rejects_unknown_entity_type(self, session_client, workspace):
+        response = session_client.post(
+            reverse("helpdesk-asset", kwargs={"slug": workspace.slug}),
+            self._payload(entity_type="not_a_real_entity_type"),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Invalid entity type."

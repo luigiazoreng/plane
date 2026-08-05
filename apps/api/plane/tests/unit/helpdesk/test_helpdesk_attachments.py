@@ -144,6 +144,56 @@ class TestBindAssets(TestCase):
                 0,
             )
 
+    def test_request_attachment_isolated_cross_workspace(self):
+        """Step 8 (feat 2026-08-04-helpdesk-editor-anexos-ticket): o mesmo
+        isolamento de bind_assets vale para REQUEST_ENTITY (anexo do editor de
+        descrição / campo dedicado do formulário de ticket), não só para
+        COMMENT_ENTITY. Um asset de outro workspace, marcado como
+        REQUEST_ENTITY, não pode ser reivindicado pela request deste
+        workspace.
+        """
+        other_request = HelpdeskRequest.objects.create(
+            workspace=self.other_workspace,
+            portal=HelpdeskPortal.objects.create(
+                workspace=self.other_workspace, public_slug="p2"
+            ),
+            title="other ticket",
+        )
+        # Pré-condição: o asset pertence ao OUTRO workspace e ainda não está
+        # vinculado a nenhuma entidade.
+        asset = make_asset(self.other_workspace, entity_type=REQUEST_ENTITY)
+        self.assertIsNone(asset.entity_identifier)
+
+        bound = bind_assets(
+            [asset.id],
+            workspace_id=self.workspace.id,
+            entity_type=REQUEST_ENTITY,
+            entity_identifier=self.request.id,
+        )
+
+        self.assertEqual(bound, 0)
+        asset.refresh_from_db()
+        self.assertIsNone(asset.entity_identifier)
+        # Confirma que o asset também não aparece nos anexos da request do
+        # OUTRO workspace (não foi reivindicado por ninguém).
+        self.assertNotEqual(asset.entity_identifier, str(other_request.id))
+
+    def test_binds_request_attachment_successfully(self):
+        """Validates that bind_assets correctly binds a HELPDESK_REQUEST_ATTACHMENT
+        asset to a HelpdeskRequest.
+        """
+        asset = make_asset(self.workspace, entity_type=REQUEST_ENTITY)
+        bound = bind_assets(
+            [asset.id],
+            workspace_id=self.workspace.id,
+            entity_type=REQUEST_ENTITY,
+            entity_identifier=self.request.id,
+        )
+        self.assertEqual(bound, 1)
+        asset.refresh_from_db()
+        self.assertEqual(asset.entity_identifier, str(self.request.id))
+        self.assertEqual(asset.entity_type, REQUEST_ENTITY)
+
 
 class TestSynthesizedContent(TestCase):
     def test_singular_and_plural(self):

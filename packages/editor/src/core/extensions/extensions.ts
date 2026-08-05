@@ -56,6 +56,8 @@ type TArguments = Pick<
   | "showPlaceholderOnEmpty"
   | "tabIndex"
   | "extendedEditorProps"
+  | "onAttachmentFile"
+  | "treatImagesAsAttachments"
 > & {
   enableHistory: boolean;
   editable: boolean;
@@ -77,6 +79,8 @@ export const CoreEditorExtensions = (args: TArguments): Extensions => {
     editable,
     extendedEditorProps,
     provider,
+    onAttachmentFile,
+    treatImagesAsAttachments,
   } = args;
 
   const extensions = [
@@ -128,6 +132,8 @@ export const CoreEditorExtensions = (args: TArguments): Extensions => {
       getEditorMetaData,
       isEditable: editable,
       isTouchDevice,
+      onAttachmentFile,
+      treatImagesAsAttachments,
     }),
     ...CoreEditorAdditionalExtensions({
       disabledExtensions,
