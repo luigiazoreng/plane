@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import { useState } from "react";
 import { cn } from "@plane/utils";
 import type { IHelpdeskMacro } from "@plane/types";
 import { AtSign, ChevronDown, Send, Smile, Zap } from "lucide-react";
@@ -26,9 +27,64 @@ type TComposerProps = {
   onSelectMacro?: (macro: IHelpdeskMacro) => void;
 };
 
-export function Composer({ mode, onModeChange, value, onChange, onSubmit, isSubmitting, attachments, macros, onSelectMacro }: TComposerProps) {
+export function Composer({
+  mode,
+  onModeChange,
+  value,
+  onChange,
+  onSubmit,
+  isSubmitting,
+  attachments,
+  macros,
+  onSelectMacro,
+}: TComposerProps) {
+  const [isDragOver, setIsDragOver] = useState(false);
   const isNote = mode === "note";
   const canSend = value.trim().length > 0 && !isSubmitting;
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files: File[] = [];
+    if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+      for (let i = 0; i < e.clipboardData.files.length; i++) {
+        const file = e.clipboardData.files[i];
+        if (file) files.push(file);
+      }
+    } else if (e.clipboardData?.items) {
+      for (let i = 0; i < e.clipboardData.items.length; i++) {
+        const item = e.clipboardData.items[i];
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      attachments.upload(files);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      attachments.upload(files);
+    }
+  };
 
   return (
     <div className="border-t border-subtle px-5 pt-3 pb-4">
@@ -63,14 +119,19 @@ export function Composer({ mode, onModeChange, value, onChange, onSubmit, isSubm
 
         {/* Box */}
         <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           className={cn(
-            "rounded-lg border transition-colors focus-within:border-strong",
-            isNote ? "border-warning-strong bg-warning-subtle" : "border-subtle bg-surface-2"
+            "relative rounded-lg border transition-colors focus-within:border-strong",
+            isNote ? "border-warning-strong bg-warning-subtle" : "border-subtle bg-surface-2",
+            isDragOver && "border-accent-primary border-dashed bg-accent-primary/10"
           )}
         >
           <textarea
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onPaste={handlePaste}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
@@ -111,18 +172,18 @@ export function Composer({ mode, onModeChange, value, onChange, onSubmit, isSubm
               <Popover className="relative">
                 <Popover.Button
                   type="button"
-                  className="flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 font-medium text-secondary hover:border-strong transition-colors"
+                  className="flex h-6 items-center gap-1.5 rounded-md border border-subtle bg-layer-1 px-2 text-12 font-medium text-secondary transition-colors hover:border-strong"
                 >
                   <Zap className="size-3 text-warning-primary" />
                   Macros
                   <ChevronDown className="size-3" />
                 </Popover.Button>
-                <Popover.Panel className="absolute bottom-full left-0 z-20 mb-2.5 w-64 rounded-md border border-subtle bg-surface-1 p-1 shadow-md">
+                <Popover.Panel className="shadow-md absolute bottom-full left-0 z-20 mb-2.5 w-64 rounded-md border border-subtle bg-surface-1 p-1">
                   {({ close }: { close: () => void }) =>
                     !macros || macros.length === 0 ? (
-                      <div className="px-3 py-2 text-12 text-tertiary text-center">Nenhuma macro disponível</div>
+                      <div className="px-3 py-2 text-center text-12 text-tertiary">Nenhuma macro disponível</div>
                     ) : (
-                      <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                      <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
                         {macros.map((macro) => (
                           <button
                             key={macro.id}
@@ -134,13 +195,15 @@ export function Composer({ mode, onModeChange, value, onChange, onSubmit, isSubm
                             }}
                             className="flex flex-col items-start gap-0.5 rounded px-2.5 py-1.5 text-left text-12 transition-colors hover:bg-layer-2"
                           >
-                            <span className="font-medium text-primary flex items-center gap-1">
+                            <span className="flex items-center gap-1 font-medium text-primary">
                               {macro.name}
                               {!macro.is_public && (
-                                <span className="text-[10px] text-tertiary bg-layer-2 px-1 rounded">Privada</span>
+                                <span className="rounded bg-layer-2 px-1 text-[10px] text-tertiary">Privada</span>
                               )}
                             </span>
-                            {macro.description && <span className="text-11 text-tertiary truncate w-full">{macro.description}</span>}
+                            {macro.description && (
+                              <span className="w-full truncate text-11 text-tertiary">{macro.description}</span>
+                            )}
                           </button>
                         ))}
                       </div>

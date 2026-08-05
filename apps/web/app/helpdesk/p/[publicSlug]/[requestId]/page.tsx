@@ -8,15 +8,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router";
 import { observer } from "mobx-react";
 import { ArrowLeft, Send, Lock } from "lucide-react";
+import { cn } from "@plane/utils";
 import { PublicHelpdeskService } from "@plane/services";
 import type { IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskPortal } from "@plane/types";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
 import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
-import {
-  CommentAttachments,
-  PendingAttachmentChips,
-} from "@/components/helpdesk/attachments/attachment-chips";
+import { CommentAttachments, PendingAttachmentChips } from "@/components/helpdesk/attachments/attachment-chips";
 import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
 
 const publicHelpdeskService = new PublicHelpdeskService();
@@ -32,6 +30,7 @@ const HelpdeskPublicRequestPage = observer(() => {
 
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
     if (publicSlug && requestId) {
@@ -106,6 +105,50 @@ const HelpdeskPublicRequestPage = observer(() => {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to post comment." });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files: File[] = [];
+    if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+      for (let i = 0; i < e.clipboardData.files.length; i++) {
+        const file = e.clipboardData.files[i];
+        if (file) files.push(file);
+      }
+    } else if (e.clipboardData?.items) {
+      for (let i = 0; i < e.clipboardData.items.length; i++) {
+        const item = e.clipboardData.items[i];
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      attachments.upload(files);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      attachments.upload(files);
     }
   };
 
@@ -239,10 +282,19 @@ const HelpdeskPublicRequestPage = observer(() => {
       {/* Reply Input */}
       {portal?.enable_chat && (
         <div className="mt-8">
-          <div className="focus-within:border-primary focus-within:ring-primary/20 shadow-sm relative flex flex-col gap-2 rounded-md border border-subtle bg-surface-1 transition-all focus-within:ring-1">
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "focus-within:border-primary focus-within:ring-primary/20 shadow-sm relative flex flex-col gap-2 rounded-md border border-subtle bg-surface-1 transition-all focus-within:ring-1",
+              isDragOver && "border-primary bg-primary/5 border-dashed"
+            )}
+          >
             <textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
+              onPaste={handlePaste}
               placeholder="Type your reply here..."
               className="text-sm min-h-[120px] w-full resize-none bg-transparent p-4 text-primary outline-none"
             />
