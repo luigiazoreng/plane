@@ -1056,8 +1056,9 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
   ];
 
   const firstRow = head.length + 1;
-  const sortedDates = Array.from(byDate.keys()).toSorted();
-  const entries: [string, { count: number | null; avgHours: number | null }][] = sortedDates.map((d) => [
+  const sortedDates: string[] = Array.from(byDate.keys());
+  sortedDates.sort((a: string, b: string) => a.localeCompare(b));
+  const entries: [string, { count: number | null; avgHours: number | null }][] = sortedDates.map((d: string) => [
     d,
     byDate.get(d)!,
   ]);
