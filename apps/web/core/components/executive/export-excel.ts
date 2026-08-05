@@ -25,6 +25,8 @@ import { PERIOD_LABELS, PROFILE_CONFIG } from "./helpers";
 export interface IExecutiveExportPayload {
   workspaceSlug: string;
   period: TExecutivePeriod;
+  customStartDate?: string;
+  customEndDate?: string;
   itIndex: IITGeneralIndex;
   members: IExecutiveMember[];
   kpi: IKpiOverviewResponse | undefined;
@@ -168,7 +170,8 @@ const COUNT_LABELS: Record<TKpiIssueStatus, string> = {
 const countHeaders = (): Row => COUNT_KEYS.map((k) => thNum(COUNT_LABELS[k]));
 const countCells = (counts: Record<TKpiIssueStatus, number>): Row => COUNT_KEYS.map((k) => num(counts[k]));
 
-const periodLabel = (period: TExecutivePeriod) => `Last ${PERIOD_LABELS[period]}`;
+const periodLabel = (period: TExecutivePeriod, start?: string, end?: string) =>
+  period === "custom" && start && end ? `Custom (${start} ~ ${end})` : `Last ${PERIOD_LABELS[period]}`;
 
 /** A sheet's title block: heading plus the period it covers. */
 const titleBlock = (heading: string, subtitle: string, cols: number[]): Row[] => {
@@ -265,7 +268,7 @@ function buildOverviewSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const header: Row[] = [
     ...titleBlock(
       "Executive Dashboard — IT General Index",
-      `${workspaceSlug} · ${periodLabel(period)}`,
+      `${workspaceSlug} · ${periodLabel(period, payload.customStartDate, payload.customEndDate)}`,
       OVERVIEW_COLS
     ),
     [key("KPI window"), dim(kpi ? `${kpi.period.start ?? "—"} → ${kpi.period.end ?? "—"}` : "—")],
@@ -290,7 +293,6 @@ function buildOverviewSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const lastRow = firstRow + itIndex.components.length - 1;
   // Sum of the default weights of the indicators that actually have a value.
   const availableRow = lastRow + 1;
-  const indexRow = availableRow + 1;
 
   const sources: Record<string, string> = {
     project_efficiency: "Sector Health → Engineering Efficiency (Σ Vf / Σ Vp, item-weighted)",
@@ -376,7 +378,7 @@ function buildSectorHealthSheet(payload: IExecutiveExportPayload): Sheet<never> 
   const unified = kpi?.unified;
 
   const head: Row[] = [
-    ...titleBlock("Sector Health", periodLabel(payload.period), SECTOR_COLS),
+    ...titleBlock("Sector Health", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), SECTOR_COLS),
     spanned([[section("Helpdesk & Support"), SECTOR_COLS.length]]),
     [th("Metric"), thNum("Value"), th("Definition")],
   ];
@@ -554,7 +556,7 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
   const head: Row[] = [
     ...titleBlock(
       "Team Performance",
-      `${periodLabel(payload.period)} · plain cells are raw API inputs, every other column is a live formula`,
+      `${periodLabel(payload.period, payload.customStartDate, payload.customEndDate)} · plain cells are raw API inputs, every other column is a live formula`,
       TEAM_COLS
     ),
     [
@@ -674,7 +676,7 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const projects = payload.kpi?.projects ?? [];
 
   const head: Row[] = [
-    ...titleBlock("KPI by Project", periodLabel(payload.period), PROJECT_COLS),
+    ...titleBlock("KPI by Project", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), PROJECT_COLS),
     ([
       th("Project"),
       th("Identifier"),
@@ -774,7 +776,7 @@ function buildKpiMemberSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const head: Row[] = [
     ...titleBlock(
       "KPI by Member",
-      `${periodLabel(payload.period)} · Vp and Vf are split equally between a work item's assignees, so totals can be fractional`,
+      `${periodLabel(payload.period, payload.customStartDate, payload.customEndDate)} · Vp and Vf are split equally between a work item's assignees, so totals can be fractional`,
       MEMBER_COLS
     ),
     ([th("Member"), thNum("Σ Vp"), thNum("Σ Vf"), thNum("Efficiency (%)")] as Row).concat(countHeaders(), [
@@ -847,7 +849,7 @@ function buildHelpdeskSummarySheet(payload: IExecutiveExportPayload): Sheet<neve
   ];
 
   const head: Row[] = [
-    ...titleBlock("Helpdesk Analytics — Summary", periodLabel(payload.period), HD_SUMMARY_COLS),
+    ...titleBlock("Helpdesk Analytics — Summary", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), HD_SUMMARY_COLS),
     spanned([[section("Key metrics vs. the previous period of the same length"), HD_SUMMARY_COLS.length]]),
     [th("Metric"), thNum("Current"), thNum("Previous"), thNum("Change (%)")],
   ];
@@ -924,7 +926,7 @@ function buildHelpdeskAgentsSheet(payload: IExecutiveExportPayload): Sheet<never
   const agents = payload.helpdesk?.charts.top_agents ?? [];
 
   const head: Row[] = [
-    ...titleBlock("Helpdesk — Agent Performance", periodLabel(payload.period), HD_AGENT_COLS),
+    ...titleBlock("Helpdesk — Agent Performance", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), HD_AGENT_COLS),
     [
       th("Agent"),
       thNum("Tickets"),
@@ -995,12 +997,12 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
   }
 
   const head: Row[] = [
-    ...titleBlock("Helpdesk — Trends", periodLabel(payload.period), TRENDS_COLS),
+    ...titleBlock("Helpdesk — Trends", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), TRENDS_COLS),
     [th("Date"), thNum("Requests created"), thNum("Avg resolution (h)")],
   ];
 
   const firstRow = head.length + 1;
-  const entries = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const entries = [...byDate.entries()].toSorted(([a], [b]) => a.localeCompare(b));
   const lastRow = firstRow + Math.max(entries.length - 1, 0);
 
   const data: Row[] = [

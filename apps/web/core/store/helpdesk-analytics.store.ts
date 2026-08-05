@@ -25,7 +25,7 @@ export interface IHelpdeskAnalyticsStore {
 }
 
 const cacheKey = (workspaceSlug: string, filters: IHelpdeskAnalyticsFilters): string =>
-  `${workspaceSlug}:${filters.date_filter}:${filters.portal_id ?? "all"}`;
+  `${workspaceSlug}:${filters.date_filter}:${filters.start_date ?? ""}:${filters.end_date ?? ""}:${filters.portal_id ?? "all"}`;
 
 export class HelpdeskAnalyticsStore implements IHelpdeskAnalyticsStore {
   analyticsData: Record<string, IHelpdeskAnalyticsResponse> = {};

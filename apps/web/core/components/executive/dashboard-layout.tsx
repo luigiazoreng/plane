@@ -71,10 +71,21 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
   // ── Local state ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<TExecutivePeriod>("30d");
+  const [customStartDate, setCustomStartDate] = useState<string | undefined>();
+  const [customEndDate, setCustomEndDate] = useState<string | undefined>();
+
+  const handlePeriodChange = (nextPeriod: TExecutivePeriod, start?: string, end?: string) => {
+    setPeriod(nextPeriod);
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+  };
 
   const hdFilters: IHelpdeskAnalyticsFilters = useMemo(
-    () => ({ date_filter: helpdeskFilterForPeriod(period) }),
-    [period]
+    () =>
+      period === "custom"
+        ? { date_filter: "custom", start_date: customStartDate, end_date: customEndDate }
+        : { date_filter: helpdeskFilterForPeriod(period) },
+    [period, customStartDate, customEndDate]
   );
 
   // ── Derived data ─────────────────────────────────────────────
@@ -87,18 +98,20 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     setLoading(true);
 
     Promise.all([
-      fetchWorkspaceOverview(workspaceSlug, { period: kpiPeriodForPeriod(period) }),
+      fetchWorkspaceOverview(workspaceSlug, {
+        period: kpiPeriodForPeriod(period),
+        start: period === "custom" ? customStartDate : undefined,
+        end: period === "custom" ? customEndDate : undefined,
+      }),
       fetchAnalytics(workspaceSlug, hdFilters),
-    ]).finally(
-      () => {
-        if (mounted) setLoading(false);
-      }
-    );
+    ]).finally(() => {
+      if (mounted) setLoading(false);
+    });
 
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, period, hdFilters, fetchWorkspaceOverview, fetchAnalytics]);
+  }, [workspaceSlug, period, customStartDate, customEndDate, hdFilters, fetchWorkspaceOverview, fetchAnalytics]);
 
   // ── Computed values ──────────────────────────────────────────
   const itIndex = useMemo(() => computeITGeneralIndex(helpdeskData, overview), [helpdeskData, overview]);
@@ -123,9 +136,28 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
   // outside this component, in the route layout.
   const { setPayload } = useExecutiveExport();
   useEffect(() => {
-    setPayload({ workspaceSlug, period, itIndex, members: executiveMembers, kpi: overview, helpdesk: helpdeskData });
+    setPayload({
+      workspaceSlug,
+      period,
+      customStartDate,
+      customEndDate,
+      itIndex,
+      members: executiveMembers,
+      kpi: overview,
+      helpdesk: helpdeskData,
+    });
     return () => setPayload(null);
-  }, [setPayload, workspaceSlug, period, itIndex, executiveMembers, overview, helpdeskData]);
+  }, [
+    setPayload,
+    workspaceSlug,
+    period,
+    customStartDate,
+    customEndDate,
+    itIndex,
+    executiveMembers,
+    overview,
+    helpdeskData,
+  ]);
 
   // ── Loading state ────────────────────────────────────────────
   if (loading && (!overview || !helpdeskData)) {
@@ -136,13 +168,22 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     );
   }
 
-  const periodDaysLabel = PERIOD_LABELS[period];
+  const periodDaysLabel =
+    period === "custom" && customStartDate && customEndDate
+      ? `${customStartDate} ~ ${customEndDate}`
+      : PERIOD_LABELS[period];
 
   // ── Render ───────────────────────────────────────────────────
   return (
     <div className="executive-dashboard-print vertical-scrollbar flex scrollbar-lg h-full w-full flex-col overflow-y-auto bg-surface-1">
       {/* ─── Section 1: IT General Index Hero ─────────────────── */}
-      <ITGeneralIndex data={itIndex} period={period} onPeriodChange={setPeriod} />
+      <ITGeneralIndex
+        data={itIndex}
+        period={period}
+        customStartDate={customStartDate}
+        customEndDate={customEndDate}
+        onPeriodChange={handlePeriodChange}
+      />
 
       {/* ─── Section 2: Sector Health ─────────────────────────── */}
       <div>

@@ -364,7 +364,8 @@ export type THelpdeskDateFilter =
   | "last_30_days"
   | "last_3_months"
   | "last_6_months"
-  | "last_12_months";
+  | "last_12_months"
+  | "custom";
 
 export interface IHelpdeskKPIMetric {
   current: number | null;
@@ -439,6 +440,8 @@ export interface IHelpdeskAnalyticsResponse {
 export interface IHelpdeskAnalyticsFilters {
   date_filter: THelpdeskDateFilter;
   portal_id?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export enum EHelpdeskMemberRole {

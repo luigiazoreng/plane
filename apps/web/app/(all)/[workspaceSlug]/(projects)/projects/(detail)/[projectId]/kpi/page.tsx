@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -58,7 +58,9 @@ function ProjectKpiPage() {
   const [selectedPriorityLevel, setSelectedPriorityLevel] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   // The project endpoints default to the whole history; this page opts into a window.
-  const [period, setPeriod] = useState<Exclude<TKpiPeriod, "custom">>("all");
+  const [period, setPeriod] = useState<TKpiPeriod>("all");
+  const [customStartDate, setCustomStartDate] = useState<string | undefined>();
+  const [customEndDate, setCustomEndDate] = useState<string | undefined>();
 
   const config = projectConfig[projectId];
   const agg = aggregates[projectId];
@@ -70,12 +72,17 @@ function ProjectKpiPage() {
     // Difficulty is the issue's native estimate -> preload so the dropdown can
     // resolve and display the currently selected estimate value.
     getProjectEstimates(workspaceSlug, projectId).catch(() => {});
+    const periodParams = {
+      period,
+      start: period === "custom" ? customStartDate : undefined,
+      end: period === "custom" ? customEndDate : undefined,
+    };
     Promise.all([
       fetchProjectConfig(workspaceSlug, projectId),
       // Still fetched for the project-wide StatBar aggregates; the per-issue
       // rows themselves are no longer rendered on this (now read-only) page.
-      fetchProjectIssues(workspaceSlug, projectId, { aggregates_only: true, period }),
-      fetchProjectMemberAggregates(workspaceSlug, projectId, { period }),
+      fetchProjectIssues(workspaceSlug, projectId, { aggregates_only: true, ...periodParams }),
+      fetchProjectMemberAggregates(workspaceSlug, projectId, periodParams),
     ]).finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
@@ -84,11 +91,19 @@ function ProjectKpiPage() {
     workspaceSlug,
     projectId,
     period,
+    customStartDate,
+    customEndDate,
     fetchProjectConfig,
     fetchProjectIssues,
     fetchProjectMemberAggregates,
     getProjectEstimates,
   ]);
+
+  const handlePeriodChange = useCallback((next: TKpiPeriod, start?: string, end?: string) => {
+    setPeriod(next);
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+  }, []);
 
   const priorityLevels = useMemo(() => Object.keys(config?.tables.priority ?? {}), [config]);
 
@@ -146,7 +161,13 @@ function ProjectKpiPage() {
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <KpiPeriodSelector value={period} onChange={setPeriod} disabled={loading} />
+            <KpiPeriodSelector
+              value={period}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onChange={handlePeriodChange}
+              disabled={loading}
+            />
             <button
               type="button"
               onClick={() => setIsHelpOpen(true)}

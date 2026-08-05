@@ -42,6 +42,12 @@ class TestGetAnalyticsDateRange:
     def test_unknown_filter_returns_none(self):
         assert get_analytics_date_range("last_5_years") is None
 
+    def test_custom_date_range(self):
+        ranges = get_analytics_date_range("custom", start_date="2026-01-01", end_date="2026-01-31")
+        assert ranges is not None
+        assert ranges["current"]["gte"].date() == timezone.datetime.strptime("2026-01-01", "%Y-%m-%d").date()
+        assert ranges["current"]["lte"].date() == timezone.datetime.strptime("2026-01-31", "%Y-%m-%d").date()
+
 
 @pytest.mark.unit
 class TestGetChartPeriodRange:
@@ -58,4 +64,9 @@ class TestGetChartPeriodRange:
         assert end == today
 
     def test_unknown_filter_returns_none(self):
-        assert get_chart_period_range("last_5_years") is None
+        assert get_chart_period_range("invalid_filter") is None
+
+    def test_custom_chart_period_range(self):
+        start, end = get_chart_period_range("custom", start_date="2026-01-01", end_date="2026-01-31")
+        assert start == timezone.datetime.strptime("2026-01-01", "%Y-%m-%d").date()
+        assert end == timezone.datetime.strptime("2026-01-31", "%Y-%m-%d").date()

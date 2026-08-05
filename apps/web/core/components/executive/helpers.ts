@@ -21,7 +21,7 @@ import type {
  * unbounded window, so "all" is deliberately absent -- offering it would
  * silently pair all-time KPI data with a 12-month Helpdesk slice.
  */
-export const EXECUTIVE_PERIODS = ["7d", "30d", "90d", "180d", "365d"] as const;
+export const EXECUTIVE_PERIODS = ["7d", "30d", "90d", "180d", "365d", "custom"] as const;
 
 export type TExecutivePeriod = (typeof EXECUTIVE_PERIODS)[number];
 
@@ -31,6 +31,7 @@ const HELPDESK_FILTER_BY_PERIOD: Record<TExecutivePeriod, THelpdeskDateFilter> =
   "90d": "last_3_months",
   "180d": "last_6_months",
   "365d": "last_12_months",
+  custom: "custom",
 };
 
 /** Translate the shared period into the Helpdesk analytics endpoint's own vocabulary. */
@@ -43,10 +44,11 @@ export const PERIOD_LABELS: Record<TExecutivePeriod, string> = {
   "90d": "90 days",
   "180d": "6 months",
   "365d": "12 months",
+  custom: "Custom",
 };
 
-/** The executive periods are all valid KPI periods; this just narrows the type. */
-export const kpiPeriodForPeriod = (period: TExecutivePeriod): Exclude<TKpiPeriod, "custom"> => period;
+/** The executive periods are all valid KPI periods. */
+export const kpiPeriodForPeriod = (period: TExecutivePeriod): TKpiPeriod => period;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

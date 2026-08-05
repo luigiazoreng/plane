@@ -33,7 +33,9 @@ function WorkspaceKpiPage() {
   const { workspaceSlug } = useParams() as { workspaceSlug: string };
   const { workspaceOverview, fetchWorkspaceOverview } = useKpi();
 
-  const [period, setPeriod] = useState<Exclude<TKpiPeriod, "custom">>("90d");
+  const [period, setPeriod] = useState<TKpiPeriod>("90d");
+  const [customStartDate, setCustomStartDate] = useState<string | undefined>();
+  const [customEndDate, setCustomEndDate] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
@@ -42,13 +44,17 @@ function WorkspaceKpiPage() {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    fetchWorkspaceOverview(workspaceSlug, { period }).finally(() => {
+    fetchWorkspaceOverview(workspaceSlug, {
+      period,
+      start: period === "custom" ? customStartDate : undefined,
+      end: period === "custom" ? customEndDate : undefined,
+    }).finally(() => {
       if (mounted) setLoading(false);
     });
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, period, fetchWorkspaceOverview]);
+  }, [workspaceSlug, period, customStartDate, customEndDate, fetchWorkspaceOverview]);
 
   // The StatBar speaks IKpiAggregates; the unified summary carries the same
   // figures under workspace-wide names, so adapt instead of duplicating the bar.
@@ -77,7 +83,11 @@ function WorkspaceKpiPage() {
     [overview]
   );
 
-  const handlePeriodChange = useCallback((next: Exclude<TKpiPeriod, "custom">) => setPeriod(next), []);
+  const handlePeriodChange = useCallback((next: TKpiPeriod, start?: string, end?: string) => {
+    setPeriod(next);
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+  }, []);
 
   if (loading && !overview) {
     return (
@@ -90,7 +100,7 @@ function WorkspaceKpiPage() {
   return (
     <>
       <PageHead title="Workspace KPI" />
-      <div className="vertical-scrollbar scrollbar-lg flex h-full w-full flex-col overflow-y-auto bg-surface-1">
+      <div className="vertical-scrollbar flex scrollbar-lg h-full w-full flex-col overflow-y-auto bg-surface-1">
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-subtle px-page-x">
           <div className="flex items-baseline gap-2 truncate">
             <h3 className="text-13 font-medium text-primary">Active KPIs</h3>
@@ -107,7 +117,13 @@ function WorkspaceKpiPage() {
               <HelpCircle className="size-3.5" />
               How it works
             </button>
-            <KpiPeriodSelector value={period} onChange={handlePeriodChange} disabled={loading} />
+            <KpiPeriodSelector
+              value={period}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onChange={handlePeriodChange}
+              disabled={loading}
+            />
           </div>
         </div>
 

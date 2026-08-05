@@ -17,10 +17,12 @@ import { EXECUTIVE_PERIODS, type TExecutivePeriod } from "./helpers";
 type Props = {
   data: IITGeneralIndex;
   period: TExecutivePeriod;
-  onPeriodChange: (period: TExecutivePeriod) => void;
+  customStartDate?: string;
+  customEndDate?: string;
+  onPeriodChange: (period: TExecutivePeriod, startDate?: string, endDate?: string) => void;
 };
 
-export const ITGeneralIndex: React.FC<Props> = ({ data, period, onPeriodChange }) => {
+export const ITGeneralIndex: React.FC<Props> = ({ data, period, customStartDate, customEndDate, onPeriodChange }) => {
   const { index, components, missing } = data;
 
   const tooltipContent = components
@@ -70,7 +72,9 @@ export const ITGeneralIndex: React.FC<Props> = ({ data, period, onPeriodChange }
           <div className="rounded-md border border-subtle bg-surface-2 p-0.5">
             <KpiPeriodSelector
               value={period}
-              onChange={(next) => onPeriodChange(next as TExecutivePeriod)}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onChange={(next, start, end) => onPeriodChange(next as TExecutivePeriod, start, end)}
               options={EXECUTIVE_PERIODS}
             />
           </div>

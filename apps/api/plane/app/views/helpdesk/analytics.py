@@ -25,9 +25,19 @@ def _duration_to_hours(td):
     return round(td.total_seconds() / 3600, 2)
 
 
-def _get_trunc_fn(date_filter):
+from datetime import datetime, timedelta
+
+def _get_trunc_fn(date_filter, start_date=None, end_date=None):
     if date_filter in ("yesterday", "last_7_days", "last_30_days"):
         return TruncDate
+    if date_filter == "custom" and start_date and end_date:
+        try:
+            s = datetime.strptime(start_date, "%Y-%m-%d").date()
+            e = datetime.strptime(end_date, "%Y-%m-%d").date()
+            if (e - s).days <= 31:
+                return TruncDate
+        except (ValueError, TypeError):
+            pass
     return TruncMonth
 
 
@@ -49,9 +59,11 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             return Response({"error": "Access denied."}, status=http_status.HTTP_403_FORBIDDEN)
         date_filter = request.query_params.get("date_filter", "last_30_days")
         portal_id = request.query_params.get("portal_id")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
 
-        date_ranges = get_analytics_date_range(date_filter)
-        chart_range = get_chart_period_range(date_filter)
+        date_ranges = get_analytics_date_range(date_filter, start_date=start_date, end_date=end_date)
+        chart_range = get_chart_period_range(date_filter, start_date=start_date, end_date=end_date)
 
         if not date_ranges:
             return Response({"error": "Invalid date_filter"}, status=400)
@@ -186,7 +198,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                     sla_data["resolution_pct"] = round(within_sla / total_resolved * 100, 1)
 
         # --- Charts ---
-        trunc_fn = _get_trunc_fn(date_filter)
+        trunc_fn = _get_trunc_fn(date_filter, start_date=start_date, end_date=end_date)
 
         # Group by ref_date (start_date when available) so imported tickets distribute
         # across their original historical dates rather than clustering at import time.
