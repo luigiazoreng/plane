@@ -84,7 +84,8 @@ export function CreateTicketModal({
     setNewCustomerName("");
     setNewCustomerEmail("");
     void onFetchCustomers();
-  }, [isOpen, portals, statuses, onFetchCustomers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

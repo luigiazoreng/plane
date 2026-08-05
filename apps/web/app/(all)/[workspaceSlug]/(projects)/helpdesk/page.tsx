@@ -332,6 +332,12 @@ const WorkspaceHelpdeskPage = observer(() => {
     setStoredDisplay({ ...displayFilters, ...data });
   const handleOrderByChange = (order_by: THelpdeskOrderBy) => handleDisplayChange({ order_by });
 
+  const handleFetchCustomers = useCallback(() => helpdeskStore.fetchCustomers(wSlug), [helpdeskStore, wSlug]);
+  const handleCreateCustomer = useCallback(
+    (data: { name: string; email: string }) => helpdeskStore.createCustomer(wSlug, data),
+    [helpdeskStore, wSlug]
+  );
+
   const handleStatusDrop = async (
     sourceId: string,
     _destinationId: string | null,
@@ -836,8 +842,8 @@ const WorkspaceHelpdeskPage = observer(() => {
         statuses={statuses}
         teams={helpdeskStore.getWorkspaceTeams(wSlug)}
         customers={helpdeskStore.getWorkspaceCustomers(wSlug)}
-        onFetchCustomers={() => helpdeskStore.fetchCustomers(wSlug)}
-        onCreateCustomer={(data) => helpdeskStore.createCustomer(wSlug, data)}
+        onFetchCustomers={handleFetchCustomers}
+        onCreateCustomer={handleCreateCustomer}
         onSubmit={async (payload) => {
           try {
             await helpdeskStore.createRequest(wSlug, payload);
