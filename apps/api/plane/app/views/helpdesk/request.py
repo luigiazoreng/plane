@@ -114,7 +114,7 @@ class HelpdeskRequestViewSet(BaseViewSet):
 
         # Eager-load related objects to avoid N+1 queries on serialization.
         # _prefetched_assignees is read by HelpdeskRequestSerializer.to_representation.
-        queryset = queryset.select_related("status", "portal", "form").prefetch_related(
+        queryset = queryset.select_related("status", "portal", "form", "created_by", "customer").prefetch_related(
             Prefetch(
                 "request_assignees",
                 queryset=HelpdeskRequestAssignee.objects.filter(deleted_at__isnull=True),

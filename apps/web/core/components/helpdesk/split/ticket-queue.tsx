@@ -157,7 +157,13 @@ export function TicketQueue({
                 )}
 
                 <div className="flex items-center gap-1.5 text-12 text-tertiary">
-                  <span className="min-w-0 truncate">{request.contact_email || "Authenticated"}</span>
+                  <span className="min-w-0 truncate">
+                    {request.customer_detail?.name || request.contact_email
+                      ? request.customer_detail?.name || request.contact_email
+                      : request.created_by_detail
+                        ? `Agente: ${request.created_by_detail.display_name || request.created_by_detail.first_name || "Membro"}`
+                        : "Sem cliente"}
+                  </span>
                   <span>·</span>
                   <span className="shrink-0">{relativeAge(request.created_at)}</span>
                   {status && <HelpdeskStatusPill status={status} className="ml-auto" />}

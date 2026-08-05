@@ -193,7 +193,10 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/requests/${requestId}/archive/`).then((res) => res?.data);
   }
 
-  async markRequestRead(workspaceSlug: string, requestId: string): Promise<{ is_unread: boolean; last_read_at: string }> {
+  async markRequestRead(
+    workspaceSlug: string,
+    requestId: string
+  ): Promise<{ is_unread: boolean; last_read_at: string }> {
     return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/mark-read/`, {}).then((res) => res?.data);
   }
 
@@ -377,6 +380,10 @@ export class HelpdeskService extends APIService {
 
   async getCustomers(workspaceSlug: string): Promise<IHelpdeskCustomer[]> {
     return this.get(`${workspaceSlug}/helpdesk/customers/`).then((res) => res?.data);
+  }
+
+  async createCustomer(workspaceSlug: string, data: Partial<IHelpdeskCustomer>): Promise<IHelpdeskCustomer> {
+    return this.post(`${workspaceSlug}/helpdesk/customers/`, data).then((res) => res?.data);
   }
 
   async updateCustomer(

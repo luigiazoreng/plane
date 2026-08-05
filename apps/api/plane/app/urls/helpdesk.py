@@ -348,7 +348,7 @@ urlpatterns = [
     # --- Customer management (admin) ---
     path(
         "workspaces/<str:slug>/helpdesk/customers/",
-        HelpdeskCustomerViewSet.as_view({"get": "list"}),
+        HelpdeskCustomerViewSet.as_view({"get": "list", "post": "create"}),
         name="helpdesk-customer-list",
     ),
     path(

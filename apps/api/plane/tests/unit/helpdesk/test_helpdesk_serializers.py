@@ -8,8 +8,8 @@ from plane.app.serializers.helpdesk import (
     HelpdeskRequestCommentSerializer,
     HelpdeskRequestSerializer,
 )
-from plane.db.models import HelpdeskPortal, HelpdeskRequest, HelpdeskRequestComment
-from plane.tests.factories import WorkspaceFactory
+from plane.db.models import HelpdeskCustomer, HelpdeskPortal, HelpdeskRequest, HelpdeskRequestComment
+from plane.tests.factories import UserFactory, WorkspaceFactory
 
 
 class TestHelpdeskPortalSmtpValidation(TestCase):
@@ -254,3 +254,54 @@ class TestHelpdeskRequestDescriptionSanitization(TestCase):
         instance = serializer.save(workspace=self.workspace, portal=self.portal)
 
         self.assertEqual(instance.description, "Plain text description, no HTML at all.")
+
+
+import uuid
+
+
+class TestHelpdeskRequestCreatorAndCustomer(TestCase):
+    def setUp(self):
+        self.workspace = WorkspaceFactory.create()
+        self.portal = HelpdeskPortal.objects.create(
+            workspace=self.workspace, public_slug="portal-creator"
+        )
+        self.user = UserFactory.create(
+            username=f"user_{uuid.uuid4().hex[:8]}",
+            first_name="John",
+            last_name="Agent",
+            email=f"agent_{uuid.uuid4().hex[:8]}@example.com",
+        )
+        self.customer = HelpdeskCustomer.objects.create(
+            workspace=self.workspace, name="Customer Name", email="customer@example.com"
+        )
+
+    def test_request_serializer_exposes_created_by_detail_and_customer_detail(self):
+        request_obj = HelpdeskRequest(
+            workspace=self.workspace,
+            portal=self.portal,
+            title="Agent created ticket",
+            created_by=self.user,
+            customer=self.customer,
+            contact_email=self.customer.email,
+        )
+        request_obj.save(created_by_id=self.user.id)
+        data = HelpdeskRequestSerializer(request_obj).data
+        self.assertIn("created_by_detail", data)
+        self.assertIsNotNone(data["created_by_detail"])
+        self.assertEqual(str(data["created_by_detail"]["id"]), str(self.user.id))
+        self.assertIn("customer_detail", data)
+        self.assertEqual(str(data["customer_detail"]["id"]), str(self.customer.id))
+        self.assertEqual(data["customer_detail"]["email"], "customer@example.com")
+
+    def test_agent_can_link_customer_on_request_create_and_sync_email(self):
+        serializer = HelpdeskRequestSerializer(
+            data={
+                "title": "Ticket with customer link",
+                "customer": self.customer.id,
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        instance = serializer.save(workspace=self.workspace, portal=self.portal, created_by=self.user)
+        self.assertEqual(instance.customer_id, self.customer.id)
+        self.assertEqual(instance.contact_email, "customer@example.com")
+

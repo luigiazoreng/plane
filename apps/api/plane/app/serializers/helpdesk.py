@@ -47,7 +47,7 @@ class HelpdeskCustomerAdminSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskCustomer
         fields = ["id", "workspace", "name", "email", "is_active", "created_at", "updated_at"]
-        read_only_fields = ["id", "workspace", "email", "created_at", "updated_at"]
+        read_only_fields = ["id", "workspace", "created_at", "updated_at"]
 
 
 class HelpdeskStatusSerializer(BaseSerializer):
@@ -223,7 +223,21 @@ class HelpdeskFormSerializer(BaseSerializer):
         read_only_fields = READ_ONLY_BASE + ["ticket_id_counter"]
 
 
+class HelpdeskCustomerLiteSerializer(BaseSerializer):
+    """Customer identity for display alongside a request or comment.
+
+    Deliberately excludes `password` and `is_active`.
+    """
+
+    class Meta:
+        model = HelpdeskCustomer
+        fields = ["id", "name", "email"]
+        read_only_fields = fields
+
+
 class HelpdeskRequestSerializer(BaseSerializer):
+    created_by_detail = UserLiteSerializer(source="created_by", read_only=True)
+    customer_detail = HelpdeskCustomerLiteSerializer(source="customer", read_only=True)
     status_detail = HelpdeskStatusSerializer(source="status", read_only=True)
     # Use the lite serializer (no fields_detail) — avoids serializing all form
     # fields for every ticket in the list response.
@@ -264,7 +278,7 @@ class HelpdeskRequestSerializer(BaseSerializer):
     class Meta:
         model = HelpdeskRequest
         fields = "__all__"
-        read_only_fields = READ_ONLY_BASE + ["portal", "customer", "display_id", "archived_at"]
+        read_only_fields = READ_ONLY_BASE + ["portal", "display_id", "archived_at"]
 
     def _sync_assignees(self, instance, assignee_ids):
         # hard delete so soft-deleted rows don't linger in the M2M relation
@@ -305,6 +319,9 @@ class HelpdeskRequestSerializer(BaseSerializer):
     def create(self, validated_data):
         assignees = validated_data.pop("assignees", None)
         label_ids = validated_data.pop("labels", None)
+        customer = validated_data.get("customer")
+        if customer and not validated_data.get("contact_email"):
+            validated_data["contact_email"] = customer.email
         instance = super().create(validated_data)
         if assignees is not None:
             self._sync_assignees(instance, assignees)
@@ -315,6 +332,12 @@ class HelpdeskRequestSerializer(BaseSerializer):
     def update(self, instance, validated_data):
         assignees = validated_data.pop("assignees", None)
         label_ids = validated_data.pop("labels", None)
+        if "customer" in validated_data:
+            customer = validated_data["customer"]
+            if customer and not validated_data.get("contact_email"):
+                validated_data["contact_email"] = customer.email
+            elif not customer and "contact_email" not in validated_data:
+                validated_data["contact_email"] = ""
         instance = super().update(instance, validated_data)
         if assignees is not None:
             self._sync_assignees(instance, assignees)

@@ -31,6 +31,7 @@ import {
   KanbanSquare,
   LayoutList,
   MessageSquareText,
+  Plus,
   Search,
   Settings,
   UserRound,
@@ -38,6 +39,7 @@ import {
 import { BaseKanbanLayout } from "@/components/base-layouts/kanban/layout";
 import { AppHeader } from "@/components/core/app-header";
 import { HelpdeskSplitView } from "@/components/helpdesk/split";
+import { CreateTicketModal } from "@/components/helpdesk/create-ticket-modal";
 import { HelpdeskAppliedFilters } from "@/components/helpdesk/filters/helpdesk-applied-filters";
 import { HelpdeskDisplayDropdown } from "@/components/helpdesk/filters/helpdesk-display-dropdown";
 import { HelpdeskFiltersDropdown } from "@/components/helpdesk/filters/helpdesk-filters-dropdown";
@@ -117,6 +119,7 @@ const WorkspaceHelpdeskPage = observer(() => {
     storageKey,
     "list"
   );
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const { storedValue: storedFilters, setValue: setStoredFilters } = useLocalStorage<IHelpdeskRequestFilters>(
     workspaceSlug ? `helpdesk-filters:${workspaceSlug}` : "helpdesk-filters",
     DEFAULT_HELPDESK_FILTERS
@@ -430,6 +433,16 @@ const WorkspaceHelpdeskPage = observer(() => {
                   </button>
                 ))}
               </div>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="ml-1 flex items-center gap-1.5"
+              >
+                <Plus className="size-3.5" />
+                <span>Criar Ticket</span>
+              </Button>
             </div>
           </div>
         }
@@ -813,6 +826,27 @@ const WorkspaceHelpdeskPage = observer(() => {
           </div>
         )}
       </div>
+
+      <CreateTicketModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        workspaceSlug={wSlug}
+        portals={portals}
+        forms={forms}
+        statuses={statuses}
+        teams={helpdeskStore.getWorkspaceTeams(wSlug)}
+        customers={helpdeskStore.getWorkspaceCustomers(wSlug)}
+        onFetchCustomers={() => helpdeskStore.fetchCustomers(wSlug)}
+        onCreateCustomer={(data) => helpdeskStore.createCustomer(wSlug, data)}
+        onSubmit={async (payload) => {
+          try {
+            await helpdeskStore.createRequest(wSlug, payload);
+            setToast({ type: TOAST_TYPE.SUCCESS, title: "Sucesso", message: "Ticket criado com sucesso." });
+          } catch (_error) {
+            setToast({ type: TOAST_TYPE.ERROR, title: "Erro", message: "Falha ao criar ticket." });
+          }
+        }}
+      />
     </div>
   );
 });

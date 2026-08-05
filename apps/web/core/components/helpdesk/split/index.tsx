@@ -119,6 +119,12 @@ export const HelpdeskSplitView = observer(
       };
     }, [selectedRequestId, queuedRequest, offQueueRequest, workspaceSlug, helpdeskStore]);
 
+    useEffect(() => {
+      if (workspaceSlug) {
+        void helpdeskStore.fetchCustomers(workspaceSlug);
+      }
+    }, [workspaceSlug, helpdeskStore]);
+
     // Load the detail bundle for whichever ticket is selected.
     useEffect(() => {
       if (!workspaceSlug || !selectedRequestId) return;
@@ -269,6 +275,25 @@ export const HelpdeskSplitView = observer(
       [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
     );
 
+    const handleCustomerChange = useCallback(
+      async (customerId: string | null) => {
+        if (!selectedRequestId) return;
+        try {
+          applyRequestUpdate(
+            await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { customer: customerId })
+          );
+          setToast({
+            type: TOAST_TYPE.SUCCESS,
+            title: "Sucesso",
+            message: customerId ? "Cliente vinculado ao ticket." : "Cliente desvinculado.",
+          });
+        } catch (_error) {
+          setToast({ type: TOAST_TYPE.ERROR, title: "Erro", message: "Falha ao vincular cliente." });
+        }
+      },
+      [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
+    );
+
     const handleLabelsChange = useCallback(
       async (labelIds: string[]) => {
         if (!selectedRequestId) return;
@@ -409,6 +434,8 @@ export const HelpdeskSplitView = observer(
                 statusMap={statusMap}
                 portal={portal}
                 customerStats={customerStats}
+                customers={helpdeskStore.getWorkspaceCustomers(workspaceSlug)}
+                onCustomerChange={handleCustomerChange}
                 onAssigneesChange={handleAssigneesChange}
                 onPriorityChange={handlePriorityChange}
                 teams={teams}

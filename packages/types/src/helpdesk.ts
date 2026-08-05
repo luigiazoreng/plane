@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import type { IUserLite } from "./users";
 import type { TIssuePriorities } from "./issues";
 
 export type IHelpdeskAutoAssignmentType = "load_balance" | "round_robin" | "capacity";
@@ -138,6 +139,9 @@ export interface IHelpdeskRequest {
   form?: string | null;
   workspace: string;
   customer?: string | null;
+  customer_detail?: { id: string; name?: string; email: string } | null;
+  created_by?: string | null;
+  created_by_detail?: IUserLite | null;
   contact_email?: string | null;
   title: string;
   description: string;

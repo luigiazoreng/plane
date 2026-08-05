@@ -203,6 +203,12 @@ export function ConversationPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {request.created_by_detail && (
+            <span className="border-accent-primary/20 inline-flex items-center gap-1 rounded-md border bg-accent-primary/10 px-2 py-0.5 text-11 font-medium text-accent-primary">
+              Criado por Agente:{" "}
+              {request.created_by_detail.display_name || request.created_by_detail.first_name || "Agente"}
+            </span>
+          )}
           {/* Status — native select layered over the styled trigger keeps keyboard
               and mobile behaviour without hand-rolling a listbox. */}
           <div className="relative inline-flex">

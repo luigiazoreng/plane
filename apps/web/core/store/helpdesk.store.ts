@@ -204,6 +204,7 @@ export interface IHelpdeskStore {
   getWorkspaceMacros: (workspaceSlug: string) => IHelpdeskMacro[];
   // customer actions
   fetchCustomers: (workspaceSlug: string) => Promise<IHelpdeskCustomer[]>;
+  createCustomer: (workspaceSlug: string, data: Partial<IHelpdeskCustomer>) => Promise<IHelpdeskCustomer>;
   updateCustomer: (
     workspaceSlug: string,
     customerId: string,
@@ -321,6 +322,7 @@ export class HelpdeskStore implements IHelpdeskStore {
       deleteMacro: action,
       customers: observable,
       fetchCustomers: action,
+      createCustomer: action,
       updateCustomer: action,
       deleteCustomer: action,
     });
@@ -1422,7 +1424,11 @@ export class HelpdeskStore implements IHelpdeskStore {
     return response;
   };
 
-  updateMacro = async (workspaceSlug: string, macroId: string, data: Partial<IHelpdeskMacro>): Promise<IHelpdeskMacro> => {
+  updateMacro = async (
+    workspaceSlug: string,
+    macroId: string,
+    data: Partial<IHelpdeskMacro>
+  ): Promise<IHelpdeskMacro> => {
     const response = await this.helpdeskService.updateMacro(workspaceSlug, macroId, data);
     runInAction(() => {
       const current = this.macros[workspaceSlug] || [];
@@ -1467,6 +1473,15 @@ export class HelpdeskStore implements IHelpdeskStore {
       this.stopLoading(key, error);
       throw error;
     }
+  };
+
+  createCustomer = async (workspaceSlug: string, data: Partial<IHelpdeskCustomer>): Promise<IHelpdeskCustomer> => {
+    const response = await this.helpdeskService.createCustomer(workspaceSlug, data);
+    runInAction(() => {
+      const current = this.customers[workspaceSlug] || [];
+      set(this.customers, [workspaceSlug], [response, ...current]);
+    });
+    return response;
   };
 
   updateCustomer = async (

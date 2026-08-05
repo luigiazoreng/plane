@@ -8,6 +8,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type {
+  IHelpdeskCustomer,
   IHelpdeskCustomerStats,
   IHelpdeskPortal,
   IHelpdeskRequest,
@@ -46,6 +47,8 @@ type TDetailPanelProps = {
   statusMap: Record<string, IHelpdeskStatus>;
   portal: IHelpdeskPortal | undefined;
   customerStats?: IHelpdeskCustomerStats | null;
+  customers?: IHelpdeskCustomer[];
+  onCustomerChange?: (customerId: string | null) => void;
   onAssigneesChange: (assignees: string[]) => void;
   onPriorityChange: (priority: TIssuePriorities) => void;
   teams?: IHelpdeskTeam[];
@@ -72,6 +75,8 @@ export function DetailPanel({
   statusMap,
   portal,
   customerStats: customerStatsProp,
+  customers = [],
+  onCustomerChange,
   onAssigneesChange,
   onPriorityChange,
   teams = [],
@@ -103,6 +108,25 @@ export function DetailPanel({
     <aside className="hidden w-[300px] min-w-[300px] flex-col overflow-y-auto border-l border-subtle bg-surface-2 xl:flex">
       {/* ---------------- Ticket ---------------- */}
       <Section title="Ticket">
+        <Row label="Criado por">
+          {request.created_by_detail ? (
+            <div className="flex items-center gap-1.5 text-12 text-secondary">
+              <span className="inline-flex size-5 items-center justify-center rounded-full bg-layer-3 text-10 font-semibold text-primary">
+                {(request.created_by_detail.first_name || request.created_by_detail.display_name || "A")
+                  .charAt(0)
+                  .toUpperCase()}
+              </span>
+              <span className="truncate font-medium text-primary">
+                {request.created_by_detail.display_name || request.created_by_detail.first_name
+                  ? `${request.created_by_detail.first_name || ""} ${request.created_by_detail.last_name || ""}`.trim() ||
+                    request.created_by_detail.display_name
+                  : "Agente"}
+              </span>
+            </div>
+          ) : (
+            <span className="text-12 text-secondary">Cliente (Portal / E-mail)</span>
+          )}
+        </Row>
         <Row label="Status">{status ? <HelpdeskStatusPill status={status} /> : <Empty />}</Row>
         <Row label="Priority">
           <PriorityDropdown
@@ -200,22 +224,68 @@ export function DetailPanel({
 
       {/* ---------------- Customer ---------------- */}
       <Section title="Customer">
-        <div className="flex items-start gap-2.5">
-          <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-primary text-13 font-semibold text-white">
-            {(request.contact_email || "?").charAt(0).toUpperCase()}
-          </span>
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="truncate text-13 font-medium text-primary">
-              {request.contact_email || "Authenticated customer"}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+            <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-primary text-13 font-semibold text-white">
+              {(request.customer_detail?.name || request.contact_email || "?").charAt(0).toUpperCase()}
             </span>
-            <Link
-              to={`/${workspaceSlug}/helpdesk/customers`}
-              className="inline-flex items-center gap-1 text-12 text-accent-primary hover:underline"
-            >
-              View full profile
-              <ExternalLink className="size-3" />
-            </Link>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate text-13 font-medium text-primary">
+                {request.customer_detail?.name || request.contact_email || "Nenhum cliente vinculado"}
+              </span>
+              {request.customer_detail?.email && request.customer_detail.name && (
+                <span className="truncate text-11 text-tertiary">{request.customer_detail.email}</span>
+              )}
+              <Link
+                to={`/${workspaceSlug}/helpdesk/customers`}
+                className="mt-0.5 inline-flex items-center gap-1 text-12 text-accent-primary hover:underline"
+              >
+                Ver clientes
+                <ExternalLink className="size-3" />
+              </Link>
+            </div>
           </div>
+
+          {onCustomerChange && (
+            <Popover className="relative shrink-0">
+              <Popover.Button
+                type="button"
+                className="rounded border border-subtle bg-layer-1 px-2 py-1 text-11 font-medium text-secondary transition-colors hover:border-strong"
+              >
+                {request.customer || request.contact_email ? "Alterar" : "Vincular"}
+              </Popover.Button>
+              <Popover.Panel className="shadow-md absolute top-full right-0 z-20 mt-1 w-56 rounded-md border border-subtle bg-surface-1 p-1">
+                {({ close }: { close: () => void }) => (
+                  <div className="flex max-h-52 flex-col gap-0.5 overflow-y-auto text-12">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onCustomerChange(null);
+                        close();
+                      }}
+                      className="rounded px-2.5 py-1.5 text-left text-tertiary hover:bg-layer-2"
+                    >
+                      — Sem cliente —
+                    </button>
+                    {(customers || []).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          onCustomerChange(c.id);
+                          close();
+                        }}
+                        className="flex flex-col rounded px-2.5 py-1.5 text-left text-primary hover:bg-layer-2"
+                      >
+                        <span className="truncate font-medium">{c.name || c.email}</span>
+                        {c.name && <span className="truncate text-11 text-tertiary">{c.email}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Popover.Panel>
+            </Popover>
+          )}
         </div>
 
         {customerStats ? (
