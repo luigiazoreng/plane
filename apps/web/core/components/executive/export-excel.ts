@@ -341,24 +341,27 @@ function buildOverviewSheet(payload: IExecutiveExportPayload): Sheet<never> {
       }),
       styled(dim("= Σ (value × effective weight)"), { backgroundColor: COLOR.totalBg }),
     ],
-    ...legend([
-      ["Value (%)", "Raw indicator, normalized to 0-100. Edit one and the whole index below recalculates."],
-      ["Default weight", "The indicator's designed share of the index. The five sum to 100%."],
+    ...legend(
       [
-        "Effective weight",
-        `=IF(B${firstRow}="",0,C${firstRow}/$C$${availableRow}) — an indicator with no data drops to 0 and its share is redistributed across the others, so a missing metric never counts as a zero score.`,
+        ["Value (%)", "Raw indicator, normalized to 0-100. Edit one and the whole index below recalculates."],
+        ["Default weight", "The indicator's designed share of the index. The five sum to 100%."],
+        [
+          "Effective weight",
+          `=IF(B${firstRow}="",0,C${firstRow}/$C$${availableRow}) — an indicator with no data drops to 0 and its share is redistributed across the others, so a missing metric never counts as a zero score.`,
+        ],
+        ["Contribution (%)", `=IF(B${firstRow}="",0,B${firstRow}*D${firstRow}) — value × effective weight.`],
+        ["IT General Index", `=SUM(E${firstRow}:E${lastRow}) — the sum of all contributions.`],
+        [
+          "Backlog Health",
+          "(1 − open tickets ÷ total tickets) × 100. 100% means no open backlog. Computed on the Sector Health sheet.",
+        ],
+        [
+          "Resolution Speed",
+          "Average resolution time mapped linearly: 0h = 100%, 48h or more = 0%. Computed on the Sector Health sheet.",
+        ],
       ],
-      ["Contribution (%)", `=IF(B${firstRow}="",0,B${firstRow}*D${firstRow}) — value × effective weight.`],
-      ["IT General Index", `=SUM(E${firstRow}:E${lastRow}) — the sum of all contributions.`],
-      [
-        "Backlog Health",
-        "(1 − open tickets ÷ total tickets) × 100. 100% means no open backlog. Computed on the Sector Health sheet.",
-      ],
-      [
-        "Resolution Speed",
-        "Average resolution time mapped linearly: 0h = 100%, 48h or more = 0%. Computed on the Sector Health sheet.",
-      ],
-    ], OVERVIEW_COLS),
+      OVERVIEW_COLS
+    ),
   ];
 
   return {
@@ -378,7 +381,11 @@ function buildSectorHealthSheet(payload: IExecutiveExportPayload): Sheet<never> 
   const unified = kpi?.unified;
 
   const head: Row[] = [
-    ...titleBlock("Sector Health", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), SECTOR_COLS),
+    ...titleBlock(
+      "Sector Health",
+      periodLabel(payload.period, payload.customStartDate, payload.customEndDate),
+      SECTOR_COLS
+    ),
     spanned([[section("Helpdesk & Support"), SECTOR_COLS.length]]),
     [th("Metric"), thNum("Value"), th("Definition")],
   ];
@@ -632,30 +639,33 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
   const data: Row[] = [
     ...head,
     ...memberRows,
-    ...legend([
-      ["Σ Vf, Σ Vp", "Raw point totals over this member's delivered work items. They scale with volume — see below."],
+    ...legend(
       [
-        "Projects Efficiency (%)",
-        `=IF(E${firstRow}=0,"",D${firstRow}/E${firstRow}*100) — Σ Vf ÷ Σ Vp. Independent of volume, which is why this, and not the totals, is comparable between people.`,
+        ["Σ Vf, Σ Vp", "Raw point totals over this member's delivered work items. They scale with volume — see below."],
+        [
+          "Projects Efficiency (%)",
+          `=IF(E${firstRow}=0,"",D${firstRow}/E${firstRow}*100) — Σ Vf ÷ Σ Vp. Independent of volume, which is why this, and not the totals, is comparable between people.`,
+        ],
+        [
+          "Helpdesk Efficiency (%)",
+          `=IF(COUNT(J${firstRow}:K${firstRow})=0,"",AVERAGE(J${firstRow}:K${firstRow})) — the average of the member's two SLA percentages. A quality measure: 1 ticket within SLA scores the same as 20 within SLA, and extra late tickets never raise it.`,
+        ],
+        [
+          "Workload",
+          `=G${firstRow}+H${firstRow}+I${firstRow} — delivered + pending work items + Helpdesk tickets. Context only; it is deliberately absent from the Score formula so that carrying more work can never lower a ranking.`,
+        ],
+        [
+          "Profile",
+          "Hybrid = KPI work AND at least 3 resolved tickets. Helpdesk = 3+ tickets and no KPI work. Development = KPI work with fewer than 3 tickets. The 3-ticket floor stops incidental support work from reclassifying an engineer.",
+        ],
+        ["Score", "Depends on the profile — the exact formula used for each row is spelled out in the last column."],
+        [
+          "Why Σ Vf isn't the ranking",
+          "Σ Vf is a raw total: delivering 100 items beats delivering 15 on that number even if the second person was never late. The per-item delay penalty is real, but it is applied per item and then summed, so volume still dominates the total. Efficiency removes the volume effect.",
+        ],
       ],
-      [
-        "Helpdesk Efficiency (%)",
-        `=IF(COUNT(J${firstRow}:K${firstRow})=0,"",AVERAGE(J${firstRow}:K${firstRow})) — the average of the member's two SLA percentages. A quality measure: 1 ticket within SLA scores the same as 20 within SLA, and extra late tickets never raise it.`,
-      ],
-      [
-        "Workload",
-        `=G${firstRow}+H${firstRow}+I${firstRow} — delivered + pending work items + Helpdesk tickets. Context only; it is deliberately absent from the Score formula so that carrying more work can never lower a ranking.`,
-      ],
-      [
-        "Profile",
-        "Hybrid = KPI work AND at least 3 resolved tickets. Helpdesk = 3+ tickets and no KPI work. Development = KPI work with fewer than 3 tickets. The 3-ticket floor stops incidental support work from reclassifying an engineer.",
-      ],
-      ["Score", "Depends on the profile — the exact formula used for each row is spelled out in the last column."],
-      [
-        "Why Σ Vf isn't the ranking",
-        "Σ Vf is a raw total: delivering 100 items beats delivering 15 on that number even if the second person was never late. The per-item delay penalty is real, but it is applied per item and then summed, so volume still dominates the total. Efficiency removes the volume effect.",
-      ],
-    ], TEAM_COLS),
+      TEAM_COLS
+    ),
   ];
 
   return {
@@ -676,16 +686,22 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const projects = payload.kpi?.projects ?? [];
 
   const head: Row[] = [
-    ...titleBlock("KPI by Project", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), PROJECT_COLS),
-    ([
-      th("Project"),
-      th("Identifier"),
-      thNum("Σ Vp"),
-      thNum("Σ Vf"),
-      thNum("Efficiency (%)"),
-      thNum("Scored items"),
-      thNum("Contribution (%)"),
-    ] as Row).concat(countHeaders(), [th("Penalty mode"), thNum("k"), th("Config")]),
+    ...titleBlock(
+      "KPI by Project",
+      periodLabel(payload.period, payload.customStartDate, payload.customEndDate),
+      PROJECT_COLS
+    ),
+    (
+      [
+        th("Project"),
+        th("Identifier"),
+        thNum("Σ Vp"),
+        thNum("Σ Vf"),
+        thNum("Efficiency (%)"),
+        thNum("Scored items"),
+        thNum("Contribution (%)"),
+      ] as Row
+    ).concat(countHeaders(), [th("Penalty mode"), thNum("k"), th("Config")]),
   ];
 
   const firstRow = head.length + 1;
@@ -696,15 +712,17 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
     const r = firstRow + idx;
     // C=ΣVp D=ΣVf E=efficiency F=scored G=contribution
     return band(
-      ([
-        key(project.name),
-        dim(project.identifier),
-        pts(project.sum_vp),
-        pts(project.sum_vf),
-        fxPct(`IF(C${r}=0,"",D${r}/C${r}*100)`),
-        num(project.scored_items),
-        fxPct(`IF(OR(E${r}="",$F$${totalRow}=0),"",E${r}*F${r}/$F$${totalRow})`),
-      ] as Row).concat(countCells(project.counts), [
+      (
+        [
+          key(project.name),
+          dim(project.identifier),
+          pts(project.sum_vp),
+          pts(project.sum_vf),
+          fxPct(`IF(C${r}=0,"",D${r}/C${r}*100)`),
+          num(project.scored_items),
+          fxPct(`IF(OR(E${r}="",$F$${totalRow}=0),"",E${r}*F${r}/$F$${totalRow})`),
+        ] as Row
+      ).concat(countCells(project.counts), [
         dim(project.penalty_mode),
         num(project.k),
         dim(project.inherited_config ? "Inherited from workspace" : "Project-specific"),
@@ -719,15 +737,17 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
     projects.length === 0
       ? []
       : [
-          ([
-            { value: "TOTAL / UNIFIED KPI", type: String, fontWeight: "bold" } as Cell,
-            null,
-            fx(`SUM(C${firstRow}:C${lastRow})`, POINTS_FORMAT),
-            fx(`SUM(D${firstRow}:D${lastRow})`, POINTS_FORMAT),
-            fxPct(`SUM(G${firstRow}:G${lastRow})`),
-            fx(`SUM(F${firstRow}:F${lastRow})`),
-            fxPct(`SUM(G${firstRow}:G${lastRow})`),
-          ] as Row)
+          (
+            [
+              { value: "TOTAL / UNIFIED KPI", type: String, fontWeight: "bold" } as Cell,
+              null,
+              fx(`SUM(C${firstRow}:C${lastRow})`, POINTS_FORMAT),
+              fx(`SUM(D${firstRow}:D${lastRow})`, POINTS_FORMAT),
+              fxPct(`SUM(G${firstRow}:G${lastRow})`),
+              fx(`SUM(F${firstRow}:F${lastRow})`),
+              fxPct(`SUM(G${firstRow}:G${lastRow})`),
+            ] as Row
+          )
             .concat(
               COUNT_KEYS.map((_, i) => fx(`SUM(${colLetter(7 + i)}${firstRow}:${colLetter(7 + i)}${lastRow})`)),
               [null, null, null]
@@ -739,22 +759,25 @@ function buildKpiProjectSheet(payload: IExecutiveExportPayload): Sheet<never> {
     ...head,
     ...projectRows,
     ...totalRows,
-    ...legend([
+    ...legend(
       [
-        "Efficiency (%)",
-        `=IF(C${firstRow}=0,"",D${firstRow}/C${firstRow}*100) — the project's own Σ Vf ÷ Σ Vp.`,
+        ["Efficiency (%)", `=IF(C${firstRow}=0,"",D${firstRow}/C${firstRow}*100) — the project's own Σ Vf ÷ Σ Vp.`],
+        [
+          "Contribution (%)",
+          `=E${firstRow}*F${firstRow}/$F$${totalRow} — the project's efficiency weighted by its share of all scored items. The contributions add up to the Unified Workspace KPI in the TOTAL row, which is what 'Project Efficiency' on the Overview sheet uses.`,
+        ],
+        [
+          "Σ Vp / Σ Vf in the TOTAL row",
+          "Summed for reference only. Projects can use different point scales, so this pooled ratio is NOT the workspace KPI — the item-weighted contribution total is.",
+        ],
+        [
+          "Penalty mode / k",
+          "The project's KPI configuration: how fast a late item loses value, and the smoothing factor.",
+        ],
+        ["Config", "Whether the project uses its own KPI configuration or inherits the workspace default."],
       ],
-      [
-        "Contribution (%)",
-        `=E${firstRow}*F${firstRow}/$F$${totalRow} — the project's efficiency weighted by its share of all scored items. The contributions add up to the Unified Workspace KPI in the TOTAL row, which is what 'Project Efficiency' on the Overview sheet uses.`,
-      ],
-      [
-        "Σ Vp / Σ Vf in the TOTAL row",
-        "Summed for reference only. Projects can use different point scales, so this pooled ratio is NOT the workspace KPI — the item-weighted contribution total is.",
-      ],
-      ["Penalty mode / k", "The project's KPI configuration: how fast a late item loses value, and the smoothing factor."],
-      ["Config", "Whether the project uses its own KPI configuration or inherits the workspace default."],
-    ], PROJECT_COLS),
+      PROJECT_COLS
+    ),
   ];
 
   return {
@@ -791,12 +814,14 @@ function buildKpiMemberSheet(payload: IExecutiveExportPayload): Sheet<never> {
     const r = firstRow + idx;
     // B=ΣVp C=ΣVf D=eff E=on_time F=early G=late H=pending I=delivered J=total
     return band(
-      ([
-        key(member.display_name),
-        pts(member.sum_vp),
-        pts(member.sum_vf),
-        fxPct(`IF(B${r}=0,"",C${r}/B${r}*100)`),
-      ] as Row).concat(countCells(member.counts), [fx(`E${r}+F${r}+G${r}`), fx(`I${r}+H${r}`)]),
+      (
+        [
+          key(member.display_name),
+          pts(member.sum_vp),
+          pts(member.sum_vf),
+          fxPct(`IF(B${r}=0,"",C${r}/B${r}*100)`),
+        ] as Row
+      ).concat(countCells(member.counts), [fx(`E${r}+F${r}+G${r}`), fx(`I${r}+H${r}`)]),
       idx
     );
   });
@@ -806,21 +831,24 @@ function buildKpiMemberSheet(payload: IExecutiveExportPayload): Sheet<never> {
     ...memberRows,
     blank,
     [key("Unassigned scored items"), num(payload.kpi?.unassigned_count)],
-    ...legend([
+    ...legend(
       [
-        "Efficiency (%)",
-        `=IF(B${firstRow}=0,"",C${firstRow}/B${firstRow}*100) — Σ Vf ÷ Σ Vp. The one figure comparable between members.`,
+        [
+          "Efficiency (%)",
+          `=IF(B${firstRow}=0,"",C${firstRow}/B${firstRow}*100) — Σ Vf ÷ Σ Vp. The one figure comparable between members.`,
+        ],
+        ["Delivered items", `=E${firstRow}+F${firstRow}+G${firstRow} — on time + early + late.`],
+        [
+          "Total items",
+          `=I${firstRow}+H${firstRow} — delivered plus pending. Pending items are shown for visibility but contribute no Vp and no Vf, so an open backlog cannot lower Efficiency.`,
+        ],
+        [
+          "Unassigned scored items",
+          "Delivered work items with no assignee. They count toward the project and workspace figures but appear against no member.",
+        ],
       ],
-      ["Delivered items", `=E${firstRow}+F${firstRow}+G${firstRow} — on time + early + late.`],
-      [
-        "Total items",
-        `=I${firstRow}+H${firstRow} — delivered plus pending. Pending items are shown for visibility but contribute no Vp and no Vf, so an open backlog cannot lower Efficiency.`,
-      ],
-      [
-        "Unassigned scored items",
-        "Delivered work items with no assignee. They count toward the project and workspace figures but appear against no member.",
-      ],
-    ], MEMBER_COLS),
+      MEMBER_COLS
+    ),
   ];
 
   return {
@@ -849,7 +877,11 @@ function buildHelpdeskSummarySheet(payload: IExecutiveExportPayload): Sheet<neve
   ];
 
   const head: Row[] = [
-    ...titleBlock("Helpdesk Analytics — Summary", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), HD_SUMMARY_COLS),
+    ...titleBlock(
+      "Helpdesk Analytics — Summary",
+      periodLabel(payload.period, payload.customStartDate, payload.customEndDate),
+      HD_SUMMARY_COLS
+    ),
     spanned([[section("Key metrics vs. the previous period of the same length"), HD_SUMMARY_COLS.length]]),
     [th("Metric"), thNum("Current"), thNum("Previous"), thNum("Change (%)")],
   ];
@@ -877,9 +909,17 @@ function buildHelpdeskSummarySheet(payload: IExecutiveExportPayload): Sheet<neve
     ...[
       [key("First response (%)"), pct(hd?.sla.first_response_pct), dim("Share of tickets meeting the response SLA")],
       [key("Resolution (%)"), pct(hd?.sla.resolution_pct), dim("Share of tickets meeting the resolution SLA")],
-      [key("First response target (h)"), num(hd?.sla.sla_first_response_hours), dim("The threshold being measured against")],
+      [
+        key("First response target (h)"),
+        num(hd?.sla.sla_first_response_hours),
+        dim("The threshold being measured against"),
+      ],
       [key("Resolution target (h)"), num(hd?.sla.sla_resolution_hours), dim("The threshold being measured against")],
-      [key("Scope"), dim(hd?.sla.scope), dim("portal / workspace_default / ambiguous — which configuration was applied")],
+      [
+        key("Scope"),
+        dim(hd?.sla.scope),
+        dim("portal / workspace_default / ambiguous — which configuration was applied"),
+      ],
       [key("Historical cutoff"), dim(hd?.sla.historical_cutoff), dim(hd?.sla.historical_note)],
     ].map((row, idx) => band(row, idx)),
     blank,
@@ -890,24 +930,27 @@ function buildHelpdeskSummarySheet(payload: IExecutiveExportPayload): Sheet<neve
     spanned([[section("Requests by source"), HD_SUMMARY_COLS.length]]),
     [th("Source"), thNum("Count")],
     ...(hd?.charts.by_source ?? []).map((point, idx): Row => band([key(point.source), num(point.count)], idx)),
-    ...legend([
+    ...legend(
       [
-        "Change (%)",
-        `=(B${firstMetricRow}-C${firstMetricRow})/C${firstMetricRow}*100 — current vs. the immediately preceding window of the same length. Blank when there is no previous value to compare against.`,
+        [
+          "Change (%)",
+          `=(B${firstMetricRow}-C${firstMetricRow})/C${firstMetricRow}*100 — current vs. the immediately preceding window of the same length. Blank when there is no previous value to compare against.`,
+        ],
+        [
+          "SLA percentages",
+          "Share of tickets whose first response / resolution landed inside the configured threshold, measured from ticket creation.",
+        ],
+        [
+          "Scope",
+          "'portal' means a portal-specific SLA was used; 'workspace_default' the workspace fallback; 'ambiguous' means tickets spanned portals with differing SLAs.",
+        ],
+        [
+          "Historical cutoff",
+          "Tickets created before this date predate SLA tracking and are excluded from the percentages.",
+        ],
       ],
-      [
-        "SLA percentages",
-        "Share of tickets whose first response / resolution landed inside the configured threshold, measured from ticket creation.",
-      ],
-      [
-        "Scope",
-        "'portal' means a portal-specific SLA was used; 'workspace_default' the workspace fallback; 'ambiguous' means tickets spanned portals with differing SLAs.",
-      ],
-      [
-        "Historical cutoff",
-        "Tickets created before this date predate SLA tracking and are excluded from the percentages.",
-      ],
-    ], HD_SUMMARY_COLS),
+      HD_SUMMARY_COLS
+    ),
   ];
 
   return {
@@ -926,7 +969,11 @@ function buildHelpdeskAgentsSheet(payload: IExecutiveExportPayload): Sheet<never
   const agents = payload.helpdesk?.charts.top_agents ?? [];
 
   const head: Row[] = [
-    ...titleBlock("Helpdesk — Agent Performance", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), HD_AGENT_COLS),
+    ...titleBlock(
+      "Helpdesk — Agent Performance",
+      periodLabel(payload.period, payload.customStartDate, payload.customEndDate),
+      HD_AGENT_COLS
+    ),
     [
       th("Agent"),
       thNum("Tickets"),
@@ -953,20 +1000,23 @@ function buildHelpdeskAgentsSheet(payload: IExecutiveExportPayload): Sheet<never
         idx
       );
     }),
-    ...legend([
+    ...legend(
       [
-        "Helpdesk Efficiency (%)",
-        `=IF(COUNT(C${firstRow}:D${firstRow})=0,"",AVERAGE(C${firstRow}:D${firstRow})) — the average of the two SLA percentages, and nothing else.`,
+        [
+          "Helpdesk Efficiency (%)",
+          `=IF(COUNT(C${firstRow}:D${firstRow})=0,"",AVERAGE(C${firstRow}:D${firstRow})) — the average of the two SLA percentages, and nothing else.`,
+        ],
+        [
+          "Tickets",
+          "Volume, shown as context only. It never enters the efficiency formula: resolving 1 ticket within SLA scores the same as resolving 20 within SLA, and resolving many late tickets does not score higher for being many.",
+        ],
+        [
+          "Where volume does matter",
+          "Only in the Hybrid blend on the Team Performance sheet, where ticket count decides how much of a person's score comes from Helpdesk versus Projects — not how good that score is.",
+        ],
       ],
-      [
-        "Tickets",
-        "Volume, shown as context only. It never enters the efficiency formula: resolving 1 ticket within SLA scores the same as resolving 20 within SLA, and resolving many late tickets does not score higher for being many.",
-      ],
-      [
-        "Where volume does matter",
-        "Only in the Hybrid blend on the Team Performance sheet, where ticket count decides how much of a person's score comes from Helpdesk versus Projects — not how good that score is.",
-      ],
-    ], HD_AGENT_COLS),
+      HD_AGENT_COLS
+    ),
   ];
 
   return {
@@ -997,18 +1047,23 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
   }
 
   const head: Row[] = [
-    ...titleBlock("Helpdesk — Trends", periodLabel(payload.period, payload.customStartDate, payload.customEndDate), TRENDS_COLS),
+    ...titleBlock(
+      "Helpdesk — Trends",
+      periodLabel(payload.period, payload.customStartDate, payload.customEndDate),
+      TRENDS_COLS
+    ),
     [th("Date"), thNum("Requests created"), thNum("Avg resolution (h)")],
   ];
 
   const firstRow = head.length + 1;
-  const entries = [...byDate.entries()].toSorted(([a], [b]) => a.localeCompare(b));
+  const entries = Array.from(byDate.entries()).toSorted(([a], [b]) => a.localeCompare(b));
   const lastRow = firstRow + Math.max(entries.length - 1, 0);
 
   const data: Row[] = [
     ...head,
-    ...entries.map(([date, point], idx): Row =>
-      band([key(date), num(point.count), num(point.avgHours, POINTS_FORMAT)], idx)
+    ...entries.map(
+      ([date, point]: [string, { count: number | null; avgHours: number | null }], idx: number): Row =>
+        band([key(date), num(point.count), num(point.avgHours, POINTS_FORMAT)], idx)
     ),
     // Skipped when there is no data, so the totals never reference themselves.
     ...(entries.length === 0
@@ -1023,17 +1078,20 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
             }),
           ],
         ]),
-    ...legend([
-      ["Requests created", "Tickets opened on that date. The TOTAL row sums the column."],
+    ...legend(
       [
-        "Avg resolution (h)",
-        "Mean hours to resolve, for tickets resolved on that date. Blank days had no resolutions, and are excluded from the average rather than counted as zero.",
+        ["Requests created", "Tickets opened on that date. The TOTAL row sums the column."],
+        [
+          "Avg resolution (h)",
+          "Mean hours to resolve, for tickets resolved on that date. Blank days had no resolutions, and are excluded from the average rather than counted as zero.",
+        ],
+        [
+          "Using this sheet",
+          "Select the two columns and insert a line chart to reproduce the two trend charts on the dashboard.",
+        ],
       ],
-      [
-        "Using this sheet",
-        "Select the two columns and insert a line chart to reproduce the two trend charts on the dashboard.",
-      ],
-    ], TRENDS_COLS),
+      TRENDS_COLS
+    ),
   ];
 
   return {
