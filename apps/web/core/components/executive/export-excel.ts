@@ -1056,14 +1056,17 @@ function buildHelpdeskTrendsSheet(payload: IExecutiveExportPayload): Sheet<never
   ];
 
   const firstRow = head.length + 1;
-  const entries = Array.from(byDate.entries()).toSorted(([a], [b]) => a.localeCompare(b));
+  const sortedDates = Array.from(byDate.keys()).toSorted();
+  const entries: [string, { count: number | null; avgHours: number | null }][] = sortedDates.map((d) => [
+    d,
+    byDate.get(d)!,
+  ]);
   const lastRow = firstRow + Math.max(entries.length - 1, 0);
 
   const data: Row[] = [
     ...head,
     ...entries.map(
-      ([date, point]: [string, { count: number | null; avgHours: number | null }], idx: number): Row =>
-        band([key(date), num(point.count), num(point.avgHours, POINTS_FORMAT)], idx)
+      ([date, point], idx): Row => band([key(date), num(point.count), num(point.avgHours, POINTS_FORMAT)], idx)
     ),
     // Skipped when there is no data, so the totals never reference themselves.
     ...(entries.length === 0
