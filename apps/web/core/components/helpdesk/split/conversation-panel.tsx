@@ -51,6 +51,7 @@ type TConversationPanelProps = {
   isSubmitting: boolean;
   attachments: ReturnType<typeof useAttachmentUpload>;
   onBackToQueue: () => void;
+  workspaceSlug?: string;
 };
 
 export function ConversationPanel({
@@ -77,6 +78,7 @@ export function ConversationPanel({
   isSubmitting,
   attachments,
   onBackToQueue,
+  workspaceSlug,
 }: TConversationPanelProps) {
   const [tab, setTab] = useState<TConversationTab>("conversation");
   const isBookmarked = isRequestBookmarked(request);
@@ -416,6 +418,7 @@ export function ConversationPanel({
         isSubmitting={isSubmitting}
         attachments={attachments}
         macros={macros}
+        workspaceSlug={workspaceSlug}
       />
     </div>
   );

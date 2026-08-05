@@ -4,14 +4,19 @@
  * See the LICENSE file for details.
  */
 
-import { useState } from "react";
-import { cn } from "@plane/utils";
-import type { IHelpdeskMacro } from "@plane/types";
+import { useMemo, useRef, useState } from "react";
+import { observer } from "mobx-react";
 import { AtSign, ChevronDown, Send, Smile, Zap } from "lucide-react";
 import { Popover } from "@headlessui/react";
+import { EmojiReactionPicker } from "@plane/propel/emoji-reaction";
+import { stringToEmoji } from "@plane/propel/emoji-icon-picker";
+import { Avatar } from "@plane/ui";
+import { cn, getFileURL } from "@plane/utils";
+import type { IHelpdeskMacro, IUserLite } from "@plane/types";
 import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
 import { PendingAttachmentChips } from "@/components/helpdesk/attachments/attachment-chips";
 import type { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
+import { useMember } from "@/hooks/store/use-member";
 
 export type TComposerMode = "reply" | "note";
 
@@ -25,9 +30,10 @@ type TComposerProps = {
   attachments: ReturnType<typeof useAttachmentUpload>;
   macros?: IHelpdeskMacro[];
   onSelectMacro?: (macro: IHelpdeskMacro) => void;
+  workspaceSlug?: string;
 };
 
-export function Composer({
+export const Composer = observer(function Composer({
   mode,
   onModeChange,
   value,
@@ -37,10 +43,144 @@ export function Composer({
   attachments,
   macros,
   onSelectMacro,
+  workspaceSlug,
 }: TComposerProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [isMentionPickerOpen, setIsMentionPickerOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const { getUserDetails, workspace } = useMember();
+
   const isNote = mode === "note";
   const canSend = value.trim().length > 0 && !isSubmitting;
+
+  const memberIds = useMemo(() => {
+    if (!workspaceSlug) return [];
+    return workspace.getWorkspaceMemberIds(workspaceSlug) ?? [];
+  }, [workspaceSlug, workspace]);
+
+  const members = useMemo(() => {
+    return memberIds.map((id) => getUserDetails(id)).filter((m): m is IUserLite => Boolean(m));
+  }, [memberIds, getUserDetails]);
+
+  const filteredMembers = useMemo(() => {
+    if (!mentionQuery.trim()) return members;
+    const q = mentionQuery.toLowerCase();
+    return members.filter(
+      (m) =>
+        (m.display_name && m.display_name.toLowerCase().includes(q)) ||
+        (m.first_name && m.first_name.toLowerCase().includes(q)) ||
+        (m.last_name && m.last_name.toLowerCase().includes(q)) ||
+        (m.email && m.email.toLowerCase().includes(q))
+    );
+  }, [members, mentionQuery]);
+
+  const handleEmojiSelect = (emojiCode: string) => {
+    const emoji = stringToEmoji(emojiCode) || emojiCode;
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      onChange(value + emoji);
+      setIsEmojiPickerOpen(false);
+      return;
+    }
+    const start = textarea.selectionStart ?? value.length;
+    const end = textarea.selectionEnd ?? value.length;
+    const newValue = value.substring(0, start) + emoji + value.substring(end);
+    onChange(newValue);
+    setIsEmojiPickerOpen(false);
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + emoji.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  const handleInsertMention = (member: IUserLite) => {
+    const name =
+      member.display_name || `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.email || "user";
+    const mentionText = `@${name} `;
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      onChange(value + mentionText);
+      setIsMentionPickerOpen(false);
+      setMentionQuery("");
+      return;
+    }
+
+    const start = textarea.selectionStart ?? value.length;
+    const end = textarea.selectionEnd ?? value.length;
+    const textBeforeCursor = value.substring(0, start);
+    const lastAtPos = textBeforeCursor.lastIndexOf("@");
+
+    let replaceStart = start;
+    if (lastAtPos !== -1 && lastAtPos >= start - mentionQuery.length - 1) {
+      replaceStart = lastAtPos;
+    }
+
+    const newValue = value.substring(0, replaceStart) + mentionText + value.substring(end);
+    onChange(newValue);
+    setIsMentionPickerOpen(false);
+    setMentionQuery("");
+
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = replaceStart + mentionText.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  const handleMentionButtonClick = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setIsMentionPickerOpen((prev) => !prev);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? value.length;
+    const textBeforeCursor = value.substring(0, start);
+    if (!textBeforeCursor.endsWith("@")) {
+      const newValue = value.substring(0, start) + "@" + value.substring(start);
+      onChange(newValue);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + 1, start + 1);
+      }, 0);
+    } else {
+      setTimeout(() => {
+        textarea.focus();
+      }, 0);
+    }
+    setIsMentionPickerOpen((prev) => !prev);
+    setMentionQuery("");
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    onChange(newValue);
+
+    const start = e.target.selectionStart ?? newValue.length;
+    const textBeforeCursor = newValue.substring(0, start);
+    const lastAtPos = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtPos !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtPos + 1);
+      if (
+        !textAfterAt.includes("\n") &&
+        textAfterAt.length <= 20 &&
+        (lastAtPos === 0 || /\s/.test(newValue[lastAtPos - 1]))
+      ) {
+        setMentionQuery(textAfterAt);
+        setIsMentionPickerOpen(true);
+        return;
+      }
+    }
+    if (isMentionPickerOpen) {
+      setIsMentionPickerOpen(false);
+      setMentionQuery("");
+    }
+  };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files: File[] = [];
@@ -129,8 +269,9 @@ export function Composer({
           )}
         >
           <textarea
+            ref={textareaRef}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={handleTextareaChange}
             onPaste={handlePaste}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -148,25 +289,65 @@ export function Composer({
             <div className="flex items-center gap-1.5">
               <AttachmentPicker onSelect={attachments.upload} disabled={isSubmitting} />
 
-              {/* Emoji, mentions and macros are drawn from the design but have no
-                  backing implementation yet — kept visible and disabled rather
-                  than silently dropped, so the toolbar matches what ships next. */}
-              <button
-                type="button"
-                disabled
-                title="Emojis — em breve"
-                className="grid size-6 place-items-center rounded text-tertiary opacity-40"
-              >
-                <Smile className="size-4" />
-              </button>
-              <button
-                type="button"
-                disabled
-                title="Menções — em breve"
-                className="grid size-6 place-items-center rounded text-tertiary opacity-40"
-              >
-                <AtSign className="size-4" />
-              </button>
+              <EmojiReactionPicker
+                isOpen={isEmojiPickerOpen}
+                handleToggle={(val) => setIsEmojiPickerOpen(val)}
+                onChange={handleEmojiSelect}
+                disabled={isSubmitting}
+                label={
+                  <span
+                    title="Emojis"
+                    className="grid size-6 cursor-pointer place-items-center rounded text-tertiary transition-colors hover:bg-layer-2 hover:text-primary"
+                  >
+                    <Smile className="size-4" />
+                  </span>
+                }
+              />
+
+              <Popover className="relative">
+                <Popover.Button
+                  type="button"
+                  onClick={handleMentionButtonClick}
+                  title="Menções"
+                  disabled={isSubmitting}
+                  className="grid size-6 cursor-pointer place-items-center rounded text-tertiary transition-colors hover:bg-layer-2 hover:text-primary"
+                >
+                  <AtSign className="size-4" />
+                </Popover.Button>
+                {isMentionPickerOpen && (
+                  <Popover.Panel
+                    static
+                    className="shadow-md absolute bottom-full left-0 z-20 mb-2.5 w-64 rounded-md border border-subtle bg-surface-1 p-1"
+                  >
+                    <div className="tracking-wider px-2 py-1.5 text-[10px] font-semibold text-tertiary uppercase">
+                      Mencionar membro
+                    </div>
+                    {filteredMembers.length === 0 ? (
+                      <div className="px-3 py-2 text-center text-12 text-tertiary">Nenhum membro encontrado</div>
+                    ) : (
+                      <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+                        {filteredMembers.map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => handleInsertMention(member)}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-12 transition-colors hover:bg-layer-2"
+                          >
+                            <Avatar src={getFileURL(member.avatar_url ?? "")} name={member.display_name} size="sm" />
+                            <div className="flex min-w-0 flex-1 flex-col">
+                              <span className="truncate font-medium text-primary">
+                                {member.display_name || `${member.first_name || ""} ${member.last_name || ""}`.trim()}
+                              </span>
+                              {member.email && <span className="truncate text-11 text-tertiary">{member.email}</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </Popover.Panel>
+                )}
+              </Popover>
+
               <span className="mx-0.5 h-4 w-px bg-layer-2" />
 
               <Popover className="relative">
@@ -237,4 +418,4 @@ export function Composer({
       </div>
     </div>
   );
-}
+});

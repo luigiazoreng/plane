@@ -400,6 +400,7 @@ export const HelpdeskSplitView = observer(
                 isSubmitting={isSubmitting}
                 attachments={attachments}
                 onBackToQueue={onClearSelection}
+                workspaceSlug={workspaceSlug}
               />
 
               <DetailPanel
