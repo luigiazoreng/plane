@@ -160,7 +160,7 @@ const HelpdeskPublicFormPage = observer(() => {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2" />
+        <div className="border-accent-subtle h-8 w-8 animate-spin rounded-full border-b-2" />
       </div>
     );
   }
@@ -168,8 +168,8 @@ const HelpdeskPublicFormPage = observer(() => {
   if (!form) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Form not found</h1>
-        <p className="text-text-400 mt-2">The requested form is unavailable or you do not have access to it.</p>
+        <h1 className="text-2xl text-primary font-bold">Form not found</h1>
+        <p className="text-placeholder mt-2">The requested form is unavailable or you do not have access to it.</p>
       </div>
     );
   }
@@ -178,14 +178,14 @@ const HelpdeskPublicFormPage = observer(() => {
     const nextParam = submittedRequestId ? `?next=/helpdesk/p/${pSlug}/${submittedRequestId}` : "";
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <h1 className="text-3xl text-text-100 font-bold">Request submitted successfully</h1>
-        <p className="text-text-400 mt-3">{form.success_message || "Your request has been submitted successfully."}</p>
-        {successEmail ? <p className="text-sm text-text-300 mt-2">We will contact you at {successEmail}.</p> : null}
+        <h1 className="text-3xl text-primary font-bold">Request submitted successfully</h1>
+        <p className="text-placeholder mt-3">{form.success_message || "Your request has been submitted successfully."}</p>
+        {successEmail ? <p className="text-sm text-tertiary mt-2">We will contact you at {successEmail}.</p> : null}
 
         {submittedRequestId && (
           <div className="mt-8 rounded-xl border border-subtle bg-surface-2 p-6">
-            <p className="text-text-200 font-medium">Want to track your ticket?</p>
-            <p className="text-sm text-text-400 mt-1">Create an account or sign in to follow up on this request.</p>
+            <p className="text-secondary font-medium">Want to track your ticket?</p>
+            <p className="text-sm text-placeholder mt-1">Create an account or sign in to follow up on this request.</p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Button variant="primary" onClick={() => navigate(`/helpdesk/p/${pSlug}/register${nextParam}`)}>
                 Create account
@@ -207,8 +207,8 @@ const HelpdeskPublicFormPage = observer(() => {
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-8">
-        <h1 className="text-3xl text-text-100 font-bold">{form.name}</h1>
-        <p className="text-text-400 mt-2">
+        <h1 className="text-3xl text-primary font-bold">{form.name}</h1>
+        <p className="text-placeholder mt-2">
           {form.description || "Please provide as much detail as possible so our team can help you quickly."}
         </p>
       </div>
@@ -217,8 +217,8 @@ const HelpdeskPublicFormPage = observer(() => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {!publicStore.customerToken && (
             <div>
-              <label htmlFor="contact_email" className="text-sm text-text-200 mb-1.5 block font-medium">
-                Contact Email <span className="text-red-500">*</span>
+              <label htmlFor="contact_email" className="text-sm text-secondary mb-1.5 block font-medium">
+                Contact Email <span className="text-danger-primary">*</span>
               </label>
               <Input
                 id="contact_email"

@@ -384,7 +384,7 @@ export const SidebarProjectsListItem = observer(function SidebarProjectsListItem
                       <span className="flex items-center justify-start gap-2">
                         <Star
                           className={cn("h-3.5 w-3.5 ", {
-                            "fill-yellow-500 stroke-yellow-500": project.is_favorite,
+                            "fill-label-yellow-text stroke-label-yellow-text": project.is_favorite,
                           })}
                         />
                         <span>{project.is_favorite ? t("remove_from_favorites") : t("add_to_favorites")}</span>

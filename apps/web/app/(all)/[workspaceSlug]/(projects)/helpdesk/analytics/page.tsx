@@ -56,7 +56,7 @@ const WorkspaceHelpdeskAnalyticsPage = observer(() => {
               >
                 Helpdesk
               </button>
-              <span className="text-tertiary text-xs">/</span>
+              <span className="text-placeholder text-xs">/</span>
               <div className="flex items-center gap-1.5">
                 <BarChart2 className="text-secondary size-4" />
                 <span className="text-sm text-primary font-semibold tracking-tight">Analytics</span>

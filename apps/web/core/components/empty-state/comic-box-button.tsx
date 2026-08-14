@@ -56,9 +56,9 @@ export function ComicBoxButton(props: Props) {
             <div
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
-              className={`bg-blue-300 absolute right-0 z-10 h-2.5 w-2.5 animate-ping rounded-full`}
+              className={`bg-accent-subtle absolute right-0 z-10 h-2.5 w-2.5 animate-ping rounded-full`}
             />
-            <div className={`bg-blue-400/40 absolute right-0 mt-0.5 mr-0.5 h-1.5 w-1.5 rounded-full`} />
+            <div className={`bg-accent-subtle absolute right-0 mt-0.5 mr-0.5 h-1.5 w-1.5 rounded-full`} />
           </span>
         </Button>
       </Popover.Button>

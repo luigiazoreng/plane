@@ -157,7 +157,7 @@ export const EstimateDropdown = observer(function EstimateDropdown(props: Props)
                   <div className="flex min-w-0 items-center gap-2">
                     <EstimatePropertyIcon className="h-3 w-3 flex-shrink-0" />
                     <span className="min-w-0 flex-grow truncate">{formattedValue}</span>
-                    <span className="text-custom-text-400 max-w-20 flex-shrink-0 truncate">{estimate.name}</span>
+                    <span className="text-placeholder max-w-20 flex-shrink-0 truncate">{estimate.name}</span>
                   </div>
                 ),
               };

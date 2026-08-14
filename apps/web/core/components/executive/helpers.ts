@@ -365,18 +365,18 @@ export function buildExecutiveMembers(
 export const PROFILE_CONFIG: Record<TMemberProfile, { label: string; color: string; bg: string }> = {
   helpdesk: {
     label: "Helpdesk",
-    color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-blue-500/10",
+    color: "text-accent-primary",
+    bg: "bg-accent-primary/10",
   },
   development: {
     label: "Development",
-    color: "text-purple-600 dark:text-purple-400",
-    bg: "bg-purple-500/10",
+    color: "text-label-purple-text",
+    bg: "bg-label-purple-bg",
   },
   hybrid: {
     label: "Hybrid",
-    color: "text-teal-600 dark:text-teal-400",
-    bg: "bg-teal-500/10",
+    color: "text-label-emerald-text",
+    bg: "bg-label-emerald-bg",
   },
 };
 
@@ -394,26 +394,26 @@ export function getHealthStatus(value: number | null): THealthStatus {
 export const HEALTH_CONFIG: Record<THealthStatus, { label: string; color: string; bg: string; dot: string }> = {
   healthy: {
     label: "Healthy",
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-500/10",
-    dot: "bg-emerald-500",
+    color: "text-success-primary",
+    bg: "bg-success-primary/10",
+    dot: "bg-success-primary",
   },
   warning: {
     label: "Attention",
-    color: "text-amber-600 dark:text-amber-400",
-    bg: "bg-amber-500/10",
-    dot: "bg-amber-500",
+    color: "text-warning-primary",
+    bg: "bg-warning-primary/10",
+    dot: "bg-warning-primary",
   },
   critical: {
     label: "Critical",
-    color: "text-rose-600 dark:text-rose-400",
-    bg: "bg-rose-500/10",
-    dot: "bg-rose-500",
+    color: "text-danger-primary",
+    bg: "bg-danger-primary/10",
+    dot: "bg-danger-primary",
   },
   unknown: {
     label: "No data",
-    color: "text-custom-text-400",
-    bg: "bg-custom-background-80",
-    dot: "bg-custom-text-400",
+    color: "text-placeholder",
+    bg: "bg-layer-2",
+    dot: "bg-layer-3",
   },
 };

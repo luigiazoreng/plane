@@ -50,14 +50,14 @@ export const EstimateListItem = observer(function EstimateListItem(props: TEstim
         <span className="flex items-center gap-2">
           <span>{currentEstimate.name}</span>
           {isEstimateActive ? (
-            <span className="bg-green-500/10 text-green-500 rounded px-1.5 py-0.5 text-11 font-medium">Active</span>
+            <span className="bg-success-subtle text-success-primary rounded px-1.5 py-0.5 text-11 font-medium">Active</span>
           ) : (
-            <span className="bg-custom-background-80 text-custom-text-400 rounded px-1.5 py-0.5 text-11 font-medium">
+            <span className="bg-layer-2 text-placeholder rounded px-1.5 py-0.5 text-11 font-medium">
               Inactive
             </span>
           )}
           {isActive && (
-            <span className="bg-custom-primary-100/10 text-custom-primary-100 rounded px-1.5 py-0.5 text-11 font-medium">
+            <span className="bg-accent-subtle text-accent-primary rounded px-1.5 py-0.5 text-11 font-medium">
               Default
             </span>
           )}

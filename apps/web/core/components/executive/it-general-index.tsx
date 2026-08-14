@@ -105,7 +105,13 @@ export const ITGeneralIndex: React.FC<Props> = ({ data, period, customStartDate,
           {components
             .filter((c) => c.value != null && c.effectiveWeight > 0)
             .map((c, i) => {
-              const colors = ["bg-indigo-500", "bg-sky-500", "bg-teal-500", "bg-emerald-500", "bg-amber-500"];
+              const colors = [
+                "bg-label-indigo-bg-strong",
+                "bg-accent-primary",
+                "bg-label-emerald-bg-strong",
+                "bg-label-yellow-bg-strong",
+                "bg-label-crimson-bg-strong",
+              ];
               return (
                 <Tooltip key={c.key} tooltipContent={`${c.label}: ${c.contribution.toFixed(1)}%`} position="top">
                   <div

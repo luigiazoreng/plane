@@ -691,7 +691,7 @@ const HelpdeskSettingsPage = observer(() => {
             >
               <ArrowLeft className="size-4" />
             </button>
-            <div className="bg-custom-sidebar-accent/15 text-custom-sidebar-accent flex size-6 shrink-0 items-center justify-center rounded-md">
+            <div className="bg-accent-subtle text-accent-primary flex size-6 shrink-0 items-center justify-center rounded-md">
               <Headset className="size-3.5" />
             </div>
             <span className="text-sm font-semibold text-primary">Helpdesk Settings</span>
@@ -817,7 +817,7 @@ const HelpdeskSettingsPage = observer(() => {
                           type="button"
                           onClick={handleCreateStatus}
                           disabled={!newStatusName.trim()}
-                          className="bg-accent-strong rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                          className="bg-accent-primary rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                         >
                           Add
                         </button>
@@ -876,7 +876,7 @@ const HelpdeskSettingsPage = observer(() => {
                     type="button"
                     onClick={handleCreatePortal}
                     disabled={!newPortalSlug.trim() || isCreatingPortal}
-                    className="bg-accent-strong flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                    className="bg-accent-primary flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                   >
                     <Plus className="size-3.5" />
                     Create
@@ -958,7 +958,7 @@ const HelpdeskSettingsPage = observer(() => {
                                 <button
                                   type="button"
                                   onClick={handleSaveSlug}
-                                  className="bg-accent-strong rounded-md px-2.5 py-1 text-12 font-medium text-white"
+                                  className="bg-accent-primary rounded-md px-2.5 py-1 text-12 font-medium text-white"
                                 >
                                   Save
                                 </button>
@@ -1002,7 +1002,7 @@ const HelpdeskSettingsPage = observer(() => {
                             <button
                               type="button"
                               onClick={() => setDeletingPortalId(portal.id)}
-                              className="hover:text-red-500 text-tertiary transition-colors"
+                              className="hover:text-danger-primary text-tertiary transition-colors"
                               title="Delete portal"
                             >
                               <Trash2 className="size-4" />
@@ -1011,7 +1011,7 @@ const HelpdeskSettingsPage = observer(() => {
                               type="button"
                               onClick={handleSave}
                               disabled={!isDirty}
-                              className="bg-accent-strong ml-2 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                              className="bg-accent-primary ml-2 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                             >
                               Save configuration
                             </button>
@@ -1102,7 +1102,7 @@ const HelpdeskSettingsPage = observer(() => {
                                   />
                                 </div>
                                 {autoAssignmentConfig.member_ids.length === 0 ? (
-                                  <p className="text-amber-500 text-12">
+                                  <p className="text-warning-primary text-12">
                                     Tickets will remain unassigned until you add agents.
                                   </p>
                                 ) : (
@@ -1147,7 +1147,7 @@ const HelpdeskSettingsPage = observer(() => {
                                         className={cn(
                                           "rounded-md border px-2.5 py-1.5 text-12 transition-colors disabled:cursor-not-allowed",
                                           isSelected
-                                            ? "bg-accent-strong/10 border-accent-strong text-primary"
+                                            ? "bg-accent-subtle border-accent-strong text-accent-primary"
                                             : "border-subtle bg-layer-2 text-secondary"
                                         )}
                                       >
@@ -1264,7 +1264,7 @@ const HelpdeskSettingsPage = observer(() => {
                             type="button"
                             onClick={handleSave}
                             disabled={!isDirty}
-                            className="bg-accent-strong flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                            className="bg-accent-primary flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                           >
                             Save configuration
                           </button>
@@ -1370,7 +1370,7 @@ const HelpdeskSettingsPage = observer(() => {
                                       type="button"
                                       onClick={() => handleSyncIMAP(portal.id)}
                                       disabled={isSyncingImap}
-                                      className="text-12 font-medium text-custom-primary-100 bg-custom-primary-10/10 hover:bg-custom-primary-20/20 px-3 py-1 rounded transition-colors disabled:opacity-50"
+                                      className="text-12 font-medium text-accent-primary bg-accent-subtle hover:bg-accent-subtle-hover px-3 py-1 rounded transition-colors disabled:opacity-50"
                                     >
                                       {isSyncingImap ? "Syncing..." : "Sync Now"}
                                     </button>
@@ -1595,7 +1595,7 @@ const HelpdeskSettingsPage = observer(() => {
                                     <td className="px-4 py-3 text-tertiary">
                                       {new Date(log.created_at).toLocaleString()}
                                     </td>
-                                    <td className="px-4 py-3 text-red-500 max-w-[200px] truncate" title={log.email_error ?? ""}>
+                                    <td className="px-4 py-3 text-danger-primary max-w-[200px] truncate" title={log.email_error ?? ""}>
                                       {log.email_error || "-"}
                                     </td>
                                   </tr>
@@ -1672,7 +1672,7 @@ const HelpdeskSettingsPage = observer(() => {
                                     <td className="px-4 py-3 text-tertiary">
                                       {new Date(log.created_at).toLocaleString()}
                                     </td>
-                                    <td className="px-4 py-3 text-red-500 max-w-[200px] truncate" title={log.error_message ?? ""}>
+                                    <td className="px-4 py-3 text-danger-primary max-w-[200px] truncate" title={log.error_message ?? ""}>
                                       {log.error_message || "-"}
                                     </td>
                                   </tr>
@@ -1718,7 +1718,7 @@ const HelpdeskSettingsPage = observer(() => {
                         className={cn(
                           "rounded-md border px-3 py-1.5 text-13 transition-colors",
                           selectedPortal.id === portal.id
-                            ? "bg-accent-strong/10 border-accent-strong text-primary"
+                            ? "bg-accent-subtle border-accent-strong text-accent-primary"
                             : "border-subtle bg-layer-2 text-secondary hover:text-primary"
                         )}
                       >
@@ -1761,7 +1761,7 @@ const HelpdeskSettingsPage = observer(() => {
                       <button
                         type="button"
                         onClick={() => handleCreateForm(selectedPortal.id)}
-                        className="bg-accent-strong rounded-md px-3 py-2 text-13 font-medium text-white"
+                        className="bg-accent-primary rounded-md px-3 py-2 text-13 font-medium text-white"
                       >
                         Create form
                       </button>
@@ -1824,12 +1824,12 @@ const HelpdeskSettingsPage = observer(() => {
                                 />
                               </div>
                               {activationErrors.length > 0 && selectedForm?.id === form.id && (
-                                <div className="border-red-200 bg-red-50 dark:border-red-800/40 dark:bg-red-900/20 rounded-md border p-2">
+                                <div className="border-danger-subtle bg-danger-subtle rounded-md border p-2">
                                   <div className="flex items-start gap-1.5">
-                                    <AlertCircle className="text-red-500 mt-0.5 size-3.5 shrink-0" />
+                                    <AlertCircle className="text-danger-primary mt-0.5 size-3.5 shrink-0" />
                                     <div className="space-y-0.5">
                                       {activationErrors.map((err) => (
-                                        <p key={err} className="text-red-600 dark:text-red-400 text-11">
+                                        <p key={err} className="text-danger-primary text-11">
                                           {err}
                                         </p>
                                       ))}
@@ -1840,7 +1840,7 @@ const HelpdeskSettingsPage = observer(() => {
                               <button
                                 type="button"
                                 onClick={() => setDeletingFormId({ formId: form.id, portalId: selectedPortal.id })}
-                                className="text-red-500 text-12"
+                                className="text-danger-primary text-12"
                               >
                                 Delete form
                               </button>
@@ -1877,7 +1877,7 @@ const HelpdeskSettingsPage = observer(() => {
                               type="button"
                               onClick={handleSaveAll}
                               disabled={!isDirty || isSaving}
-                              className="bg-accent-strong flex items-center gap-1.5 rounded-md px-3 py-1.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                              className="bg-accent-primary flex items-center gap-1.5 rounded-md px-3 py-1.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                             >
                               {isSaving ? "Saving…" : "Save"}
                             </button>
@@ -2109,7 +2109,7 @@ const HelpdeskSettingsPage = observer(() => {
                                             <button
                                               type="button"
                                               onClick={() => handleRemoveDropdownOption(index)}
-                                              className="text-red-500 rounded-md px-2 text-12"
+                                              className="text-danger-primary rounded-md px-2 text-12"
                                               disabled={draftField.options.length <= 1}
                                             >
                                               Remove
@@ -2180,7 +2180,7 @@ const HelpdeskSettingsPage = observer(() => {
                                               <button
                                                 type="button"
                                                 onClick={() => handleRemoveCascadeOption(idx)}
-                                                className="text-red-400 hover:text-red-500 shrink-0 rounded p-1"
+                                                className="text-danger-primary hover:text-danger-primary shrink-0 rounded p-1"
                                               >
                                                 <X className="size-3" />
                                               </button>
@@ -2278,7 +2278,7 @@ const HelpdeskSettingsPage = observer(() => {
                                         setSelectedFieldId(null);
                                       }
                                     }}
-                                    className="text-red-500 text-12"
+                                    className="text-danger-primary text-12"
                                   >
                                     Remove field
                                   </button>
@@ -2363,7 +2363,7 @@ const HelpdeskSettingsPage = observer(() => {
                           setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to add members" });
                         }
                       }}
-                      className="bg-accent-strong rounded-md px-3 py-2 text-13 font-medium text-white disabled:opacity-50"
+                      className="bg-accent-primary rounded-md px-3 py-2 text-13 font-medium text-white disabled:opacity-50"
                     >
                       Add
                     </button>
@@ -2766,7 +2766,7 @@ function SettingsTabButton({ label, isActive, onClick }: { label: string; isActi
       className={cn(
         "rounded-md border px-3 py-1.5 text-13 font-medium transition-colors",
         isActive
-          ? "bg-accent-strong/10 border-accent-strong text-primary"
+          ? "bg-accent-subtle border-accent-strong text-accent-primary"
           : "border-subtle bg-layer-2 text-secondary hover:bg-layer-1 hover:text-primary"
       )}
     >
@@ -2852,7 +2852,7 @@ function StatusRow({
           <span className="flex-1 text-13 font-medium text-primary">{status.name}</span>
 
           {status.is_default && (
-            <span className="bg-accent-strong/10 text-accent-strong rounded-full px-2 py-0.5 text-11 font-medium">
+            <span className="bg-accent-subtle text-accent-primary rounded-full px-2 py-0.5 text-11 font-medium">
               Default
             </span>
           )}
@@ -2881,7 +2881,7 @@ function StatusRow({
               type="button"
               onClick={onDelete}
               title="Delete"
-              className="hover:text-red-500 rounded p-1 text-tertiary hover:bg-layer-transparent-hover"
+              className="hover:text-danger-primary rounded p-1 text-tertiary hover:bg-layer-transparent-hover"
             >
               <Trash2 className="size-3.5" />
             </button>
@@ -2915,7 +2915,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (color: str
               }}
               className={cn(
                 "h-5 w-5 rounded-md border-2 transition-transform hover:scale-110",
-                c === value ? "border-primary" : "border-transparent"
+                c === value ? "border-accent-subtle" : "border-transparent"
               )}
               style={{ backgroundColor: c }}
             />
@@ -2996,7 +2996,7 @@ function HelpdeskMemberRow({
       {d.avatar_url ? (
         <img src={d.avatar_url} alt={displayName} className="size-7 rounded-full object-cover" />
       ) : (
-        <div className="bg-accent-strong/20 text-accent-strong flex size-7 items-center justify-center rounded-full text-11 font-medium">
+        <div className="bg-accent-primary/20 text-accent-primary flex size-7 items-center justify-center rounded-full text-11 font-medium">
           {displayName.charAt(0).toUpperCase()}
         </div>
       )}
@@ -3012,7 +3012,7 @@ function HelpdeskMemberRow({
         <option value={15}>Member</option>
         <option value={5}>Guest</option>
       </select>
-      <button type="button" onClick={onRemove} className="hover:text-red-500 text-tertiary transition-colors">
+      <button type="button" onClick={onRemove} className="hover:text-danger-primary text-tertiary transition-colors">
         <Trash2 className="size-4" />
       </button>
     </div>

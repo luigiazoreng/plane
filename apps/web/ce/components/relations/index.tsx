@@ -36,7 +36,7 @@ export const ISSUE_RELATION_OPTIONS: Record<TIssueRelationTypes, TRelationObject
   blocking: {
     key: "blocking",
     i18n_label: "issue.relation.blocking",
-    className: "bg-yellow-500/20 text-yellow-700",
+    className: "bg-warning-subtle text-warning-primary",
     icon: (size) => <XCircle size={size} className="text-secondary" />,
     placeholder: "None",
   },

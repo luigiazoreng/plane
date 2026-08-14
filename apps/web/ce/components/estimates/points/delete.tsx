@@ -63,7 +63,7 @@ export function EstimatePointDelete(props: TEstimatePointDelete) {
       </button>
       <button
         type="button"
-        className="bg-red-500 rounded-xs px-2 py-1 text-white transition-opacity hover:opacity-90 disabled:opacity-70"
+        className="bg-danger-primary rounded-xs px-2 py-1 text-white transition-opacity hover:opacity-90 disabled:opacity-70"
         onClick={handleDelete}
         disabled={isDeleting}
       >

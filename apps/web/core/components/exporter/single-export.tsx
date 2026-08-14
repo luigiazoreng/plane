@@ -45,11 +45,11 @@ export function SingleExport({ service, refreshing }: Props) {
               service.status === "completed"
                 ? "bg-success-subtle text-success-primary"
                 : service.status === "processing"
-                  ? "bg-yellow-500/20 text-yellow-500"
+                  ? "bg-warning-subtle text-warning-primary"
                   : service.status === "failed"
                     ? "bg-danger-subtle text-danger-primary"
                     : service.status === "expired"
-                      ? "bg-orange-500/20 text-orange-500"
+                      ? "bg-warning-subtle text-warning-primary"
                       : ""
             }`}
           >

@@ -16,8 +16,8 @@ export default function WorkspaceKpiLayout() {
       <AppHeader
         header={
           <div className="flex items-center gap-2">
-            <Gauge className="text-custom-text-300 size-4" />
-            <span className="text-sm text-custom-text-100 font-medium">Workspace KPI</span>
+            <Gauge className="text-tertiary size-4" />
+            <span className="text-sm text-primary font-medium">Workspace KPI</span>
           </div>
         }
       />

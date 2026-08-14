@@ -26,7 +26,7 @@ export const PendingAttachmentChips = ({ attachments, onRemove }: PendingProps) 
           className={`text-11 flex items-center gap-1.5 rounded-md border px-2 py-1 ${
             attachment.status === "error"
               ? "border-danger/40 bg-danger/10 text-danger"
-              : "border-subtle bg-surface-2 text-text-200"
+              : "border-subtle bg-surface-2 text-secondary"
           }`}
         >
           {attachment.status === "uploading" ? (
@@ -35,11 +35,11 @@ export const PendingAttachmentChips = ({ attachments, onRemove }: PendingProps) 
             <Paperclip className="size-3" />
           )}
           <span className="max-w-40 truncate">{attachment.name}</span>
-          <span className="text-text-400">{convertBytesToSize(attachment.size)}</span>
+          <span className="text-placeholder">{convertBytesToSize(attachment.size)}</span>
           <button
             type="button"
             onClick={() => onRemove(attachment.tempId)}
-            className="hover:text-text-100"
+            className="hover:text-primary"
             aria-label={`Remover ${attachment.name}`}
           >
             <X className="size-3" />
@@ -66,11 +66,11 @@ export const CommentAttachments = ({ attachments }: SentProps) => {
           href={attachment.asset_url ? getFileURL(attachment.asset_url) : undefined}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-11 text-text-200 hover:text-text-100 flex items-center gap-1.5 hover:underline"
+          className="text-11 text-secondary hover:text-primary flex items-center gap-1.5 hover:underline"
         >
           <Paperclip className="size-3 shrink-0" />
           <span className="max-w-52 truncate">{attachment.name}</span>
-          <span className="text-text-400 shrink-0">{convertBytesToSize(attachment.size)}</span>
+          <span className="text-placeholder shrink-0">{convertBytesToSize(attachment.size)}</span>
         </a>
       ))}
     </div>

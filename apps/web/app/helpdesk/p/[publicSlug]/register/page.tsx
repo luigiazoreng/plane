@@ -51,13 +51,13 @@ const HelpdeskRegisterPage = observer(() => {
   return (
     <div className="shadow-sm mx-auto mt-12 max-w-md rounded-lg border border-subtle bg-surface-2 p-8">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Create an Account</h1>
-        <p className="text-sm text-text-400 mt-2">Sign up to submit and track your support tickets.</p>
+        <h1 className="text-2xl text-primary font-bold">Create an Account</h1>
+        <p className="text-sm text-placeholder mt-2">Sign up to submit and track your support tickets.</p>
       </div>
 
       <form onSubmit={handleRegister} className="space-y-4">
         <div>
-          <label htmlFor="name" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="name" className="text-sm text-secondary mb-1.5 block font-medium">
             Full Name
           </label>
           <Input
@@ -72,7 +72,7 @@ const HelpdeskRegisterPage = observer(() => {
         </div>
 
         <div>
-          <label htmlFor="email" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="email" className="text-sm text-secondary mb-1.5 block font-medium">
             Email Address
           </label>
           <Input
@@ -87,7 +87,7 @@ const HelpdeskRegisterPage = observer(() => {
         </div>
 
         <div>
-          <label htmlFor="password" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="password" className="text-sm text-secondary mb-1.5 block font-medium">
             Password
           </label>
           <Input
@@ -107,7 +107,7 @@ const HelpdeskRegisterPage = observer(() => {
         </Button>
       </form>
 
-      <p className="text-sm text-text-400 mt-6 text-center">
+      <p className="text-sm text-placeholder mt-6 text-center">
         Already have an account?{" "}
         <Link
           to={`/helpdesk/p/${pSlug}/login${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""}`}

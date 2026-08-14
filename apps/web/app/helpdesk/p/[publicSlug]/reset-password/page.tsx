@@ -76,8 +76,8 @@ const HelpdeskResetPasswordPage = observer(() => {
   if (!token) {
     return (
       <div className="shadow-sm mx-auto mt-12 max-w-md rounded-lg border border-subtle bg-surface-2 p-8 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Invalid reset link</h1>
-        <p className="text-sm text-text-400 mt-2">
+        <h1 className="text-2xl text-primary font-bold">Invalid reset link</h1>
+        <p className="text-sm text-placeholder mt-2">
           This password reset link is missing or invalid. Please request a new one.
         </p>
         <Link
@@ -93,8 +93,8 @@ const HelpdeskResetPasswordPage = observer(() => {
   return (
     <div className="shadow-sm mx-auto mt-12 max-w-md rounded-lg border border-subtle bg-surface-2 p-8">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Set a new password</h1>
-        <p className="text-sm text-text-400 mt-2">Choose a new password for your support account.</p>
+        <h1 className="text-2xl text-primary font-bold">Set a new password</h1>
+        <p className="text-sm text-placeholder mt-2">Choose a new password for your support account.</p>
       </div>
 
       {errorMessage && (
@@ -103,7 +103,7 @@ const HelpdeskResetPasswordPage = observer(() => {
           <div className="space-y-1">
             <p className="font-medium">{errorMessage}</p>
             <p className="text-xs">
-              <Link to={`/helpdesk/p/${pSlug}/forgot-password`} className="hover:text-text-100 font-medium underline">
+              <Link to={`/helpdesk/p/${pSlug}/forgot-password`} className="hover:text-primary font-medium underline">
                 Click here to request a new link
               </Link>
             </p>
@@ -113,7 +113,7 @@ const HelpdeskResetPasswordPage = observer(() => {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="password" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="password" className="text-sm text-secondary mb-1.5 block font-medium">
             New Password
           </label>
           <div className="relative flex items-center">
@@ -130,19 +130,19 @@ const HelpdeskResetPasswordPage = observer(() => {
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              className="text-text-400 hover:text-text-200 absolute right-3 transition-colors"
+              className="text-placeholder hover:text-secondary absolute right-3 transition-colors"
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="text-xs text-text-400 mt-1">
+          <p className="text-xs text-placeholder mt-1">
             Must be at least 8 characters. Avoid common words or predictable phrases.
           </p>
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="confirmPassword" className="text-sm text-secondary mb-1.5 block font-medium">
             Confirm Password
           </label>
           <div className="relative flex items-center">
@@ -159,7 +159,7 @@ const HelpdeskResetPasswordPage = observer(() => {
             <button
               type="button"
               onClick={() => setShowConfirmPassword((prev) => !prev)}
-              className="text-text-400 hover:text-text-200 absolute right-3 transition-colors"
+              className="text-placeholder hover:text-secondary absolute right-3 transition-colors"
               aria-label={showConfirmPassword ? "Hide password" : "Show password"}
             >
               {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -172,7 +172,7 @@ const HelpdeskResetPasswordPage = observer(() => {
         </Button>
       </form>
 
-      <p className="text-sm text-text-400 mt-6 text-center">
+      <p className="text-sm text-placeholder mt-6 text-center">
         Remembered your password?{" "}
         <Link to={`/helpdesk/p/${pSlug}/login`} className="font-medium text-primary hover:underline">
           Sign in

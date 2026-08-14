@@ -43,7 +43,7 @@ const HelpdeskPublicDashboard = observer(() => {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
+        <div className="border-accent-subtle h-8 w-8 animate-spin rounded-full border-b-2"></div>
       </div>
     );
   }
@@ -54,11 +54,11 @@ const HelpdeskPublicDashboard = observer(() => {
       <div className="shadow-sm rounded-xl border border-subtle bg-surface-2 p-8">
         <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
           <div>
-            <div className="bg-primary/10 mb-2 flex h-12 w-12 items-center justify-center rounded-lg text-primary">
+            <div className="bg-accent-subtle mb-2 flex h-12 w-12 items-center justify-center rounded-lg text-accent-primary">
               <LifeBuoy className="size-6" />
             </div>
-            <h1 className="text-3xl text-text-100 font-bold">Welcome to {currentPortal?.public_slug || "Support"}</h1>
-            <p className="text-text-400 mt-2 max-w-xl">
+            <h1 className="text-3xl text-primary font-bold">Welcome to {currentPortal?.public_slug || "Support"}</h1>
+            <p className="text-placeholder mt-2 max-w-xl">
               Need help? Submit a request and our team will get back to you as soon as possible.
             </p>
           </div>
@@ -76,25 +76,25 @@ const HelpdeskPublicDashboard = observer(() => {
 
       {/* Requests Table */}
       <section>
-        <h2 className="text-xl text-text-100 mb-4 font-bold">My Requests</h2>
+        <h2 className="text-xl text-primary mb-4 font-bold">My Requests</h2>
 
         {!customerToken ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-subtle bg-surface-2 py-16 text-center">
-            <LogIn className="text-text-400 mb-4 size-10" />
-            <h3 className="text-lg text-text-100 font-medium">Sign in to see your tickets</h3>
-            <p className="text-sm text-text-400 mt-1 mb-4">
+            <LogIn className="text-placeholder mb-4 size-10" />
+            <h3 className="text-lg text-primary font-medium">Sign in to see your tickets</h3>
+            <p className="text-sm text-placeholder mt-1 mb-4">
               Log in or create an account to track requests you have submitted.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => navigate(`/helpdesk/p/${pSlug}/login`)}
-                className="bg-primary hover:bg-primary-hover text-sm rounded-md px-4 py-2 font-medium text-white transition-colors"
+                className="bg-accent-primary hover:bg-accent-primary-hover text-sm rounded-md px-4 py-2 font-medium text-white transition-colors"
               >
                 Sign in
               </button>
               <button
                 onClick={() => navigate(`/helpdesk/p/${pSlug}/register`)}
-                className="text-sm text-text-200 rounded-md border border-subtle px-4 py-2 font-medium transition-colors hover:bg-surface-1"
+                className="text-sm text-secondary rounded-md border border-subtle px-4 py-2 font-medium transition-colors hover:bg-surface-1"
               >
                 Create account
               </button>
@@ -102,14 +102,14 @@ const HelpdeskPublicDashboard = observer(() => {
           </div>
         ) : myRequests.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-subtle bg-surface-2 py-16 text-center">
-            <Inbox className="text-text-400 mb-4 size-10" />
-            <h3 className="text-lg text-text-100 font-medium">No requests yet</h3>
-            <p className="text-sm text-text-400 mt-1">When you submit a request, it will appear here.</p>
+            <Inbox className="text-placeholder mb-4 size-10" />
+            <h3 className="text-lg text-primary font-medium">No requests yet</h3>
+            <p className="text-sm text-placeholder mt-1">When you submit a request, it will appear here.</p>
           </div>
         ) : (
           <div className="shadow-sm overflow-hidden rounded-lg border border-subtle bg-surface-2">
             <table className="text-sm w-full text-left">
-              <thead className="text-xs text-text-400 border-b border-subtle bg-surface-1 uppercase">
+              <thead className="text-xs text-placeholder border-b border-subtle bg-surface-1 uppercase">
                 <tr>
                   <th className="tracking-wider px-6 py-4 font-medium">Request ID</th>
                   <th className="tracking-wider px-6 py-4 font-medium">Title</th>
@@ -124,8 +124,8 @@ const HelpdeskPublicDashboard = observer(() => {
                     className="group cursor-pointer transition-colors hover:bg-surface-1"
                     onClick={() => navigate(`/helpdesk/p/${pSlug}/${req.id}`)}
                   >
-                    <td className="font-mono text-xs text-text-400 px-6 py-4">#{req.id.split("-")[0]}</td>
-                    <td className="text-text-100 px-6 py-4 font-medium transition-colors group-hover:text-primary">
+                    <td className="font-mono text-xs text-placeholder px-6 py-4">#{req.id.split("-")[0]}</td>
+                    <td className="text-primary px-6 py-4 font-medium transition-colors group-hover:text-primary">
                       {req.title}
                     </td>
                     <td className="px-6 py-4">
@@ -143,7 +143,7 @@ const HelpdeskPublicDashboard = observer(() => {
                         {req.status_detail?.name || "Open"}
                       </Badge>
                     </td>
-                    <td className="text-text-400 px-6 py-4">
+                    <td className="text-placeholder px-6 py-4">
                       {new Date(req.created_at).toLocaleDateString(undefined, {
                         month: "short",
                         day: "numeric",

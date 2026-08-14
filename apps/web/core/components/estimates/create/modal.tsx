@@ -183,7 +183,7 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
             )}
             <div className="text-18 font-medium text-primary">{t("project_settings.estimates.new")}</div>
           </div>
-          <div className="text-gray-400 text-11">
+          <div className="text-placeholder text-11">
             {t("project_settings.estimates.create.step", {
               step: renderEstimateStepsCount,
               total: 2,

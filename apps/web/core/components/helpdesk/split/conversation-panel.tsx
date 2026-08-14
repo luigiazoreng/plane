@@ -127,7 +127,7 @@ export function ConversationPanel({
               title={isBookmarked ? "Remover dos favoritos" : "Favoritar ticket"}
               className={cn(
                 "grid size-6 place-items-center rounded transition-colors hover:bg-layer-2",
-                isBookmarked ? "text-amber-400" : "text-tertiary hover:text-primary"
+                isBookmarked ? "text-warning-primary" : "text-tertiary hover:text-primary"
               )}
             >
               <Star className={cn("size-4", isBookmarked && "fill-current")} />
