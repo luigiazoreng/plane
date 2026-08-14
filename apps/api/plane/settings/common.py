@@ -129,6 +129,8 @@ REST_FRAMEWORK = {
         # Portal customers upload attachments unauthenticated on public portals.
         # Without a dedicated bucket this endpoint is free storage for anyone.
         "helpdesk_public_asset": "30/minute",
+        # Rate limit for public helpdesk customer authentication & password reset.
+        "helpdesk_public_auth": "10/minute",
     },
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),

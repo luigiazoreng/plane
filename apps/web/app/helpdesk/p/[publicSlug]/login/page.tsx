@@ -78,7 +78,7 @@ const HelpdeskLoginPage = observer(() => {
               Password
             </label>
             <Link
-              to={`/helpdesk/p/${pSlug}/forgot-password`}
+              to={`/helpdesk/p/${pSlug}/forgot-password${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
               className="text-sm font-medium text-primary hover:underline"
             >
               Forgot password?

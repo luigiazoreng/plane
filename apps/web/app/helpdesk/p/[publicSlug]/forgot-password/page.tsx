@@ -22,11 +22,13 @@ const HelpdeskForgotPasswordPage = observer(() => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
 
     setLoading(true);
     try {
-      await publicStore.forgotPasswordCustomer(pSlug, email);
+      await publicStore.forgotPasswordCustomer(pSlug, cleanEmail);
+      setEmail(cleanEmail);
       setSubmitted(true);
     } catch (_err) {
       setToast({
@@ -47,10 +49,23 @@ const HelpdeskForgotPasswordPage = observer(() => {
       </div>
 
       {submitted ? (
-        <p className="text-sm text-text-200 text-center">
-          If an account exists for <span className="font-medium">{email}</span>, we've sent a password reset link to
-          that address.
-        </p>
+        <div className="space-y-6 text-center">
+          <p className="text-sm text-text-200">
+            If an account exists for <span className="text-text-100 font-medium">{email}</span>, we've sent a password
+            reset link to that address.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-center"
+            onClick={() => {
+              setSubmitted(false);
+              setEmail("");
+            }}
+          >
+            Try a different email
+          </Button>
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

@@ -4,6 +4,7 @@ import datetime
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -15,6 +16,7 @@ from plane.bgtasks.helpdesk_forgot_password_task import helpdesk_forgot_password
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import HelpdeskCustomer, HelpdeskPortal, HelpdeskRequest
 from plane.app.serializers.helpdesk import HelpdeskCustomerSerializer
+from plane.throttles.helpdesk import HelpdeskPublicAuthThrottle
 
 PASSWORD_RESET_PURPOSE = "helpdesk_password_reset"
 
@@ -29,12 +31,13 @@ def _claim_anonymous_requests(customer):
     ).update(customer=customer)
 
 def get_customer_token(customer):
+    now = timezone.now()
     payload = {
         "customer_id": str(customer.id),
         "workspace_id": str(customer.workspace_id),
         "email": customer.email,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7),
-        "iat": datetime.datetime.utcnow(),
+        "exp": now + datetime.timedelta(days=7),
+        "iat": now,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
@@ -42,17 +45,18 @@ def get_customer_token(customer):
 def _password_signature(customer):
     # Ties the reset token to the current password hash so it is
     # invalidated automatically once the password has been changed.
-    return hashlib.sha256(customer.password.encode()).hexdigest()[:16]
+    return hashlib.sha256((customer.password or "").encode()).hexdigest()[:16]
 
 
 def get_password_reset_token(customer):
+    now = timezone.now()
     payload = {
         "purpose": PASSWORD_RESET_PURPOSE,
         "customer_id": str(customer.id),
         "workspace_id": str(customer.workspace_id),
         "pwd_sig": _password_signature(customer),
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1),
-        "iat": datetime.datetime.utcnow(),
+        "exp": now + datetime.timedelta(hours=1),
+        "iat": now,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
@@ -64,9 +68,9 @@ class HelpdeskCustomerRegisterEndpoint(BaseAPIView):
         if not workspace:
             return Response({"error": "Workspace not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        email = request.data.get("email")
+        email = str(request.data.get("email") or "").strip().lower()
         password = request.data.get("password")
-        name = request.data.get("name")
+        name = str(request.data.get("name") or "").strip()
 
         if not email or not password or not name:
             return Response({"error": "Email, password and name are required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -96,7 +100,7 @@ class HelpdeskCustomerLoginEndpoint(BaseAPIView):
         if not workspace:
             return Response({"error": "Workspace not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        email = request.data.get("email")
+        email = str(request.data.get("email") or "").strip().lower()
         password = request.data.get("password")
 
         if not email or not password:
@@ -105,6 +109,9 @@ class HelpdeskCustomerLoginEndpoint(BaseAPIView):
         customer = HelpdeskCustomer.objects.filter(email=email, workspace=workspace).first()
         if not customer or not customer.check_password(password):
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not customer.is_active:
+            return Response({"error": "This account has been deactivated"}, status=status.HTTP_401_UNAUTHORIZED)
 
         _claim_anonymous_requests(customer)
         token = get_customer_token(customer)
@@ -119,6 +126,7 @@ class HelpdeskCustomerLoginEndpoint(BaseAPIView):
 
 class PublicHelpdeskCustomerRegisterEndpoint(BaseAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [HelpdeskPublicAuthThrottle]
 
     def post(self, request, public_slug):
         portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
@@ -126,9 +134,9 @@ class PublicHelpdeskCustomerRegisterEndpoint(BaseAPIView):
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
         workspace = portal.workspace
-        email = request.data.get("email")
+        email = str(request.data.get("email") or "").strip().lower()
         password = request.data.get("password")
-        name = request.data.get("name")
+        name = str(request.data.get("name") or "").strip()
 
         if not email or not password or not name:
             return Response({"error": "Email, password and name are required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -153,6 +161,7 @@ class PublicHelpdeskCustomerRegisterEndpoint(BaseAPIView):
 
 class PublicHelpdeskCustomerLoginEndpoint(BaseAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [HelpdeskPublicAuthThrottle]
 
     def post(self, request, public_slug):
         portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
@@ -160,7 +169,7 @@ class PublicHelpdeskCustomerLoginEndpoint(BaseAPIView):
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
         workspace = portal.workspace
-        email = request.data.get("email")
+        email = str(request.data.get("email") or "").strip().lower()
         password = request.data.get("password")
 
         if not email or not password:
@@ -169,6 +178,9 @@ class PublicHelpdeskCustomerLoginEndpoint(BaseAPIView):
         customer = HelpdeskCustomer.objects.filter(email=email, workspace=workspace).first()
         if not customer or not customer.check_password(password):
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not customer.is_active:
+            return Response({"error": "This account has been deactivated"}, status=status.HTTP_401_UNAUTHORIZED)
 
         _claim_anonymous_requests(customer)
         token = get_customer_token(customer)
@@ -183,13 +195,14 @@ class PublicHelpdeskCustomerLoginEndpoint(BaseAPIView):
 
 class PublicHelpdeskCustomerForgotPasswordEndpoint(BaseAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [HelpdeskPublicAuthThrottle]
 
     def post(self, request, public_slug):
         portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
         if not portal:
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        email = request.data.get("email")
+        email = str(request.data.get("email") or "").strip().lower()
         if not email:
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -200,9 +213,9 @@ class PublicHelpdeskCustomerForgotPasswordEndpoint(BaseAPIView):
 
         generic_message = {"message": "If an account exists for this email, a reset link has been sent."}
 
-        customer = HelpdeskCustomer.objects.filter(email__iexact=email, workspace=portal.workspace).first()
+        customer = HelpdeskCustomer.objects.filter(email=email, workspace=portal.workspace, is_active=True).first()
         if not customer:
-            # Do not reveal whether the account exists.
+            # Do not reveal whether the account exists or is active.
             return Response(generic_message, status=status.HTTP_200_OK)
 
         token = get_password_reset_token(customer)
@@ -213,6 +226,7 @@ class PublicHelpdeskCustomerForgotPasswordEndpoint(BaseAPIView):
 
 class PublicHelpdeskCustomerResetPasswordEndpoint(BaseAPIView):
     permission_classes = [AllowAny]
+    throttle_classes = [HelpdeskPublicAuthThrottle]
 
     def post(self, request, public_slug):
         portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
@@ -238,6 +252,9 @@ class PublicHelpdeskCustomerResetPasswordEndpoint(BaseAPIView):
         if not customer or _password_signature(customer) != payload.get("pwd_sig"):
             return Response({"error": "This reset link has already been used"}, status=status.HTTP_400_BAD_REQUEST)
 
+        if not customer.is_active:
+            return Response({"error": "This account has been deactivated"}, status=status.HTTP_400_BAD_REQUEST)
+
         results = zxcvbn(password)
         if results["score"] < 3:
             return Response(
@@ -248,3 +265,4 @@ class PublicHelpdeskCustomerResetPasswordEndpoint(BaseAPIView):
         customer.set_password(password)
         customer.save()
         return Response({"message": "Password reset successfully"}, status=status.HTTP_200_OK)
+

@@ -37,3 +37,13 @@ class HelpdeskPublicAssetThrottle(AnonRateThrottle):
     """
 
     scope = "helpdesk_public_asset"
+
+
+class HelpdeskPublicAuthThrottle(AnonRateThrottle):
+    """Rate limit for public customer authentication and password reset endpoints.
+
+    Limits abuse, email flooding, and brute-force attempts on public portal auth.
+    """
+
+    scope = "helpdesk_public_auth"
+

@@ -148,8 +148,8 @@ def send_helpdesk_comment_email(comment_id):
 
         # Threading logic
         # We use a base Message-ID derived from the request.id for threading
-        # We don't store a Message-ID for the request itself yet, but we can fake one based on its UUID
-        host = getattr(settings, "WEB_URL", "plane.so").replace("https://", "").replace("http://", "")
+        raw_web_url = getattr(settings, "WEB_URL", None) or "plane.so"
+        host = str(raw_web_url).replace("https://", "").replace("http://", "")
         if ":" in host:
             host = host.split(":")[0]
             
