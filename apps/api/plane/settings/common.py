@@ -150,7 +150,7 @@ ROOT_URLCONF = "plane.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": ["templates"],
+        "DIRS": [os.path.join(os.path.dirname(BASE_DIR), "templates"), "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
