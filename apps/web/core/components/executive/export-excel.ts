@@ -33,6 +33,38 @@ export interface IExecutiveExportPayload {
   helpdesk: IHelpdeskAnalyticsResponse | undefined;
 }
 
+/**
+ * Drop the given members from every sheet that lists people by name, before
+ * the workbook is built. `userId` is the common key across `members` (the
+ * Team Performance sheet), `kpi.members` (KPI by Member) and
+ * `helpdesk.charts.top_agents` (Helpdesk Agents) -- see IExecutiveMember and
+ * buildExecutiveMembers() in helpers.ts. Workspace/project totals are left as
+ * returned by the API, since excluding a person for reporting purposes
+ * shouldn't silently rewrite the underlying figures they still contributed to.
+ */
+export function excludeMembersFromExport(
+  payload: IExecutiveExportPayload,
+  excludedIds: Set<string>
+): IExecutiveExportPayload {
+  if (excludedIds.size === 0) return payload;
+  return {
+    ...payload,
+    members: payload.members.filter((member) => !excludedIds.has(member.userId)),
+    kpi: payload.kpi
+      ? { ...payload.kpi, members: payload.kpi.members.filter((member) => !excludedIds.has(member.user_id)) }
+      : payload.kpi,
+    helpdesk: payload.helpdesk
+      ? {
+          ...payload.helpdesk,
+          charts: {
+            ...payload.helpdesk.charts,
+            top_agents: payload.helpdesk.charts.top_agents.filter((agent) => !excludedIds.has(agent.agent_id)),
+          },
+        }
+      : payload.helpdesk,
+  };
+}
+
 // ── Formats ────────────────────────────────────────────────────────────────
 
 /** Percentages here are already on a 0-100 scale, so a literal "%" suffix is

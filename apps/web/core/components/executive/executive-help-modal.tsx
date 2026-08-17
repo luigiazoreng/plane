@@ -149,15 +149,15 @@ export const ExecutiveHelpModal = (props: Props) => {
             <p className="mt-4 text-13 leading-relaxed text-secondary">
               <strong>Σ Vf / Σ Vp column</strong> — the raw KPI point totals behind the Projects Efficiency %: final
               value (after delay penalties) over planned value, across the member&apos;s delivered work items. The
-              percentage is the ratio of exactly these two numbers. Both totals scale with delivered volume, so
-              compare the percentage between members, never these totals.
+              percentage is the ratio of exactly these two numbers. Both totals scale with delivered volume, so compare
+              the percentage between members, never these totals.
             </p>
             <p className="mt-3 text-13 leading-relaxed text-secondary">
-              <strong>Helpdesk Efficiency column</strong> — this is a quality score, not a volume score: the average
-              of the agent&apos;s own SLA First Response % and SLA Resolution % (whichever are available). Resolving 1
+              <strong>Helpdesk Efficiency column</strong> — this is a quality score, not a volume score: the average of
+              the agent&apos;s own SLA First Response % and SLA Resolution % (whichever are available). Resolving 1
               ticket within SLA scores the same as resolving 20 within SLA; resolving more tickets late doesn&apos;t
-              score higher just because there are more of them. The number in parentheses is the raw ticket count,
-              shown for context only — it does not affect this score.
+              score higher just because there are more of them. The number in parentheses is the raw ticket count, shown
+              for context only — it does not affect this score.
             </p>
             <p className="mt-3 text-13 leading-relaxed text-secondary">
               <strong>Projects Efficiency column</strong> — the member&apos;s KPI Efficiency (Σ Vf / Σ Vp of their own
@@ -197,9 +197,10 @@ export const ExecutiveHelpModal = (props: Props) => {
                 <strong>Export to Excel</strong>: a multi-sheet workbook with the underlying data rather than the
                 visuals — <em>Overview</em> (index components, weights and contributions), <em>Sector Health</em>,{" "}
                 <em>Team Performance</em> (including each member&apos;s own score formula), <em>KPI by Project</em>,{" "}
-                <em>KPI by Member</em>, <em>Helpdesk Summary</em>, <em>Helpdesk Agents</em>,{" "}
-                <em>Helpdesk Trends</em>, and a <em>Methodology</em> sheet documenting every formula on this page and
-                on the KPI page.
+                <em>KPI by Member</em>, <em>Helpdesk Summary</em>, <em>Helpdesk Agents</em>, <em>Helpdesk Trends</em>,
+                and a <em>Methodology</em> sheet documenting every formula on this page and on the KPI page. Before the
+                file is generated, a picker lets you uncheck people to leave out of the workbook — it only affects that
+                export, not the dashboard or anyone&apos;s underlying data.
               </li>
             </ul>
           </section>
