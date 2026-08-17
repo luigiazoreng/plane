@@ -251,6 +251,20 @@ export const HelpdeskSplitView = observer(
       [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
     );
 
+    const handleTargetDateChange = useCallback(
+      async (targetDate: string | null) => {
+        if (!selectedRequestId) return;
+        try {
+          applyRequestUpdate(
+            await helpdeskStore.updateRequest(workspaceSlug, selectedRequestId, { target_date: targetDate })
+          );
+        } catch (_error) {
+          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to update due date" });
+        }
+      },
+      [helpdeskStore, workspaceSlug, selectedRequestId, applyRequestUpdate]
+    );
+
     const handleAssigneesChange = useCallback(
       async (assignees: string[]) => {
         if (!selectedRequestId) return;
@@ -438,6 +452,7 @@ export const HelpdeskSplitView = observer(
                 onCustomerChange={handleCustomerChange}
                 onAssigneesChange={handleAssigneesChange}
                 onPriorityChange={handlePriorityChange}
+                onTargetDateChange={handleTargetDateChange}
                 teams={teams}
                 onTeamChange={handleTeamChange}
                 labels={workspaceLabels}

@@ -129,6 +129,8 @@ export interface IHelpdeskStatus {
   sequence: number;
   is_default: boolean;
   is_terminal: boolean;
+  /** While a request sits in a status with pauses_sla, the SLA clock stops. */
+  pauses_sla: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -166,6 +168,10 @@ export interface IHelpdeskRequest {
   snoozed_until?: string | null;
   start_date: string | null;
   target_date: string | null;
+  /** Set while the request sits in a pauses_sla status; null otherwise. */
+  sla_paused_at: string | null;
+  /** Closed pause time only, in seconds -- does not include an in-progress pause. */
+  total_paused_seconds: number;
   created_at: string;
   updated_at: string;
 }

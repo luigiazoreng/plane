@@ -1,3 +1,6 @@
+# Python imports
+from datetime import timedelta
+
 # Django imports
 # pyrefly: ignore [missing-import]
 from django.conf import settings
@@ -266,6 +269,10 @@ class HelpdeskRequestSerializer(BaseSerializer):
     label_detail = serializers.SerializerMethodField()
     # Files submitted with the original form, as opposed to those on replies.
     attachments = serializers.SerializerMethodField()
+    # Closed pause time only (total_paused_duration); does not include an
+    # in-progress pause -- the frontend adds `now() - sla_paused_at` itself so
+    # the SLA countdown can keep ticking live between fetches.
+    total_paused_seconds = serializers.SerializerMethodField()
 
     def get_attachments(self, obj):
         grouped = self.context.get("request_attachments_by_entity")
@@ -275,10 +282,19 @@ class HelpdeskRequestSerializer(BaseSerializer):
             assets = assets_for(REQUEST_ENTITY, [obj.id]).get(str(obj.id), [])
         return HelpdeskAttachmentSerializer(assets, many=True, context=self.context).data
 
+    def get_total_paused_seconds(self, obj):
+        return int((obj.total_paused_duration or timedelta()).total_seconds())
+
     class Meta:
         model = HelpdeskRequest
         fields = "__all__"
-        read_only_fields = READ_ONLY_BASE + ["portal", "display_id", "archived_at"]
+        read_only_fields = READ_ONLY_BASE + [
+            "portal",
+            "display_id",
+            "archived_at",
+            "sla_paused_at",
+            "total_paused_duration",
+        ]
 
     def _sync_assignees(self, instance, assignee_ids):
         # hard delete so soft-deleted rows don't linger in the M2M relation

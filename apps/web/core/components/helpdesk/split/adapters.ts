@@ -80,12 +80,17 @@ export type THelpdeskSla = {
   /** Fraction of the SLA window consumed, clamped to 0..1. */
   progress: number;
   isBreached: boolean;
+  /** True while the request sits in a pauses_sla status (e.g. Waiting) -- the clock is frozen. */
+  isPaused: boolean;
   label: string;
 };
 
 /**
  * Resolution SLA for a request, from the portal's configured window and the
- * request's own timestamps. Stops counting at `resolved_at` when present.
+ * request's own timestamps. Stops counting at `resolved_at` when present, and
+ * excludes any time spent in a pauses_sla status (`total_paused_seconds` for
+ * closed pauses, plus the still-running one if `sla_paused_at` is set) so a
+ * ticket sitting in "Waiting" doesn't drift further into breach.
  * Returns null when the portal has no resolution SLA configured.
  */
 export function getRequestSla(request: IHelpdeskRequest, portal: IHelpdeskPortal | undefined): THelpdeskSla | null {
@@ -97,7 +102,15 @@ export function getRequestSla(request: IHelpdeskRequest, portal: IHelpdeskPortal
 
   const windowMs = hours * 60 * 60 * 1000;
   const settledAt = request.resolved_at ? new Date(request.resolved_at).getTime() : Date.now();
-  const elapsedMs = settledAt - startedAt;
+
+  const isPaused = !request.resolved_at && !!request.sla_paused_at;
+  let pausedMs = (request.total_paused_seconds ?? 0) * 1000;
+  if (isPaused) {
+    const pausedSince = new Date(request.sla_paused_at as string).getTime();
+    if (!Number.isNaN(pausedSince)) pausedMs += Math.max(Date.now() - pausedSince, 0);
+  }
+
+  const elapsedMs = Math.max(settledAt - startedAt - pausedMs, 0);
   const remainingMs = windowMs - elapsedMs;
   const progress = Math.min(Math.max(elapsedMs / windowMs, 0), 1);
 
@@ -105,12 +118,26 @@ export function getRequestSla(request: IHelpdeskRequest, portal: IHelpdeskPortal
     return {
       progress,
       isBreached: remainingMs < 0,
+      isPaused: false,
       label: remainingMs < 0 ? `Resolvido com atraso` : `Resolvido no prazo`,
     };
   }
 
-  if (remainingMs < 0) return { progress: 1, isBreached: true, label: `${formatDuration(-remainingMs)} em atraso` };
-  return { progress, isBreached: false, label: `${formatDuration(remainingMs)} restantes` };
+  if (isPaused) {
+    return {
+      progress,
+      isBreached: remainingMs < 0,
+      isPaused: true,
+      label:
+        remainingMs < 0
+          ? `${formatDuration(-remainingMs)} em atraso — SLA pausado`
+          : `${formatDuration(remainingMs)} restantes — SLA pausado`,
+    };
+  }
+
+  if (remainingMs < 0)
+    return { progress: 1, isBreached: true, isPaused: false, label: `${formatDuration(-remainingMs)} em atraso` };
+  return { progress, isBreached: false, isPaused: false, label: `${formatDuration(remainingMs)} restantes` };
 }
 
 function formatDuration(ms: number): string {

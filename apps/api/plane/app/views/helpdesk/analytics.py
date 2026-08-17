@@ -112,7 +112,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             current_qs.filter(first_responded_at__isnull=False)
             .annotate(
                 response_duration=ExpressionWrapper(
-                    F("first_responded_at") - F("created_at"),
+                    F("first_responded_at") - F("created_at") - F("total_paused_duration"),
                     output_field=fields.DurationField(),
                 )
             )
@@ -123,7 +123,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             current_qs.filter(resolved_at__isnull=False)
             .annotate(
                 resolution_duration=ExpressionWrapper(
-                    F("resolved_at") - F("created_at"),
+                    F("resolved_at") - F("created_at") - F("total_paused_duration"),
                     output_field=fields.DurationField(),
                 )
             )
@@ -175,7 +175,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                 sla_threshold = timedelta(hours=portal.sla_first_response_hours)
                 responded_qs = current_qs.filter(first_responded_at__isnull=False).annotate(
                     response_duration=ExpressionWrapper(
-                        F("first_responded_at") - F("created_at"),
+                        F("first_responded_at") - F("created_at") - F("total_paused_duration"),
                         output_field=fields.DurationField(),
                     )
                 )
@@ -188,7 +188,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                 sla_threshold = timedelta(hours=portal.sla_resolution_hours)
                 resolved_qs = current_qs.filter(resolved_at__isnull=False).annotate(
                     resolution_duration=ExpressionWrapper(
-                        F("resolved_at") - F("created_at"),
+                        F("resolved_at") - F("created_at") - F("total_paused_duration"),
                         output_field=fields.DurationField(),
                     )
                 )
@@ -235,7 +235,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             .annotate(
                 date=trunc_fn("ref_date"),
                 resolution_duration=ExpressionWrapper(
-                    F("resolved_at") - F("created_at"),
+                    F("resolved_at") - F("created_at") - F("total_paused_duration"),
                     output_field=fields.DurationField(),
                 ),
             )
@@ -286,7 +286,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         if response_sla_threshold is not None:
             top_agents_qs = top_agents_qs.annotate(
                 response_duration=ExpressionWrapper(
-                    F("request__first_responded_at") - F("request__created_at"),
+                    F("request__first_responded_at") - F("request__created_at") - F("request__total_paused_duration"),
                     output_field=fields.DurationField(),
                 )
             )
@@ -301,7 +301,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         if resolution_sla_threshold is not None:
             top_agents_qs = top_agents_qs.annotate(
                 resolution_duration=ExpressionWrapper(
-                    F("request__resolved_at") - F("request__created_at"),
+                    F("request__resolved_at") - F("request__created_at") - F("request__total_paused_duration"),
                     output_field=fields.DurationField(),
                 )
             )

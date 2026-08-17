@@ -282,14 +282,33 @@ class HelpdeskRequestViewSet(BaseViewSet):
             "team_id": str(instance.team_id) if instance.team_id else None,
         }
         old_status_id = old_snapshot["status_id"]
+        old_status = HelpdeskStatus.objects.filter(id=old_status_id).first() if old_status_id else None
         response = super().partial_update(request, *args, **kwargs)
         new_status_id = request.data.get("status")
         if new_status_id and new_status_id != old_status_id:
             new_status = HelpdeskStatus.objects.filter(id=new_status_id).first()
+            update_fields = {}
             if new_status and new_status.is_terminal:
-                HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=timezone.now())
+                update_fields["resolved_at"] = timezone.now()
             elif new_status and not new_status.is_terminal:
-                HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=None)
+                update_fields["resolved_at"] = None
+
+            # SLA pause: close out the running pause when leaving a
+            # pauses_sla status, start one when entering a new (different)
+            # pauses_sla status. Two pauses_sla statuses in a row keep the
+            # clock running instead of resetting it.
+            was_paused = bool(old_status and old_status.pauses_sla)
+            will_pause = bool(new_status and new_status.pauses_sla and not new_status.is_terminal)
+            if was_paused and not will_pause and instance.sla_paused_at:
+                update_fields["total_paused_duration"] = instance.total_paused_duration + (
+                    timezone.now() - instance.sla_paused_at
+                )
+                update_fields["sla_paused_at"] = None
+            if will_pause and not was_paused:
+                update_fields["sla_paused_at"] = timezone.now()
+
+            if update_fields:
+                HelpdeskRequest.objects.filter(id=instance.id).update(**update_fields)
         # Record activity for any changed fields
         diff_and_record_activities(instance, request.user, old_snapshot, request.data)
         publish(self.kwargs.get("slug", ""), {"type": "request.updated", "request_id": str(instance.id)})

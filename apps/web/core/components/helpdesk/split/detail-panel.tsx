@@ -23,8 +23,9 @@ import type {
 import { Popover } from "@headlessui/react";
 import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
-import { cn, generateWorkItemLink } from "@plane/utils";
+import { cn, generateWorkItemLink, renderFormattedPayloadDate } from "@plane/utils";
 import { ArrowUpRight, Check, ChevronDown, ExternalLink, Plus, X } from "lucide-react";
+import { DateDropdown } from "@/components/dropdowns/date";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { INTAKE_STATUS_META } from "@/components/helpdesk/intake-status";
@@ -51,6 +52,7 @@ type TDetailPanelProps = {
   onCustomerChange?: (customerId: string | null) => void;
   onAssigneesChange: (assignees: string[]) => void;
   onPriorityChange: (priority: TIssuePriorities) => void;
+  onTargetDateChange?: (targetDate: string | null) => void;
   teams?: IHelpdeskTeam[];
   onTeamChange?: (teamId: string | null) => void;
   labels: IIssueLabel[];
@@ -79,6 +81,7 @@ export function DetailPanel({
   onCustomerChange,
   onAssigneesChange,
   onPriorityChange,
+  onTargetDateChange,
   teams = [],
   onTeamChange,
   labels,
@@ -200,17 +203,36 @@ export function DetailPanel({
           </Popover>
         </Row>
 
+        <Row label="Vencimento">
+          <DateDropdown
+            value={request.target_date}
+            onChange={(val) => onTargetDateChange?.(val ? (renderFormattedPayloadDate(val) ?? null) : null)}
+            placeholder="Sem prazo"
+            buttonVariant={request.target_date ? "border-with-text" : "border-without-text"}
+            buttonClassName="h-6 text-12"
+            hideIcon
+          />
+        </Row>
+
         {sla ? (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-12 text-tertiary">SLA</span>
-              <span className={cn("text-13", sla.isBreached ? "text-danger-primary" : "text-primary")}>
+              <span
+                className={cn(
+                  "text-13",
+                  sla.isPaused ? "text-tertiary" : sla.isBreached ? "text-danger-primary" : "text-primary"
+                )}
+              >
                 {sla.label}
               </span>
             </div>
             <div className="h-[3px] w-full overflow-hidden rounded-full bg-layer-2">
               <div
-                className={cn("h-full rounded-full", sla.isBreached ? "bg-danger-primary" : "bg-warning-primary")}
+                className={cn(
+                  "h-full rounded-full",
+                  sla.isPaused ? "bg-layer-3" : sla.isBreached ? "bg-danger-primary" : "bg-warning-primary"
+                )}
                 style={{ width: `${Math.round(sla.progress * 100)}%` }}
               />
             </div>

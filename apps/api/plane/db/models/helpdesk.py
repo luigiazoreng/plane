@@ -1,3 +1,6 @@
+# Python imports
+from datetime import timedelta
+
 # Django imports
 from django.db import models
 from django.db.models import Q
@@ -184,6 +187,9 @@ class HelpdeskStatus(WorkspaceBaseModel):
     sequence = models.FloatField(default=65535)
     is_default = models.BooleanField(default=False)
     is_terminal = models.BooleanField(default=False)
+    # While a request sits in a status with pauses_sla=True (e.g. "Waiting"),
+    # the SLA clock stops -- see HelpdeskRequest.sla_paused_at.
+    pauses_sla = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Helpdesk Status"
@@ -242,6 +248,10 @@ class HelpdeskRequest(WorkspaceBaseModel):
     archived_at = models.DateTimeField(null=True, blank=True)
     snoozed_until = models.DateTimeField(null=True, blank=True)
     sla_resolution_due_at = models.DateTimeField(null=True, blank=True)
+    # Set while the request sits in a status with pauses_sla=True; cleared (and
+    # folded into total_paused_duration) the moment it leaves that status.
+    sla_paused_at = models.DateTimeField(null=True, blank=True)
+    total_paused_duration = models.DurationField(default=timedelta(0))
     start_date = models.DateField(null=True, blank=True)
     target_date = models.DateField(null=True, blank=True)
     external_source = models.CharField(max_length=255, blank=True, default="")
