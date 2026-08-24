@@ -50,9 +50,83 @@ export const PERIOD_LABELS: Record<TExecutivePeriod, string> = {
 /** The executive periods are all valid KPI periods. */
 export const kpiPeriodForPeriod = (period: TExecutivePeriod): TKpiPeriod => period;
 
+// ── KPI Settings ───────────────────────────────────────────────────────────
+
+export interface IKpiSettings {
+  projectEfficiencyTarget: number;
+  deliveryReliabilityTarget: number;
+  firstResponseSlaTarget: number;
+  resolutionSlaTarget: number;
+  minimumProjectSample: number;
+  minimumHelpdeskSample: number;
+  targetVpMonthly: number;
+  projectScoreWeights: {
+    efficiency: number;
+    throughput: number;
+    reliability: number;
+  };
+  helpdeskScoreWeights: {
+    firstResponse: number;
+    resolution: number;
+  };
+  hybridScoreWeights: {
+    project: number;
+    helpdesk: number;
+  };
+}
+
+export const DEFAULT_KPI_SETTINGS: IKpiSettings = {
+  projectEfficiencyTarget: 95,
+  deliveryReliabilityTarget: 95,
+  firstResponseSlaTarget: 90,
+  resolutionSlaTarget: 90,
+  minimumProjectSample: 5,
+  minimumHelpdeskSample: 10,
+  targetVpMonthly: 800,
+  projectScoreWeights: {
+    efficiency: 0.5,
+    throughput: 0.3,
+    reliability: 0.2,
+  },
+  helpdeskScoreWeights: {
+    firstResponse: 0.4,
+    resolution: 0.6,
+  },
+  hybridScoreWeights: {
+    project: 0.5,
+    helpdesk: 0.5,
+  },
+};
+
+/**
+ * Calculate Target Vp for the selected period proportionally based on the monthly target.
+ */
+export function getTargetVpForPeriod(
+  period: TExecutivePeriod,
+  customStart?: string,
+  customEnd?: string,
+  monthlyTargetVp: number = 800
+): number {
+  let days = 30;
+  if (period === "7d") days = 7;
+  else if (period === "30d") days = 30;
+  else if (period === "90d") days = 90;
+  else if (period === "180d") days = 180;
+  else if (period === "365d") days = 365;
+  else if (period === "custom" && customStart && customEnd) {
+    const start = new Date(customStart).getTime();
+    const end = new Date(customEnd).getTime();
+    if (!isNaN(start) && !isNaN(end) && end >= start) {
+      days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)));
+    }
+  }
+  return Math.round((monthlyTargetVp / 30) * days * 100) / 100;
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type TMemberProfile = "helpdesk" | "development" | "hybrid";
+export type TSampleStatus = "sufficient" | "insufficient";
 
 export interface IITIndexComponent {
   key: string;
@@ -79,9 +153,13 @@ export interface IExecutiveMember {
   displayName: string;
   avatarUrl: string | null;
   profile: TMemberProfile;
+  /** Official rank among members with sufficient sample (1-indexed), or null if sample is insufficient. */
+  rank: number | null;
+  /** Indicates whether the member cleared minimum sample thresholds for their profile. */
+  sampleStatus: TSampleStatus;
   /** Helpdesk SLA-compliance score 0-100, or null if not applicable/no SLA configured. */
   hdScore: number | null;
-  /** KPI efficiency score 0-100, or null if not applicable. */
+  /** Multi-factor KPI efficiency score 0-100, or null if not applicable. */
   kpiScore: number | null;
   /** Final composite score. */
   finalScore: number;
@@ -89,26 +167,30 @@ export interface IExecutiveMember {
   hdTickets: number | null;
   /** Raw KPI efficiency ratio (0-1). */
   kpiEfficiency: number | null;
+  /** Delivery Reliability percentage (0-100), or null if no delivered items. */
+  deliveryReliability: number | null;
+  /** Throughput Score (0-100) based on Target Vp. */
+  throughputScore: number | null;
   /** Raw sum of planned value across this member's delivered work items. */
   sumVp: number | null;
   /** Raw sum of final value (after delay penalties) across the same items. */
   sumVf: number | null;
-  /**
-   * Total items this member is carrying in the period: delivered + pending KPI
-   * work items, plus Helpdesk tickets. Informational only -- it never feeds
-   * into finalScore, so a heavier workload never lowers the ranking.
-   */
+  /** Total items this member is carrying: delivered + pending KPI work items, plus Helpdesk tickets. */
   workload: number;
-  /** Delivered KPI work items -- the volume side of the Hybrid score blend. */
+  /** Delivered KPI work items. */
   kpiScoredItems: number;
-  /** Still-open KPI work items. Counted in workload, never in Vp/Vf. */
+  /** Still-open KPI work items. */
   kpiPendingItems: number;
-  /** The two raw SLA percentages hdScore averages, kept so exports can show the inputs. */
+  /** Item delivery breakdown. */
+  onTimeItems: number;
+  earlyItems: number;
+  lateItems: number;
+  /** The two raw SLA percentages hdScore averages. */
   hdSlaFirstResponse: number | null;
   hdSlaResolution: number | null;
 }
 
-// ── Default weights ────────────────────────────────────────────────────────
+// ── Default weights for IT General Index ────────────────────────────────────
 
 const DEFAULT_WEIGHTS: Record<string, { label: string; weight: number }> = {
   project_efficiency: { label: "Project Efficiency", weight: 0.35 },
@@ -122,30 +204,22 @@ const DEFAULT_WEIGHTS: Record<string, { label: string; weight: number }> = {
 
 /**
  * Compute the IT General Index from Helpdesk analytics and KPI overview.
- *
- * When an indicator is unavailable (`null`), its weight is redistributed
- * proportionally across the remaining indicators. If no indicators are
- * available the index is `null`.
  */
 export function computeITGeneralIndex(
   hd: IHelpdeskAnalyticsResponse | undefined,
   kpi: IKpiOverviewResponse | undefined
 ): IITGeneralIndex {
-  // Normalize each indicator to a 0-100 scale.
   const rawValues: Record<string, number | null> = {
     project_efficiency: kpi?.unified.kpi != null ? kpi.unified.kpi * 100 : null,
     sla_response: hd?.sla.first_response_pct ?? null,
     sla_resolution: hd?.sla.resolution_pct ?? null,
-    // Backlog health: lower is better. Express as percentage of non-backlog.
     backlog: normalizeBacklog(hd),
-    // Resolution speed: lower is better. Cap at 48h = 0%, 0h = 100%.
     resolution_time: normalizeResolutionTime(hd),
   };
 
   const missing: string[] = [];
   let availableWeightSum = 0;
 
-  // First pass: find available weight sum.
   for (const [key, config] of Object.entries(DEFAULT_WEIGHTS)) {
     if (rawValues[key] == null) {
       missing.push(config.label);
@@ -154,7 +228,6 @@ export function computeITGeneralIndex(
     }
   }
 
-  // Build components with redistributed weights.
   const components: IITIndexComponent[] = [];
   let index = 0;
 
@@ -186,7 +259,6 @@ function normalizeBacklog(hd: IHelpdeskAnalyticsResponse | undefined): number | 
   const total = hd.kpis.total_requests.current;
   const open = hd.kpis.open_requests.current;
   if (total == null || open == null || total === 0) return null;
-  // 100% = no backlog, 0% = all tickets are backlog
   return Math.max(0, Math.min(100, Math.round((1 - open / total) * 1000) / 10));
 }
 
@@ -194,58 +266,49 @@ function normalizeResolutionTime(hd: IHelpdeskAnalyticsResponse | undefined): nu
   if (!hd) return null;
   const avgHours = hd.kpis.avg_resolution_hours.current;
   if (avgHours == null) return null;
-  // 0h → 100, 48h+ → 0. Linear interpolation.
   const MAX_HOURS = 48;
   return Math.max(0, Math.min(100, Math.round((1 - avgHours / MAX_HOURS) * 1000) / 10));
 }
 
 // ── Member profile detection ───────────────────────────────────────────────
 
-/**
- * Minimum resolved tickets in the period for Helpdesk work to count toward a
- * member's profile/score at all. Below this, one or two incidental tickets
- * would otherwise tag someone "hybrid" and let a tiny, noisy sample drag down
- * an otherwise-solid KPI score (see computeMemberScore's volume weighting --
- * this threshold keeps genuinely incidental helpdesk work out of the blend
- * entirely, rather than relying on the weighting alone to dilute it).
- */
 const MIN_HELPDESK_TICKETS_FOR_PROFILE = 3;
 
 /**
- * Helpdesk quality score per agent: their own SLA compliance (average of
- * first-response and resolution SLA %, whichever are available), NOT ticket
- * volume. Resolving 1 ticket within SLA is a perfect score; resolving 24
- * tickets late is not "better" just because there are more of them.
+ * Helpdesk quality score per agent: weighted average of SLA first response & resolution SLAs.
  */
-export function computeHelpdeskQualityScores(agents: IHelpdeskAgentChartPoint[]): Map<string, number | null> {
+export function computeHelpdeskQualityScores(
+  agents: IHelpdeskAgentChartPoint[],
+  weights: IKpiSettings["helpdeskScoreWeights"] = DEFAULT_KPI_SETTINGS.helpdeskScoreWeights
+): Map<string, number | null> {
   const map = new Map<string, number | null>();
   for (const agent of agents) {
-    const parts = [agent.sla_first_response_pct, agent.sla_resolution_pct].filter((v): v is number => v != null);
-    map.set(
-      agent.agent_id,
-      parts.length > 0 ? Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10 : null
-    );
+    const fr = agent.sla_first_response_pct;
+    const res = agent.sla_resolution_pct;
+    if (fr == null && res == null) {
+      map.set(agent.agent_id, null);
+    } else if (fr == null) {
+      map.set(agent.agent_id, Math.round(res! * 10) / 10);
+    } else if (res == null) {
+      map.set(agent.agent_id, Math.round(fr * 10) / 10);
+    } else {
+      const score = fr * weights.firstResponse + res * weights.resolution;
+      map.set(agent.agent_id, Math.round(score * 10) / 10);
+    }
   }
   return map;
 }
 
-/** Scored KPI work items for a member: delivered items only (matches the KPI engine's Vp/Vf rule -- pending work isn't "scored"). */
 function kpiScoredItemCount(member: IKpiMemberAggregate | undefined): number {
   if (!member) return 0;
   return (member.counts.on_time ?? 0) + (member.counts.early ?? 0) + (member.counts.late ?? 0);
 }
 
-/** All KPI work items assigned to a member, delivered or still open -- unlike kpiScoredItemCount, this includes pending. */
 function kpiTotalItemCount(member: IKpiMemberAggregate | undefined): number {
   if (!member) return 0;
   return kpiScoredItemCount(member) + (member.counts.pending ?? 0);
 }
 
-/**
- * Detect whether a user works on Helpdesk, Development, or both.
- * Helpdesk only counts once ticket volume clears MIN_HELPDESK_TICKETS_FOR_PROFILE
- * -- a couple of incidental tickets don't make someone "Hybrid".
- */
 export function detectMemberProfile(
   userId: string,
   kpiMemberIds: Set<string>,
@@ -259,23 +322,13 @@ export function detectMemberProfile(
 }
 
 /**
- * Compute the final score for a member based on their profile.
- *
- * - Helpdesk-only: 100% HD score
- * - Development-only: 100% KPI score
- * - Hybrid: blended, weighted by each side's actual work volume (resolved
- *   tickets vs scored KPI items) rather than a flat 50/50 -- someone whose
- *   measured work is mostly Projects with a handful of Helpdesk tickets on
- *   the side gets scored mostly on Projects, not punished equally on both.
- *   When one side's score is unavailable (e.g. no SLA configured), all
- *   weight goes to the other side instead of defaulting the missing side to 0.
+ * Compute final score for a member based on profile and configurable hybrid weights.
  */
 export function computeMemberScore(
   profile: TMemberProfile,
   hdScore: number | null,
   kpiScore: number | null,
-  hdVolume = 0,
-  kpiVolume = 0
+  hybridWeights: IKpiSettings["hybridScoreWeights"] = DEFAULT_KPI_SETTINGS.hybridScoreWeights
 ): number {
   switch (profile) {
     case "helpdesk":
@@ -287,75 +340,128 @@ export function computeMemberScore(
       if (hdScore == null) return Math.round(kpiScore! * 10) / 10;
       if (kpiScore == null) return Math.round(hdScore * 10) / 10;
 
-      const totalVolume = hdVolume + kpiVolume;
-      const hdWeight = totalVolume > 0 ? hdVolume / totalVolume : 0.5;
-      const kpiWeight = 1 - hdWeight;
-      return Math.round((hdScore * hdWeight + kpiScore * kpiWeight) * 10) / 10;
+      const score = kpiScore * hybridWeights.project + hdScore * hybridWeights.helpdesk;
+      return Math.round(score * 10) / 10;
     }
   }
 }
 
 /**
- * Build the unified member list by cross-referencing KPI members and
- * Helpdesk top agents.
+ * Build unified executive member list with multi-factor scoring, sample size evaluation, and ranking.
  */
 export function buildExecutiveMembers(
   kpiMembers: IKpiMemberAggregate[],
-  hdAgents: IHelpdeskAgentChartPoint[]
+  hdAgents: IHelpdeskAgentChartPoint[],
+  settings: IKpiSettings = DEFAULT_KPI_SETTINGS,
+  period: TExecutivePeriod = "30d",
+  customStartDate?: string,
+  customEndDate?: string
 ): IExecutiveMember[] {
-  const hdQualityMap = computeHelpdeskQualityScores(hdAgents);
+  const hdQualityMap = computeHelpdeskQualityScores(hdAgents, settings.helpdeskScoreWeights);
   const kpiMemberIds = new Set(kpiMembers.map((m) => m.user_id));
   const hdTicketCounts = new Map(hdAgents.map((a) => [a.agent_id, a.count]));
   const hdAgentIds = new Set(hdAgents.map((a) => a.agent_id));
 
-  // Collect all unique user IDs.
   const allUserIds = new Set([...kpiMemberIds, ...hdAgentIds]);
 
-  // Build KPI lookup.
   const kpiMap = new Map<string, IKpiMemberAggregate>();
   for (const m of kpiMembers) {
     kpiMap.set(m.user_id, m);
   }
 
-  // Build HD lookup.
   const hdMap = new Map<string, IHelpdeskAgentChartPoint>();
   for (const a of hdAgents) {
     hdMap.set(a.agent_id, a);
   }
 
-  const results: IExecutiveMember[] = [];
+  const targetVp = getTargetVpForPeriod(period, customStartDate, customEndDate, settings.targetVpMonthly);
+
+  const rawResults: Omit<IExecutiveMember, "rank">[] = [];
 
   for (const userId of allUserIds) {
     const profile = detectMemberProfile(userId, kpiMemberIds, hdTicketCounts);
     const kpiMember = kpiMap.get(userId);
     const hdAgent = hdMap.get(userId);
 
-    const kpiScore = kpiMember?.efficiency != null ? Math.round(kpiMember.efficiency * 1000) / 10 : null;
-    const hdScore = hdQualityMap.get(userId) ?? null;
-    const scoredItems = kpiScoredItemCount(kpiMember);
+    const onTimeItems = kpiMember?.counts.on_time ?? 0;
+    const earlyItems = kpiMember?.counts.early ?? 0;
+    const lateItems = kpiMember?.counts.late ?? 0;
+    const scoredItems = earlyItems + onTimeItems + lateItems;
+    const hdTickets = hdAgent?.count ?? 0;
 
-    results.push({
+    // Delivery Reliability % = (Early + On time) / Scored Items * 100
+    const deliveryReliability =
+      scoredItems > 0 ? Math.round(((earlyItems + onTimeItems) / scoredItems) * 1000) / 10 : null;
+
+    // Throughput Score % = MIN(Σ Vp / Target Vp, 1) * 100
+    const sumVp = kpiMember?.sum_vp ?? null;
+    const sumVf = kpiMember?.sum_vf ?? null;
+    const throughputScore =
+      sumVp != null && targetVp > 0 ? Math.round(Math.min((sumVp / targetVp) * 100, 100) * 10) / 10 : null;
+
+    // Multi-factor Project Score = 50% Project Eff + 30% Throughput + 20% Delivery Reliability
+    let kpiScore: number | null = null;
+    if (kpiMember?.efficiency != null) {
+      const effPct = Math.round(kpiMember.efficiency * 1000) / 10;
+      const tpPct = throughputScore ?? 0;
+      const relPct = deliveryReliability ?? effPct;
+      const w = settings.projectScoreWeights;
+      kpiScore = Math.round((effPct * w.efficiency + tpPct * w.throughput + relPct * w.reliability) * 10) / 10;
+    }
+
+    const hdScore = hdQualityMap.get(userId) ?? null;
+
+    // Sample size evaluation
+    const isProjectSufficient = scoredItems >= settings.minimumProjectSample;
+    const isHdSufficient = hdTickets >= settings.minimumHelpdeskSample;
+
+    let sampleStatus: TSampleStatus = "insufficient";
+    if (profile === "development" && isProjectSufficient) sampleStatus = "sufficient";
+    else if (profile === "helpdesk" && isHdSufficient) sampleStatus = "sufficient";
+    else if (profile === "hybrid" && (isProjectSufficient || isHdSufficient)) sampleStatus = "sufficient";
+
+    const finalScore = computeMemberScore(profile, hdScore, kpiScore, settings.hybridScoreWeights);
+
+    rawResults.push({
       userId,
       displayName: kpiMember?.display_name ?? hdAgent?.display_name ?? "Unknown",
       avatarUrl: kpiMember?.avatar_url ?? null,
       profile,
+      sampleStatus,
       hdScore,
       kpiScore,
-      finalScore: computeMemberScore(profile, hdScore, kpiScore, hdAgent?.count ?? 0, scoredItems),
+      finalScore,
       hdTickets: hdAgent?.count ?? null,
       kpiEfficiency: kpiMember?.efficiency ?? null,
-      sumVp: kpiMember?.sum_vp ?? null,
-      sumVf: kpiMember?.sum_vf ?? null,
-      workload: kpiTotalItemCount(kpiMember) + (hdAgent?.count ?? 0),
+      deliveryReliability,
+      throughputScore,
+      sumVp,
+      sumVf,
+      workload: kpiTotalItemCount(kpiMember) + hdTickets,
       kpiScoredItems: scoredItems,
       kpiPendingItems: kpiMember?.counts.pending ?? 0,
+      onTimeItems,
+      earlyItems,
+      lateItems,
       hdSlaFirstResponse: hdAgent?.sla_first_response_pct ?? null,
       hdSlaResolution: hdAgent?.sla_resolution_pct ?? null,
     });
   }
 
-  // Sort by final score descending.
-  results.sort((a, b) => b.finalScore - a.finalScore);
+  // Sort: sufficient members first (by finalScore desc), then insufficient members (by finalScore desc)
+  rawResults.sort((a, b) => {
+    if (a.sampleStatus !== b.sampleStatus) {
+      return a.sampleStatus === "sufficient" ? -1 : 1;
+    }
+    return b.finalScore - a.finalScore;
+  });
+
+  // Assign 1-indexed ranks to sufficient sample members only
+  let currentRank = 1;
+  const results: IExecutiveMember[] = rawResults.map((member) => {
+    const rank = member.sampleStatus === "sufficient" ? currentRank++ : null;
+    return Object.assign(member, { rank });
+  });
 
   return results;
 }
@@ -384,10 +490,10 @@ export const PROFILE_CONFIG: Record<TMemberProfile, { label: string; color: stri
 
 export type THealthStatus = "healthy" | "warning" | "critical" | "unknown";
 
-export function getHealthStatus(value: number | null): THealthStatus {
+export function getHealthStatus(value: number | null, target: number = 90, warningDelta: number = 10): THealthStatus {
   if (value == null) return "unknown";
-  if (value >= 90) return "healthy";
-  if (value >= 70) return "warning";
+  if (value >= target) return "healthy";
+  if (value >= target - warningDelta) return "warning";
   return "critical";
 }
 

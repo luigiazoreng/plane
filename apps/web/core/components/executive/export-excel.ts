@@ -589,7 +589,7 @@ function buildSectorHealthSheet(payload: IExecutiveExportPayload): Sheet<never> 
 
 // ── Sheet 3: Team Performance ──────────────────────────────────────────────
 
-const TEAM_COLS = [7, 22, 13, 10, 10, 15, 12, 12, 13, 15, 14, 16, 11, 10, 90];
+const TEAM_COLS = [7, 22, 13, 10, 10, 15, 14, 12, 12, 13, 15, 14, 16, 14, 12, 18, 90];
 
 function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<never> {
   const head: Row[] = [
@@ -605,14 +605,16 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
       thNum("Σ Vf"),
       thNum("Σ Vp"),
       thNum("Projects Efficiency (%)"),
+      thNum("Delivery Reliability (%)"),
       thNum("Delivered items"),
       thNum("Pending items"),
       thNum("Helpdesk tickets"),
       thNum("SLA first response (%)"),
       thNum("SLA resolution (%)"),
-      thNum("Helpdesk Efficiency (%)"),
-      thNum("Workload"),
-      thNum("Score"),
+      thNum("Helpdesk Quality (%)"),
+      thNum("Project Score (%)"),
+      thNum("Final Score"),
+      th("Sample Status"),
       th("Score formula for this row"),
     ],
   ];
@@ -621,47 +623,50 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
 
   const memberRows = payload.members.map((member, idx): Row => {
     const r = firstRow + idx;
-    // Column map: D=ΣVf E=ΣVp F=ProjEff G=delivered H=pending I=tickets
-    //             J=slaFR K=slaRes L=HdEff M=workload N=score
+    // Column map: D=ΣVf E=ΣVp F=ProjEff G=DeliveryRel H=delivered I=pending J=tickets
+    //             K=slaFR L=slaRes M=HdEff N=ProjScore O=FinalScore P=SampleStatus Q=Explanation
     const projEff = `IF(E${r}=0,"",D${r}/E${r}*100)`;
-    const hdEff = `IF(COUNT(J${r}:K${r})=0,"",AVERAGE(J${r}:K${r}))`;
-    const workload = `G${r}+H${r}+I${r}`;
+    const hdEff = `IF(COUNT(K${r}:L${r})=0,"",AVERAGE(K${r}:L${r}))`;
 
     let score: string;
     let explanation: string;
     if (member.profile === "development") {
-      score = `IF(F${r}="",0,F${r})`;
-      explanation = `=F${r} — Development profile is scored purely on Projects Efficiency.`;
+      score = `IF(N${r}="",0,N${r})`;
+      explanation = `=N${r} — Development profile is scored on multi-factor Project Score (Efficiency, Throughput, and Delivery Reliability).`;
     } else if (member.profile === "helpdesk") {
-      score = `IF(L${r}="",0,L${r})`;
-      explanation = `=L${r} — Helpdesk profile is scored purely on Helpdesk Efficiency.`;
+      score = `IF(M${r}="",0,M${r})`;
+      explanation = `=M${r} — Helpdesk profile is scored on Helpdesk Quality SLA compliance.`;
     } else if (member.hdScore == null) {
-      score = `IF(F${r}="",0,F${r})`;
-      explanation = `=F${r} — Hybrid, but no Helpdesk SLA score is available, so all weight goes to Projects instead of scoring the missing side as zero.`;
+      score = `IF(N${r}="",0,N${r})`;
+      explanation = `=N${r} — Hybrid, but no Helpdesk SLA score is available, so all weight goes to Projects.`;
     } else if (member.kpiScore == null) {
-      score = `IF(L${r}="",0,L${r})`;
-      explanation = `=L${r} — Hybrid, but no Projects efficiency is available, so all weight goes to Helpdesk.`;
+      score = `IF(M${r}="",0,M${r})`;
+      explanation = `=M${r} — Hybrid, but no Projects score is available, so all weight goes to Helpdesk.`;
     } else {
-      score = `IF(I${r}+G${r}=0,AVERAGE(L${r},F${r}),L${r}*(I${r}/(I${r}+G${r}))+F${r}*(G${r}/(I${r}+G${r})))`;
-      explanation = `=Helpdesk×(tickets÷(tickets+delivered)) + Projects×(delivered÷(tickets+delivered)) — the blend follows actual work volume, so the side where this person does more work counts more.`;
+      score = `AVERAGE(N${r},M${r})`;
+      explanation = `=50%×Project Score + 50%×Helpdesk Quality — Hybrid score blend using fixed 50/50 balance.`;
     }
+
+    const sampleStatusText = member.sampleStatus === "sufficient" ? "Sufficient" : "Insufficient sample";
 
     return band(
       [
-        num(idx + 1),
+        member.rank != null ? num(member.rank) : str("—"),
         key(member.displayName),
         dim(PROFILE_CONFIG[member.profile].label),
         pts(member.sumVf),
         pts(member.sumVp),
         fxPct(projEff),
+        pct(member.deliveryReliability),
         num(member.kpiScoredItems),
         num(member.kpiPendingItems),
         num(member.hdTickets),
         pct(member.hdSlaFirstResponse),
         pct(member.hdSlaResolution),
         fxPct(hdEff),
-        fx(workload),
+        pct(member.kpiScore),
         styled(fxPct(score), { fontWeight: "bold" }),
+        str(sampleStatusText),
         dim(explanation),
       ],
       idx
@@ -673,28 +678,21 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
     ...memberRows,
     ...legend(
       [
-        ["Σ Vf, Σ Vp", "Raw point totals over this member's delivered work items. They scale with volume — see below."],
+        ["Σ Vf, Σ Vp", "Raw point totals over this member's delivered work items."],
         [
           "Projects Efficiency (%)",
-          `=IF(E${firstRow}=0,"",D${firstRow}/E${firstRow}*100) — Σ Vf ÷ Σ Vp. Independent of volume, which is why this, and not the totals, is comparable between people.`,
+          `=IF(E${firstRow}=0,"",D${firstRow}/E${firstRow}*100) — Σ Vf ÷ Σ Vp. Independent of volume, measuring overall delay penalties.`,
+        ],
+        ["Delivery Reliability (%)", "Percentage of delivered items completed on time or early."],
+        [
+          "Helpdesk Quality (%)",
+          `=IF(COUNT(K${firstRow}:L${firstRow})=0,"",AVERAGE(K${firstRow}:L${firstRow})) — weighted average of SLA compliance percentages.`,
         ],
         [
-          "Helpdesk Efficiency (%)",
-          `=IF(COUNT(J${firstRow}:K${firstRow})=0,"",AVERAGE(J${firstRow}:K${firstRow})) — the average of the member's two SLA percentages. A quality measure: 1 ticket within SLA scores the same as 20 within SLA, and extra late tickets never raise it.`,
+          "Sample Status",
+          "Sufficient = cleared minimum sample threshold (default: 5 delivered project items or 10 Helpdesk tickets). Insufficient sample = sample too small for official ranking.",
         ],
-        [
-          "Workload",
-          `=G${firstRow}+H${firstRow}+I${firstRow} — delivered + pending work items + Helpdesk tickets. Context only; it is deliberately absent from the Score formula so that carrying more work can never lower a ranking.`,
-        ],
-        [
-          "Profile",
-          "Hybrid = KPI work AND at least 3 resolved tickets. Helpdesk = 3+ tickets and no KPI work. Development = KPI work with fewer than 3 tickets. The 3-ticket floor stops incidental support work from reclassifying an engineer.",
-        ],
-        ["Score", "Depends on the profile — the exact formula used for each row is spelled out in the last column."],
-        [
-          "Why Σ Vf isn't the ranking",
-          "Σ Vf is a raw total: delivering 100 items beats delivering 15 on that number even if the second person was never late. The per-item delay penalty is real, but it is applied per item and then summed, so volume still dominates the total. Efficiency removes the volume effect.",
-        ],
+        ["Final Score", "Composite score based on member profile and configurable KPI settings."],
       ],
       TEAM_COLS
     ),
@@ -705,7 +703,6 @@ function buildTeamPerformanceSheet(payload: IExecutiveExportPayload): Sheet<neve
     data,
     columns: widths(TEAM_COLS),
     stickyRowsCount: head.length,
-    // Keep rank + name anchored while scrolling through the metric columns.
     stickyColumnsCount: 2,
   };
 }
