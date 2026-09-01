@@ -294,7 +294,7 @@ class KpiIssueListEndpoint(BaseAPIView):
     unfiltered, whole-project view they were written against.
     """
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    @allow_permission([ROLE.ADMIN])
     def get(self, request, slug, project_id):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)
@@ -385,7 +385,7 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
     people) but are counted in ``unassigned_count``.
     """
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    @allow_permission([ROLE.ADMIN])
     def get(self, request, slug, project_id):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)

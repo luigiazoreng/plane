@@ -20,6 +20,7 @@ import { cn } from "@plane/utils";
 import darkEmptyState from "@/app/assets/empty-state/disabled-feature/views-dark.webp?url";
 import lightEmptyState from "@/app/assets/empty-state/disabled-feature/views-light.webp?url";
 // components
+import { NotAuthorizedView } from "@/components/auth-screens/not-authorized-view";
 import { DetailedEmptyState } from "@/components/empty-state/detailed-empty-state-root";
 import { KpiCurveChart } from "@/components/kpi/curve-chart";
 import { KpiMathHelpModal } from "@/components/kpi/math-help-modal";
@@ -113,6 +114,19 @@ function ProjectKpiPage() {
     if (!config || !activePriorityLevel) return 0;
     return config.tables.priority?.[activePriorityLevel]?.b ?? 0;
   }, [config, activePriorityLevel]);
+
+  // The panel scores individual people, so only whoever runs the project may open
+  // it. Workspace admins who belong to the project are promoted to ADMIN by
+  // getProjectRole, matching the API.
+  const isProjectAdmin = allowPermissions(
+    [EUserProjectRoles.ADMIN],
+    EUserPermissionsLevel.PROJECT,
+    workspaceSlug,
+    projectId
+  );
+  if (currentProjectDetails && !isProjectAdmin) {
+    return <NotAuthorizedView isProjectView className="h-full" />;
+  }
 
   // No access to KPI
   if (currentProjectDetails?.kpi_view === false) {

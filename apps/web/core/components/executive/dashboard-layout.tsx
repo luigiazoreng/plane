@@ -81,6 +81,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
   // ── Local state ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<"forbidden" | "failed" | null>(null);
+  const [helpdeskUnavailable, setHelpdeskUnavailable] = useState(false);
   const [period, setPeriod] = useState<TExecutivePeriod>("30d");
   const [customStartDate, setCustomStartDate] = useState<string | undefined>();
   const [customEndDate, setCustomEndDate] = useState<string | undefined>();
@@ -110,27 +111,33 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     let mounted = true;
     setLoading(true);
     setLoadError(null);
+    setHelpdeskUnavailable(false);
 
-    Promise.all([
-      fetchWorkspaceOverview(workspaceSlug, {
-        period: kpiPeriodForPeriod(period),
-        start: period === "custom" ? customStartDate : undefined,
-        end: period === "custom" ? customEndDate : undefined,
-      }),
-      fetchAnalytics(workspaceSlug, hdFilters),
-    ])
-      .catch((error: unknown) => {
-        // Both stores rethrow, so a 403 from either endpoint lands here. Without
-        // this the rejection went unhandled, loading still flipped to false, and
-        // the dashboard rendered every figure as an em dash -- a denied or failed
-        // load was indistinguishable from a workspace that simply has no data.
-        if (!mounted) return;
-        const status = (error as { response?: { status?: number } })?.response?.status;
+    // The two halves are settled independently on purpose. Only the KPI call is
+    // gated by this page's own permission (has_workspace_kpi_access); the helpdesk
+    // call additionally requires a helpdesk role, which a granted member need not
+    // have. Failing the page on that would lock out exactly the person the grant
+    // exists for -- a director with KPI access who never touches tickets.
+    void (async () => {
+      const [kpiResult, helpdeskResult] = await Promise.allSettled([
+        fetchWorkspaceOverview(workspaceSlug, {
+          period: kpiPeriodForPeriod(period),
+          start: period === "custom" ? customStartDate : undefined,
+          end: period === "custom" ? customEndDate : undefined,
+        }),
+        fetchAnalytics(workspaceSlug, hdFilters),
+      ]);
+      if (!mounted) return;
+
+      setHelpdeskUnavailable(helpdeskResult.status === "rejected");
+      if (kpiResult.status === "fulfilled") {
+        setLoadError(null);
+      } else {
+        const status = (kpiResult.reason as { response?: { status?: number } })?.response?.status;
         setLoadError(status === 403 ? "forbidden" : "failed");
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+      }
+      setLoading(false);
+    })();
 
     return () => {
       mounted = false;
@@ -224,7 +231,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
   ]);
 
   // ── Loading state ────────────────────────────────────────────
-  if (loading && (!overview || !helpdeskData)) {
+  if (loading && !overview) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Spinner />
@@ -238,7 +245,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
 
   // A stale dashboard beats an error page, so this only takes over when the
   // failed load left nothing to show.
-  if (loadError === "failed" && (!overview || !helpdeskData)) {
+  if (loadError === "failed" && !overview) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
         <AlertTriangle className="size-8 text-warning-primary" strokeWidth={1.5} />
@@ -319,6 +326,18 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
           <p className="mt-1 text-20 font-semibold text-primary">{executiveKpiSummary.belowTargetCount}</p>
         </div>
       </div>
+
+      {helpdeskUnavailable && (
+        <div className="mx-page-x mb-2 flex items-start gap-2 rounded-md border border-subtle bg-surface-2 px-4 py-3">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-primary" />
+          <div>
+            <p className="text-13 font-medium text-secondary">Helpdesk figures are not shown</p>
+            <p className="text-12 text-tertiary">
+              Ticket volume, SLA and response times need a Helpdesk role. Delivery metrics below are complete.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ─── Section 2: Sector Health ─────────────────────────── */}
       <div>

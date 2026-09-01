@@ -179,3 +179,22 @@ export interface IKpiPreviewResponse {
   curve: IKpiCurvePoint[];
   b: number;
 }
+
+// ── Workspace KPI access grants ──────────────────────────────────────────────
+
+/** One person, besides the workspace admins, allowed into the KPI panels. */
+export interface IWorkspaceKpiAccess {
+  id: string;
+  member: string;
+  member_detail: {
+    id: string;
+    display_name: string;
+    first_name: string;
+    last_name: string;
+    avatar_url: string | null;
+    is_bot: boolean;
+  };
+  workspace: string;
+  is_active: boolean;
+  created_at: string;
+}

@@ -21,6 +21,7 @@ import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import darkEmptyState from "@/app/assets/empty-state/disabled-feature/views-dark.webp?url";
 import lightEmptyState from "@/app/assets/empty-state/disabled-feature/views-light.webp?url";
 // components
+import { NotAuthorizedView } from "@/components/auth-screens/not-authorized-view";
 import { DetailedEmptyState } from "@/components/empty-state/detailed-empty-state-root";
 import { PageHead } from "@/components/core/page-title";
 import { KpiConfigEditor } from "@/components/kpi/config-editor";
@@ -89,12 +90,9 @@ function ProjectKpiSettingsPage() {
       ),
     [estimateIds, estimateById]
   );
-  const canEdit = allowPermissions(
-    [EUserProjectRoles.ADMIN, EUserProjectRoles.MEMBER],
-    EUserPermissionsLevel.PROJECT,
-    workspaceSlug,
-    projectId
-  );
+  // Admin-only, matching the API: the KPI contract decides how every member of
+  // the project is scored, so it is not a setting a member edits for the team.
+  const canEdit = allowPermissions([EUserProjectRoles.ADMIN], EUserPermissionsLevel.PROJECT, workspaceSlug, projectId);
 
   const propertyIds = estimatePropertyIdsByProjectId(projectId) ?? [];
   const difficultyEstimateId =
@@ -114,7 +112,14 @@ function ProjectKpiSettingsPage() {
     return () => {
       mounted = false;
     };
-  }, [workspaceSlug, projectId, fetchProjectConfig, getProjectEstimates, getProjectEstimateProperties, fetchProjectLabels]);
+  }, [
+    workspaceSlug,
+    projectId,
+    fetchProjectConfig,
+    getProjectEstimates,
+    getProjectEstimateProperties,
+    fetchProjectLabels,
+  ]);
 
   const handleDifficultyEstimateChange = async (estimateId: string | null) => {
     try {
@@ -155,6 +160,12 @@ function ProjectKpiSettingsPage() {
       setSaving(false);
     }
   };
+
+  // The API now returns 403 on the config GET for non-admins, so without this the
+  // page would sit on its spinner forever instead of saying what happened.
+  if (currentProjectDetails && !canEdit) {
+    return <NotAuthorizedView section="settings" isProjectView className="h-full" />;
+  }
 
   // No access to KPI
   if (currentProjectDetails?.kpi_view === false) {
@@ -203,13 +214,13 @@ function ProjectKpiSettingsPage() {
               title="KPI configuration"
               description="Edit the point tables, priority factors and global parameters. Changes apply immediately to scoring."
             />
-            <div className="flex items-center gap-1 bg-layer-1 p-1 rounded-md border border-subtle">
+            <div className="flex items-center gap-1 rounded-md border border-subtle bg-layer-1 p-1">
               <button
                 type="button"
                 onClick={() => setActiveTab("config")}
                 className={cn(
-                  "px-3 py-1 text-12 font-medium rounded-sm transition-colors",
-                  activeTab === "config" ? "bg-surface-1 text-primary shadow-sm" : "text-tertiary hover:text-secondary"
+                  "rounded-sm px-3 py-1 text-12 font-medium transition-colors",
+                  activeTab === "config" ? "shadow-sm bg-surface-1 text-primary" : "text-tertiary hover:text-secondary"
                 )}
               >
                 Configuration
@@ -218,8 +229,8 @@ function ProjectKpiSettingsPage() {
                 type="button"
                 onClick={() => setActiveTab("docs")}
                 className={cn(
-                  "px-3 py-1 text-12 font-medium rounded-sm transition-colors",
-                  activeTab === "docs" ? "bg-surface-1 text-primary shadow-sm" : "text-tertiary hover:text-secondary"
+                  "rounded-sm px-3 py-1 text-12 font-medium transition-colors",
+                  activeTab === "docs" ? "shadow-sm bg-surface-1 text-primary" : "text-tertiary hover:text-secondary"
                 )}
               >
                 Documentation
@@ -230,19 +241,19 @@ function ProjectKpiSettingsPage() {
         <div className="min-h-0 flex-1 overflow-hidden">
           {activeTab === "config" ? (
             <KpiConfigEditor
-            config={config}
-            canEdit={canEdit}
-            saving={saving}
-            onSave={handleSave}
-            onReset={handleReset}
-            estimateOptions={estimateOptions}
-            estimateValuesById={estimateValuesById}
-            projectLabels={projectLabels ?? []}
-            difficultyEstimateId={difficultyEstimateId}
-            repetitiveEstimateId={repetitiveEstimateId}
-            onDifficultyEstimateChange={handleDifficultyEstimateChange}
-            onRepetitiveEstimateChange={handleRepetitiveEstimateChange}
-          />
+              config={config}
+              canEdit={canEdit}
+              saving={saving}
+              onSave={handleSave}
+              onReset={handleReset}
+              estimateOptions={estimateOptions}
+              estimateValuesById={estimateValuesById}
+              projectLabels={projectLabels ?? []}
+              difficultyEstimateId={difficultyEstimateId}
+              repetitiveEstimateId={repetitiveEstimateId}
+              onDifficultyEstimateChange={handleDifficultyEstimateChange}
+              onRepetitiveEstimateChange={handleRepetitiveEstimateChange}
+            />
           ) : (
             <KpiSettingsDocs />
           )}

@@ -14,6 +14,7 @@ import type {
   IKpiOverviewResponse,
   IKpiPreviewResponse,
   IKpiTaskInput,
+  IWorkspaceKpiAccess,
   TKpiPeriod,
 } from "@plane/types";
 import { APIService } from "../api.service";
@@ -21,6 +22,21 @@ import { APIService } from "../api.service";
 export class KpiService extends APIService {
   constructor(BASE_URL?: string) {
     super((BASE_URL || API_BASE_URL) + "/api/workspaces/");
+  }
+
+  // --- Access grants ---
+
+  /** Who, besides workspace admins, may open the workspace KPI panels. Admin-only. */
+  async getAccessGrants(workspaceSlug: string): Promise<IWorkspaceKpiAccess[]> {
+    return this.get(`${workspaceSlug}/kpi/access/`).then((res) => res?.data);
+  }
+
+  async grantAccess(workspaceSlug: string, memberIds: string[]): Promise<IWorkspaceKpiAccess[]> {
+    return this.post(`${workspaceSlug}/kpi/access/`, { members: memberIds }).then((res) => res?.data);
+  }
+
+  async revokeAccess(workspaceSlug: string, grantId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/kpi/access/${grantId}/`).then((res) => res?.data);
   }
 
   // --- Configuration ---

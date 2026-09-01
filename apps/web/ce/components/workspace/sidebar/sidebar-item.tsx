@@ -23,7 +23,7 @@ export function SidebarItem({ item }: Props) {
   const slug = workspaceSlug?.toString() || "";
 
   if (item.key === "helpdesk") {
-    if (!hasPageAccess(slug, item.key)) return null;
+    if (!hasPageAccess(slug, item)) return null;
     if (!isWorkspaceItemPinned(item.key)) return null;
     return <HelpdeskSidebarItem workspaceSlug={slug} />;
   }

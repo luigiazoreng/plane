@@ -329,6 +329,10 @@ export const coreRoutes: RouteConfigEntry[] = [
             "./(all)/[workspaceSlug]/(settings)/settings/(workspace)/exports/page.tsx"
           ),
           route(
+            ":workspaceSlug/settings/kpi-access",
+            "./(all)/[workspaceSlug]/(settings)/settings/(workspace)/kpi-access/page.tsx"
+          ),
+          route(
             ":workspaceSlug/settings/webhooks",
             "./(all)/[workspaceSlug]/(settings)/settings/(workspace)/webhooks/page.tsx"
           ),

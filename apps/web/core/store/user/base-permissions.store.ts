@@ -8,7 +8,7 @@ import { unset, set } from "lodash-es";
 import { action, makeObservable, observable, runInAction } from "mobx";
 import { computedFn } from "mobx-utils";
 // plane imports
-import type { TUserPermissions, TUserPermissionsLevel } from "@plane/constants";
+import type { IWorkspaceSidebarNavigationItem, TUserPermissions, TUserPermissionsLevel } from "@plane/constants";
 import {
   EUserPermissions,
   EUserPermissionsLevel,
@@ -58,7 +58,7 @@ export interface IBaseUserPermissionStore {
   fetchUserProjectPermissions: (workspaceSlug: string) => Promise<IUserProjectsRole>;
   joinProject: (workspaceSlug: string, projectId: string) => Promise<void>;
   leaveProject: (workspaceSlug: string, projectId: string) => Promise<void>;
-  hasPageAccess: (workspaceSlug: string, key: string) => boolean;
+  hasPageAccess: (workspaceSlug: string, keyOrItem: string | IWorkspaceSidebarNavigationItem) => boolean;
 }
 
 /**
@@ -174,19 +174,25 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
    * declare `requiresMeFlag`, a boolean the API resolves on /workspace-members/me/
    * for rules a role list cannot express (see the KPI panels, open to admins plus
    * an admin-managed grant list).
+   *
+   * Pass the item itself when you have it, and a key only when you do not (route
+   * guards). A key that matches no known item denies access, so a caller holding
+   * an item it built itself must pass the object or it would silently vanish.
    * @param { string } workspaceSlug
-   * @param { string } key
+   * @param { string | IWorkspaceSidebarNavigationItem } keyOrItem
    * @returns { boolean }
    */
-  hasPageAccess = computedFn((workspaceSlug: string, key: string): boolean => {
-    if (!workspaceSlug || !key) return false;
+  hasPageAccess = computedFn((workspaceSlug: string, keyOrItem: string | IWorkspaceSidebarNavigationItem): boolean => {
+    if (!workspaceSlug || !keyOrItem) return false;
     // Both collections, because SidebarItemBase renders static items (home,
-    // projects, drafts...) through the same path as the dynamic ones. Matching on
-    // item.key rather than the record key matters: the static record is keyed
-    // "your-work" while the item itself is keyed "your_work".
+    // projects, drafts...) through the same path as the dynamic ones. Matching
+    // on item.key rather than the record key matters: the static record is
+    // keyed "your-work" while the item itself is keyed "your_work".
     const settings =
-      WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.find((item) => item.key === key) ??
-      Object.values(WORKSPACE_SIDEBAR_STATIC_NAVIGATION_ITEMS).find((item) => item.key === key);
+      typeof keyOrItem === "string"
+        ? (WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.find((item) => item.key === keyOrItem) ??
+          Object.values(WORKSPACE_SIDEBAR_STATIC_NAVIGATION_ITEMS).find((item) => item.key === keyOrItem))
+        : keyOrItem;
     if (!settings) return false;
     if (!this.allowPermissions(settings.access, EUserPermissionsLevel.WORKSPACE, workspaceSlug)) return false;
     if (settings.requiresMeFlag && !this.workspaceInfoBySlug(workspaceSlug)?.[settings.requiresMeFlag]) return false;
