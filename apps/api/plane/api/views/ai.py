@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -18,6 +19,7 @@ from plane.api.serializers import (
     AIAgentRunSerializer,
 )
 from plane.api.views.base import BaseAPIView
+from plane.app.permissions import ROLE, allow_permission
 from plane.db.models import (
     AIAgentAction,
     AIAgentConversation,
@@ -29,12 +31,17 @@ from plane.db.models import (
 logger = logging.getLogger(__name__)
 
 AI_SERVICE_URL = getattr(settings, "AI_SERVICE_URL", "http://localhost:8001")
+AI_SERVICE_SECRET = getattr(settings, "AI_SERVICE_SECRET", "default-ai-service-secret")
 
 
 def _call_ai_service(endpoint: str, payload: dict) -> dict:
     url = f"{AI_SERVICE_URL.rstrip('/')}{endpoint}"
     data = json.dumps(payload).encode("utf-8")
-    req = Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+    headers = {
+        "Content-Type": "application/json",
+        "X-AI-Service-Key": AI_SERVICE_SECRET,
+    }
+    req = Request(url, data=data, headers=headers, method="POST")
     try:
         with urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -47,18 +54,20 @@ def _call_ai_service(endpoint: str, payload: dict) -> dict:
 
 
 class AIAgentRunEndpoint(BaseAPIView):
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug):
-        if not WorkspaceMember.objects.filter(
+        is_admin = WorkspaceMember.objects.filter(
             workspace__slug=slug,
             member=request.user,
+            role=ROLE.ADMIN.value,
             is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to access workspace AI agent runs."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        ).exists()
 
-        runs = AIAgentRun.objects.filter(workspace__slug=slug).order_by("-created_at")
+        runs = AIAgentRun.objects.filter(workspace__slug=slug)
+        if not is_admin:
+            runs = runs.filter(requested_by=request.user)
+
+        runs = runs.order_by("-created_at")
         queryset = self.filter_queryset(runs)
         return self.paginate(
             request=request,
@@ -66,17 +75,8 @@ class AIAgentRunEndpoint(BaseAPIView):
             on_results=lambda data: AIAgentRunSerializer(data, many=True).data,
         )
 
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def post(self, request, slug):
-        if not WorkspaceMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to execute AI agent runs in this workspace."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         workspace = Workspace.objects.get(slug=slug)
         serializer = AIAgentRunCreateSerializer(data=request.data)
         if serializer.is_valid():
@@ -97,23 +97,49 @@ class AIAgentRunEndpoint(BaseAPIView):
             }
 
             ai_res = _call_ai_service("/api/agent/run", ai_payload)
-            plan = ai_res.get("plan", {})
+            if not ai_res or not ai_res.get("success"):
+                run.status = "failed"
+                run.output_text = "Failed to communicate with AI Service or service returned error."
+                run.completed_at = timezone.now()
+                run.save()
+                return Response(AIAgentRunSerializer(run).data, status=status.HTTP_201_CREATED)
 
+            plan = ai_res.get("plan", {})
+            run.output_text = plan.get("responseText", "")
             actions = plan.get("actions", [])
             has_pending_approval = False
 
             for act in actions:
                 requires_approval = act.get("requiresApproval", True)
-                if requires_approval:
-                    has_pending_approval = True
+                status_str = "planned" if requires_approval else "executed"
 
-                AIAgentAction.objects.create(
+                action_obj = AIAgentAction.objects.create(
                     run=run,
                     action_type=act.get("type", "unknown"),
                     target_entity_type=act.get("targetEntityType", "issue"),
                     planned_payload=act.get("payload", {}),
-                    status="planned",
+                    status=status_str,
                 )
+
+                if requires_approval:
+                    has_pending_approval = True
+                else:
+                    # Auto-execute action immediately
+                    exec_res = _call_ai_service(
+                        "/api/agent/execute",
+                        {
+                            "workspaceSlug": slug,
+                            "projectId": str(run.project_id) if run.project_id else None,
+                            "actionType": action_obj.action_type,
+                            "payload": action_obj.planned_payload,
+                        },
+                    )
+                    action_obj.executed_payload = exec_res.get("result", {})
+                    action_obj.executed_at = timezone.now()
+                    if not exec_res.get("success"):
+                        action_obj.status = "failed"
+                        action_obj.error_message = exec_res.get("error", "Execution failed")
+                    action_obj.save()
 
             if has_pending_approval:
                 run.status = "awaiting_approval"
@@ -129,107 +155,95 @@ class AIAgentRunEndpoint(BaseAPIView):
 
 
 class AIAgentRunDetailEndpoint(BaseAPIView):
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug, run_id):
-        if not WorkspaceMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         try:
             run = AIAgentRun.objects.get(id=run_id, workspace__slug=slug)
+
+            is_admin = WorkspaceMember.objects.filter(
+                workspace__slug=slug,
+                member=request.user,
+                role=ROLE.ADMIN.value,
+                is_active=True,
+            ).exists()
+
+            if not is_admin and run.requested_by != request.user:
+                return Response({"error": "You do not have permission to view this run."}, status=status.HTTP_403_FORBIDDEN)
+
             return Response(AIAgentRunSerializer(run).data, status=status.HTTP_200_OK)
         except AIAgentRun.DoesNotExist:
             return Response({"error": "AI Agent Run not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AIAgentRunApprovalEndpoint(BaseAPIView):
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def post(self, request, slug, run_id):
-        if not WorkspaceMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         try:
-            run = AIAgentRun.objects.get(id=run_id, workspace__slug=slug)
+            with transaction.atomic():
+                run = AIAgentRun.objects.select_for_update().get(id=run_id, workspace__slug=slug)
 
-            if run.status != "awaiting_approval":
-                return Response(
-                    {"error": f"Run is not awaiting approval. Current status: {run.status}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            action_choice = request.data.get("action")
-            if action_choice == "approve":
-                planned_actions = list(AIAgentAction.objects.filter(run=run, status="planned"))
-                
-                for act in planned_actions:
-                    exec_res = _call_ai_service(
-                        "/api/agent/execute",
-                        {
-                            "workspaceSlug": slug,
-                            "projectId": str(run.project_id) if run.project_id else None,
-                            "actionType": act.action_type,
-                            "payload": act.planned_payload,
-                        },
+                if run.status != "awaiting_approval":
+                    return Response(
+                        {"error": f"Run is not awaiting approval. Current status: {run.status}"},
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                    act.status = "executed" if exec_res.get("success") else "failed"
-                    act.executed_payload = exec_res.get("result", {})
-                    act.approved_by = request.user
-                    act.executed_at = timezone.now()
-                    if not exec_res.get("success"):
-                        act.error_message = exec_res.get("error", "Execution failed")
-                    act.save()
+                action_choice = request.data.get("action")
+                if action_choice == "approve":
+                    planned_actions = list(AIAgentAction.objects.filter(run=run, status="planned"))
+                    all_success = True
 
-                run.status = "completed"
-                run.completed_at = timezone.now()
-                run.save()
+                    for act in planned_actions:
+                        exec_res = _call_ai_service(
+                            "/api/agent/execute",
+                            {
+                                "workspaceSlug": slug,
+                                "projectId": str(run.project_id) if run.project_id else None,
+                                "actionType": act.action_type,
+                                "payload": act.planned_payload,
+                            },
+                        )
 
-                return Response(
-                    {"message": "Run actions executed", "run": AIAgentRunSerializer(run).data},
-                    status=status.HTTP_200_OK,
-                )
-            elif action_choice == "reject":
-                run.status = "rejected"
-                run.completed_at = timezone.now()
-                run.save()
+                        success = bool(exec_res.get("success"))
+                        act.status = "executed" if success else "failed"
+                        act.executed_payload = exec_res.get("result", {})
+                        act.approved_by = request.user
+                        act.executed_at = timezone.now()
+                        if not success:
+                            all_success = False
+                            act.error_message = exec_res.get("error", "Execution failed")
+                        act.save()
 
-                AIAgentAction.objects.filter(run=run, status="planned").update(
-                    status="failed",
-                    error_message="Rejected by user",
-                )
-                return Response(
-                    {"message": "Run rejected", "run": AIAgentRunSerializer(run).data},
-                    status=status.HTTP_200_OK,
-                )
+                    run.status = "completed" if all_success else "failed"
+                    run.completed_at = timezone.now()
+                    run.save()
 
-            return Response({"error": "Invalid action choice"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        {"message": "Run actions executed", "run": AIAgentRunSerializer(run).data},
+                        status=status.HTTP_200_OK,
+                    )
+                elif action_choice == "reject":
+                    run.status = "rejected"
+                    run.completed_at = timezone.now()
+                    run.save()
+
+                    AIAgentAction.objects.filter(run=run, status="planned").update(
+                        status="failed",
+                        error_message="Rejected by user",
+                    )
+                    return Response(
+                        {"message": "Run rejected", "run": AIAgentRunSerializer(run).data},
+                        status=status.HTTP_200_OK,
+                    )
+
+                return Response({"error": "Invalid action choice"}, status=status.HTTP_400_BAD_REQUEST)
         except AIAgentRun.DoesNotExist:
             return Response({"error": "Run not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AIAgentConversationEndpoint(BaseAPIView):
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug):
-        if not WorkspaceMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to view AI conversations."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         conversations = AIAgentConversation.objects.filter(
             workspace__slug=slug,
             created_by=request.user,
@@ -241,17 +255,8 @@ class AIAgentConversationEndpoint(BaseAPIView):
             on_results=lambda data: AIAgentConversationSerializer(data, many=True).data,
         )
 
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def post(self, request, slug):
-        if not WorkspaceMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to create AI conversations."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         workspace = Workspace.objects.get(slug=slug)
         serializer = AIAgentConversationSerializer(data=request.data)
         if serializer.is_valid():
@@ -262,17 +267,8 @@ class AIAgentConversationEndpoint(BaseAPIView):
 
 
 class AIAgentConversationDetailEndpoint(BaseAPIView):
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug, conversation_id):
-        if not WorkspaceMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to view this conversation."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         try:
             conversation = AIAgentConversation.objects.get(
                 id=conversation_id,
@@ -283,17 +279,8 @@ class AIAgentConversationDetailEndpoint(BaseAPIView):
         except AIAgentConversation.DoesNotExist:
             return Response({"error": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def delete(self, request, slug, conversation_id):
-        if not WorkspaceMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        ).exists():
-            return Response(
-                {"error": "You do not have permission to delete this conversation."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         try:
             conversation = AIAgentConversation.objects.get(
                 id=conversation_id,

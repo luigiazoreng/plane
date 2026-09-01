@@ -32,7 +32,7 @@ export class MockProvider implements ILLMProvider {
       messages
         .slice()
         .toReversed()
-        .find((m) => m.role === "user")?.content || "";
+        .find((m: LLMMessage) => m.role === "user")?.content || "";
     return {
       content: `[Mock AI Response] Evaluated prompt: "${lastUserMessage}". Context grounded successfully.`,
       provider: "mock",

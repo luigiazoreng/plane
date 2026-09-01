@@ -205,3 +205,21 @@ class AIAgentContractTests(APITestCase):
         url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/{fake_id}/"
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("plane.api.views.ai._call_ai_service")
+    def test_ai_agent_run_service_outage_handling(self, mock_ai_service):
+        """Test AI service failure sets run status to failed instead of completing"""
+        mock_ai_service.return_value = {}  # Simulate service outage / connection failure
+
+        url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/"
+        payload = {
+            "mode": "ask",
+            "provider": "openai",
+            "llm_model": "gpt-4o-mini",
+            "input_text": "Summarize issues",
+        }
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        self.assertEqual(data["status"], "failed")
+        self.assertIn("Failed to communicate", data["output_text"])

@@ -16,6 +16,7 @@ class AIAgentRun(BaseModel):
     llm_model = models.CharField(max_length=50)
     status = models.CharField(max_length=20) # 'running', 'completed', 'failed', 'awaiting_approval'
     input_text = models.TextField()
+    output_text = models.TextField(blank=True, null=True)
     context_snapshot = models.JSONField(default=dict)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)

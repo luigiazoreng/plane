@@ -131,7 +131,12 @@ async function runTests() {
     }
   });
 
-  await test("HTTP Server /api/agent/run endpoint processes Ask Mode runs", async () => {
+  const defaultHeaders = {
+    "Content-Type": "application/json",
+    "X-AI-Service-Key": "default-ai-service-secret",
+  };
+
+  await test("HTTP Server returns 401 Unauthorized when X-AI-Service-Key is missing", async () => {
     const app = createServer();
     const server = app.listen(0);
     const address = server.address() as any;
@@ -141,6 +146,26 @@ async function runTests() {
       const res = await fetch(`http://localhost:${port}/api/agent/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "test", workspaceSlug: "w1" }),
+      });
+      assert.strictEqual(res.status, 401);
+      const data = await res.json();
+      assert(data.error.includes("Unauthorized"));
+    } finally {
+      server.close();
+    }
+  });
+
+  await test("HTTP Server /api/agent/run endpoint processes Ask Mode runs", async () => {
+    const app = createServer();
+    const server = app.listen(0);
+    const address = server.address() as any;
+    const port = address.port;
+
+    try {
+      const res = await fetch(`http://localhost:${port}/api/agent/run`, {
+        method: "POST",
+        headers: defaultHeaders,
         body: JSON.stringify({
           prompt: "What is the status of project?",
           workspaceSlug: "test-workspace",
@@ -167,7 +192,7 @@ async function runTests() {
     try {
       const res = await fetch(`http://localhost:${port}/api/agent/execute`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: defaultHeaders,
         body: JSON.stringify({
           workspaceSlug: "test-workspace",
           projectId: "p1",
@@ -195,7 +220,7 @@ async function runTests() {
     try {
       const res = await fetch(`http://localhost:${port}/api/agent/run`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: defaultHeaders,
         body: JSON.stringify({
           prompt: "   ",
           workspaceSlug: "test-workspace",
@@ -219,7 +244,7 @@ async function runTests() {
     try {
       const res = await fetch(`http://localhost:${port}/api/agent/execute`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: defaultHeaders,
         body: JSON.stringify({
           workspaceSlug: "test-workspace",
           actionType: "invalid_action_name",
@@ -244,7 +269,7 @@ async function runTests() {
     try {
       const res = await fetch(`http://localhost:${port}/api/agent/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: defaultHeaders,
         body: JSON.stringify({}),
       });
 

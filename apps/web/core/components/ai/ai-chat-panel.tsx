@@ -77,7 +77,7 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
       if (response.ok) {
         const data = await response.json();
         runId = data.id;
-        agentResponseText = data.input_text || "Processed request successfully.";
+        agentResponseText = data.output_text || `Run ${data.status}: ${data.input_text}`;
         actions = (data.actions || []).map((act: any) => ({
           type: act.action_type,
           targetEntityType: act.target_entity_type,
@@ -87,39 +87,9 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
         }));
         contextSummary = `Run ID: ${data.id?.slice(0, 8) || "run"} | Status: ${data.status}`;
       } else {
-        // Fallback demonstration mode
-        if (mode === "ask") {
-          agentResponseText = `[Ask Mode] Grounded on workspace "${workspaceSlug}". Summarized: No active blockers found in recent items.`;
-          contextSummary = "Grounded on 2 project(s) and 5 work item(s).";
-        } else {
-          agentResponseText = `[Build Mode] Proposed action to fulfill your request: "${currentPrompt}". Review action card below.`;
-          actions = [
-            {
-              type: lowerIncludes(currentPrompt, ["cycle", "sprint", "ciclo"])
-                ? "create_cycle"
-                : lowerIncludes(currentPrompt, ["module", "módulo"])
-                  ? "create_module"
-                  : lowerIncludes(currentPrompt, ["comment", "comentário"])
-                    ? "create_comment"
-                    : "create_work_item",
-              targetEntityType: lowerIncludes(currentPrompt, ["cycle", "sprint", "ciclo"])
-                ? "cycle"
-                : lowerIncludes(currentPrompt, ["module", "módulo"])
-                  ? "module"
-                  : lowerIncludes(currentPrompt, ["comment", "comentário"])
-                    ? "comment"
-                    : "issue",
-              payload: {
-                name: currentPrompt.replace(/create|crie|add|adicionar/gi, "").trim() || "New AI Entity",
-                project_id: projectId || "default-project",
-                description: `Created via Build Mode AI: ${currentPrompt}`,
-              },
-              requiresApproval: true,
-              status: "planned" as const,
-            },
-          ];
-          contextSummary = "1 action proposed for approval.";
-        }
+        const errData = await response.json().catch(() => ({}));
+        agentResponseText = `Failed to process AI request (${response.status}): ${errData.error || "Service Error"}`;
+        contextSummary = "Request failed.";
       }
 
       const agentMessage: AIChatMessage = {
@@ -134,14 +104,14 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
       };
 
       setMessages((prev) => [...prev, agentMessage]);
-    } catch (err) {
+    } catch (err: any) {
       console.error("[AIChatPanel] Request error:", err);
       setMessages((prev) => [
         ...prev,
         {
           id: `err-${Date.now()}`,
           sender: "agent",
-          text: "An error occurred while contacting Plane AI service. Please try again.",
+          text: `An error occurred while contacting Plane AI service: ${err.message || "Network Error"}`,
           mode,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
@@ -154,13 +124,29 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
   const handleApprovalAction = async (messageId: string, actionIndex: number, approved: boolean, runId?: string) => {
     if (runId) {
       try {
-        await fetch(`/api/v1/workspaces/${workspaceSlug}/ai/runs/${runId}/approval/`, {
+        const resp = await fetch(`/api/v1/workspaces/${workspaceSlug}/ai/runs/${runId}/approval/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: approved ? "approve" : "reject" }),
         });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          console.error("[AIChatPanel] Approval API call failed:", errData);
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== messageId) return msg;
+              return {
+                ...msg,
+                text: `${msg.text}\n\n⚠️ Action approval failed: ${errData.error || "Server Error"}`,
+              };
+            })
+          );
+          return;
+        }
       } catch (err) {
-        console.error("[AIChatPanel] Approval API call failed:", err);
+        console.error("[AIChatPanel] Approval API call network error:", err);
+        return;
       }
     }
 
@@ -174,7 +160,7 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
         };
         return {
           ...msg,
-          text: approved ? `${msg.text}\n\n✅ Action executed successfully!` : `${msg.text}\n\n❌ Action rejected.`,
+          text: approved ? `${msg.text}\n\nAction approved.` : `${msg.text}\n\nAction rejected.`,
           actions: updatedActions,
         };
       })
@@ -322,8 +308,3 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
     </div>
   );
 };
-
-function lowerIncludes(str: string, keywords: string[]): boolean {
-  const lower = str.toLowerCase();
-  return keywords.some((kw) => lower.includes(kw));
-}

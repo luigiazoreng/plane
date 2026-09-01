@@ -56,6 +56,7 @@ class AIAgentRunSerializer(BaseSerializer):
             "llm_model",
             "status",
             "input_text",
+            "output_text",
             "context_snapshot",
             "started_at",
             "completed_at",

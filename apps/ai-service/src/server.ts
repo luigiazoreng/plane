@@ -19,8 +19,26 @@ const asyncHandler =
 export const createServer = () => {
   const app = express();
 
-  app.use(cors());
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",")
+    : ["http://localhost:3000", "http://localhost:8000", "http://localhost:8001"];
+
+  app.use(cors({ origin: allowedOrigins }));
   app.use(express.json());
+
+  // Inbound secret key auth middleware for privileged endpoints
+  app.use((req, res, next) => {
+    if (req.path === "/health") {
+      return next();
+    }
+    const expectedSecret = process.env.AI_SERVICE_SECRET || "default-ai-service-secret";
+    const apiKey = req.headers["x-ai-service-key"];
+
+    if (!apiKey || apiKey !== expectedSecret) {
+      return res.status(401).json({ error: "Unauthorized: Invalid or missing X-AI-Service-Key header" });
+    }
+    next();
+  });
 
   const retriever = new WorkspaceRetriever();
   const planner = new ExecutionPlanner();
