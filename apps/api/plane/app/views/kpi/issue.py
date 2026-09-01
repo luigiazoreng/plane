@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from plane.app.views.base import BaseAPIView
 from plane.app.permissions import ROLE, allow_permission
+from plane.app.kpi.permissions import require_workspace_kpi_access
 from plane.app.serializers.kpi import KpiIssueAttributeSerializer
 from plane.db.models import (
     EstimateProperty,
@@ -204,6 +205,27 @@ def _active_kpi_projects(workspace, user):
             archived_at__isnull=True,
             project_projectmember__member=user,
             project_projectmember__is_active=True,
+        )
+        .distinct()
+        .order_by("name")
+    )
+
+
+def _workspace_kpi_projects(workspace):
+    """Projects feeding the workspace-level panels (general KPI + Executive).
+
+    Deliberately unfiltered by membership, unlike _active_kpi_projects. The
+    access gate already ran at the endpoint entrance, and the point of an
+    executive panel is precisely to cover projects the requester does not work
+    on -- an admin who belongs to no project would otherwise open the panel and
+    see nothing. Granting workspace KPI access therefore grants visibility into
+    every project with the KPI panel enabled.
+    """
+    return (
+        Project.objects.filter(
+            workspace=workspace,
+            kpi_view=True,
+            archived_at__isnull=True,
         )
         .distinct()
         .order_by("name")
@@ -410,14 +432,19 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
 class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
     """Per-member breakdown of Vp/Vf across the workspace's active KPI projects.
 
-    Scoped to projects with ``kpi_view`` enabled that the requester is a member
-    of, so the ranking covers exactly the projects whose KPI panel they can open.
+    Covers every project with ``kpi_view`` enabled (see _workspace_kpi_projects),
+    not just the requester's own, because the access gate rather than project
+    membership is what bounds this endpoint.
+
+    Guarded by the same gate as WorkspaceKpiOverviewEndpoint on purpose: both
+    return per-person figures, and a weaker gate on either one makes the other
+    decorative.
     """
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
+    @require_workspace_kpi_access
     def get(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
-        project_ids = list(_active_kpi_projects(workspace, request.user).values_list("id", flat=True))
+        project_ids = list(_workspace_kpi_projects(workspace).values_list("id", flat=True))
         contracts = resolve_contracts_bulk(workspace, project_ids)
 
         issues = list(
@@ -479,7 +506,7 @@ class WorkspaceKpiOverviewEndpoint(BaseAPIView):
     still surfaces via ``counts["pending"]``, just not via Vp/Vf.
     """
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
+    @require_workspace_kpi_access
     def get(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
 
@@ -487,7 +514,7 @@ class WorkspaceKpiOverviewEndpoint(BaseAPIView):
         if period_key is None:
             return Response({"error": PERIOD_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
-        projects = list(_active_kpi_projects(workspace, request.user))
+        projects = list(_workspace_kpi_projects(workspace))
         project_ids = [project.id for project in projects]
         contracts = resolve_contracts_bulk(workspace, project_ids)
 

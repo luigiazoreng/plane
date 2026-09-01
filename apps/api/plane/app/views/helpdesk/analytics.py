@@ -5,6 +5,7 @@ from django.db.models.functions import Coalesce, TruncDate, TruncMonth
 from rest_framework import status as http_status
 from rest_framework.response import Response
 
+from plane.app.permissions import ROLE, allow_permission
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import HelpdeskPortal, HelpdeskRequest, HelpdeskRequestAssignee, HelpdeskStatus
@@ -53,7 +54,17 @@ def _ref_date_expr():
 
 
 class HelpdeskAnalyticsEndpoint(BaseAPIView):
+    """Workspace-wide helpdesk analytics.
 
+    The gate is conjunctive on purpose. Helpdesk membership alone used to be
+    enough, which let a workspace GUEST who happened to hold any helpdesk role
+    read ``top_agents`` -- per-agent names, volumes and SLA percentages for the
+    whole workspace. That is performance data about people, so it now also
+    requires a workspace role of MEMBER or above, the same floor the KPI
+    endpoints apply (see plane.app.views.kpi.issue).
+    """
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug):
         if get_helpdesk_role(request.user, slug) is None:
             return Response({"error": "Access denied."}, status=http_status.HTTP_403_FORBIDDEN)

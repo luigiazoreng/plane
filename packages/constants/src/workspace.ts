@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import type { TStaticViewTypes, IWorkspaceSearchResults } from "@plane/types";
+import type { TStaticViewTypes, IWorkspaceSearchResults, IWorkspaceMemberMe } from "@plane/types";
 import { EUserWorkspaceRoles } from "@plane/types";
 
 export const ORGANIZATION_SIZE: string[] = ["Just myself", "2-10", "11-50", "51-200", "201-500", "500+"];
@@ -195,6 +195,13 @@ export interface IWorkspaceSidebarNavigationItem {
   labelTranslationKey: string;
   href: string;
   access: EUserWorkspaceRoles[];
+  /**
+   * An extra condition beyond the role, read from /workspace-members/me/.
+   * Used where the role is not the whole rule -- the KPI panels are open to
+   * workspace admins plus whoever an admin has granted, which no role list can
+   * express. `access` stays as the workspace-membership floor.
+   */
+  requiresMeFlag?: keyof IWorkspaceMemberMe;
   highlight: (pathname: string, url: string) => boolean;
 }
 
@@ -231,14 +238,20 @@ export const WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS: Record<string, IWorkspa
     key: "kpi",
     labelTranslationKey: "sidebar.kpi",
     href: `/kpi/`,
-    access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER],
+    // Any workspace member may be granted these; the grant, not the role, is the
+    // authority, so `access` is only the floor and requiresMeFlag decides.
+    access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER, EUserWorkspaceRoles.GUEST],
+    requiresMeFlag: "can_view_workspace_kpi",
     highlight: (pathname: string, url: string) => pathname.includes(url),
   },
   executive: {
     key: "executive",
     labelTranslationKey: "sidebar.executive",
     href: `/executive/`,
-    access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER],
+    // Any workspace member may be granted these; the grant, not the role, is the
+    // authority, so `access` is only the floor and requiresMeFlag decides.
+    access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER, EUserWorkspaceRoles.GUEST],
+    requiresMeFlag: "can_view_workspace_kpi",
     highlight: (pathname: string, url: string) => pathname.includes(url),
   },
 };

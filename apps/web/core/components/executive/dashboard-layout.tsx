@@ -12,6 +12,8 @@ import { Sliders, Award, Target, CheckCircle, HelpCircle, AlertTriangle } from "
 import { Spinner } from "@plane/ui";
 import { Button } from "@plane/propel/button";
 import type { IHelpdeskAnalyticsFilters } from "@plane/types";
+// components
+import { NotAuthorizedView } from "@/components/auth-screens/not-authorized-view";
 // hooks
 import { useHelpdeskAnalytics } from "@/hooks/store/use-helpdesk-analytics";
 import { useKpi } from "@/hooks/store/use-kpi";
@@ -78,6 +80,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
 
   // ── Local state ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<"forbidden" | "failed" | null>(null);
   const [period, setPeriod] = useState<TExecutivePeriod>("30d");
   const [customStartDate, setCustomStartDate] = useState<string | undefined>();
   const [customEndDate, setCustomEndDate] = useState<string | undefined>();
@@ -106,6 +109,7 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    setLoadError(null);
 
     Promise.all([
       fetchWorkspaceOverview(workspaceSlug, {
@@ -114,9 +118,19 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
         end: period === "custom" ? customEndDate : undefined,
       }),
       fetchAnalytics(workspaceSlug, hdFilters),
-    ]).finally(() => {
-      if (mounted) setLoading(false);
-    });
+    ])
+      .catch((error: unknown) => {
+        // Both stores rethrow, so a 403 from either endpoint lands here. Without
+        // this the rejection went unhandled, loading still flipped to false, and
+        // the dashboard rendered every figure as an em dash -- a denied or failed
+        // load was indistinguishable from a workspace that simply has no data.
+        if (!mounted) return;
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        setLoadError(status === 403 ? "forbidden" : "failed");
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
 
     return () => {
       mounted = false;
@@ -214,6 +228,22 @@ export const ExecutiveDashboardLayout = observer(function ExecutiveDashboardLayo
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Spinner />
+      </div>
+    );
+  }
+
+  if (loadError === "forbidden") {
+    return <NotAuthorizedView className="h-full" />;
+  }
+
+  // A stale dashboard beats an error page, so this only takes over when the
+  // failed load left nothing to show.
+  if (loadError === "failed" && (!overview || !helpdeskData)) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
+        <AlertTriangle className="size-8 text-warning-primary" strokeWidth={1.5} />
+        <p className="text-13 font-medium text-secondary">Couldn&rsquo;t load the executive dashboard</p>
+        <p className="text-12 text-tertiary">Reload the page to try again.</p>
       </div>
     );
   }

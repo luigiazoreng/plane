@@ -13,6 +13,7 @@ import {
   EUserPermissions,
   EUserPermissionsLevel,
   WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS,
+  WORKSPACE_SIDEBAR_STATIC_NAVIGATION_ITEMS,
 } from "@plane/constants";
 import type { EUserProjectRoles, IUserProjectsRole, IWorkspaceMemberMe, TProjectMembership } from "@plane/types";
 import { EUserWorkspaceRoles } from "@plane/types";
@@ -165,17 +166,31 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
   abstract fetchWorkspaceLevelProjectEntities: (workspaceSlug: string, projectId: string) => void;
 
   /**
-   * @description Returns whether the user has the permission to access a page
-   * @param { string } page
+   * @description Returns whether the user may access a workspace-level page.
+   *
+   * The single source of truth for page visibility: the sidebar, the extended
+   * sidebar, the customize-navigation dialog and the route guards all call this,
+   * so none of them can drift from the others. Beyond the role list, an item may
+   * declare `requiresMeFlag`, a boolean the API resolves on /workspace-members/me/
+   * for rules a role list cannot express (see the KPI panels, open to admins plus
+   * an admin-managed grant list).
+   * @param { string } workspaceSlug
+   * @param { string } key
    * @returns { boolean }
    */
   hasPageAccess = computedFn((workspaceSlug: string, key: string): boolean => {
     if (!workspaceSlug || !key) return false;
-    const settings = WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.find((item) => item.key === key);
-    if (settings) {
-      return this.allowPermissions(settings.access, EUserPermissionsLevel.WORKSPACE, workspaceSlug);
-    }
-    return false;
+    // Both collections, because SidebarItemBase renders static items (home,
+    // projects, drafts...) through the same path as the dynamic ones. Matching on
+    // item.key rather than the record key matters: the static record is keyed
+    // "your-work" while the item itself is keyed "your_work".
+    const settings =
+      WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.find((item) => item.key === key) ??
+      Object.values(WORKSPACE_SIDEBAR_STATIC_NAVIGATION_ITEMS).find((item) => item.key === key);
+    if (!settings) return false;
+    if (!this.allowPermissions(settings.access, EUserPermissionsLevel.WORKSPACE, workspaceSlug)) return false;
+    if (settings.requiresMeFlag && !this.workspaceInfoBySlug(workspaceSlug)?.[settings.requiresMeFlag]) return false;
+    return true;
   });
 
   // action helpers

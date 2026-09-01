@@ -107,6 +107,12 @@ export interface IWorkspaceMemberMe {
   view_props: IWorkspaceViewProps;
   workspace: string;
   draft_issue_count: number;
+  /**
+   * Whether this member may open the workspace KPI and Executive panels.
+   * Resolved by the API from the workspace role plus the explicit grant list,
+   * so the client never re-derives the rule from `role` alone.
+   */
+  can_view_workspace_kpi: boolean;
 }
 
 export interface ILastActiveWorkspaceDetails {

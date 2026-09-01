@@ -1,6 +1,8 @@
 from django.urls import path
 
 from plane.app.views.kpi import (
+    WorkspaceKpiAccessEndpoint,
+    WorkspaceKpiAccessDetailEndpoint,
     KpiWorkspaceConfigEndpoint,
     KpiProjectConfigEndpoint,
     KpiIssueListEndpoint,
@@ -13,6 +15,17 @@ from plane.app.views.kpi import (
 )
 
 urlpatterns = [
+    # Who, besides workspace admins, may open the workspace KPI panels
+    path(
+        "workspaces/<str:slug>/kpi/access/",
+        WorkspaceKpiAccessEndpoint.as_view(),
+        name="workspace-kpi-access",
+    ),
+    path(
+        "workspaces/<str:slug>/kpi/access/<uuid:pk>/",
+        WorkspaceKpiAccessDetailEndpoint.as_view(),
+        name="workspace-kpi-access-detail",
+    ),
     # Workspace-default config
     path(
         "workspaces/<str:slug>/kpi/config/",

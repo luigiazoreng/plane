@@ -2,8 +2,9 @@
 from rest_framework import serializers
 
 # Module imports
-from plane.db.models import KpiConfig, KpiIssueAttribute
+from plane.db.models import KpiConfig, KpiIssueAttribute, WorkspaceKpiAccess
 from plane.app.serializers.base import BaseSerializer
+from plane.app.serializers.user import UserLiteSerializer
 
 READ_ONLY_BASE = ["workspace", "created_at", "updated_at", "created_by", "updated_by", "deleted_at"]
 
@@ -53,3 +54,18 @@ class KpiIssueAttributeSerializer(BaseSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "issue", "created_at", "updated_at"]
+
+
+class WorkspaceKpiAccessSerializer(BaseSerializer):
+    """A single grant to the workspace KPI panels.
+
+    ``member_detail`` is expanded so the settings screen can render the person
+    without a second round trip, matching HelpdeskMemberSerializer.
+    """
+
+    member_detail = UserLiteSerializer(source="member", read_only=True)
+
+    class Meta:
+        model = WorkspaceKpiAccess
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE + ["workspace"]

@@ -79,15 +79,9 @@ export const CustomizeNavigationDialog = observer(function CustomizeNavigationDi
 
   // Filter workspace items by permissions and feature flags, then get pinned/unpinned items
   const workspaceItems = useMemo(() => {
-    const items = WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.filter((item) => {
-      // Permission check
-      const hasPermission = allowPermissions(
-        item.access,
-        EUserPermissionsLevel.WORKSPACE,
-        workspaceSlug?.toString() || ""
-      );
-      return hasPermission;
-    }).map((item) => {
+    const items = WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.filter((item) =>
+      hasPageAccess(workspaceSlug?.toString() || "", item.key)
+    ).map((item) => {
       // Get pinned status and sort order from localStorage
       const preference = workspacePreferences.items[item.key];
       const isPinned = preference?.is_pinned ?? false;

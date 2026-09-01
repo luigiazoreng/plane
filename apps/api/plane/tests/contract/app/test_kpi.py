@@ -530,8 +530,13 @@ class TestWorkspaceKpiMemberAggregates:
         assert body["results"] == []
         assert body["unassigned_count"] == 0
 
-    def test_project_the_requester_does_not_belong_to_is_excluded(self, session_client, workspace, create_user):
-        """KPI-enabled but without membership -> its scores stay invisible."""
+    def test_project_the_requester_does_not_belong_to_is_included(self, session_client, workspace, create_user):
+        """KPI-enabled anywhere in the workspace -> its scores count here.
+
+        The workspace-level endpoints are gated by has_workspace_kpi_access rather
+        than by project membership, so they deliberately reach past the caller's
+        own projects.
+        """
         outsider = User.objects.create(username="outsider", email="outsider@plane.so", first_name="Out", last_name="Sider")
         project = Project.objects.create(
             name="Foreign", identifier="FOR", workspace=workspace, created_by=outsider, kpi_view=True
@@ -550,7 +555,7 @@ class TestWorkspaceKpiMemberAggregates:
 
         url = reverse("workspace-kpi-member-aggregates", kwargs={"slug": workspace.slug})
         body = session_client.get(url).json()
-        assert body["results"] == []
+        assert [row["user_id"] for row in body["results"]] == [str(outsider.id)]
 
 
 def _kpi_project(workspace, user, name, identifier, kpi_view=True):
@@ -672,7 +677,15 @@ class TestKpiWorkspaceOverview:
         assert [row["identifier"] for row in body["projects"]] == ["LIV"]
         assert body["unified"]["scored_items"] == 1
 
-    def test_project_without_membership_is_excluded(self, session_client, workspace, create_user):
+    def test_projects_without_membership_are_included(self, session_client, workspace, create_user):
+        """Workspace panels span the workspace, not the requester's own projects.
+
+        This inverts the old rule on purpose. Reaching this endpoint now requires
+        has_workspace_kpi_access -- workspace admin, or a grant an admin opened --
+        and an executive panel that hid the projects its reader does not work on
+        would show an admin who joined nothing an empty dashboard. Membership
+        still scopes the project-level endpoints; see TestKpiMemberAggregates.
+        """
         outsider = User.objects.create(username="outsider-ov", email="outsider-ov@plane.so", first_name="Out", last_name="Sider")
         mine, state_mine = _kpi_project(workspace, create_user, "Mine", "MIN")
         theirs, state_theirs = _kpi_project(workspace, outsider, "Theirs", "THE")
@@ -685,7 +698,7 @@ class TestKpiWorkspaceOverview:
             )
 
         body = session_client.get(self._url(workspace)).json()
-        assert [row["identifier"] for row in body["projects"]] == ["MIN"]
+        assert sorted(row["identifier"] for row in body["projects"]) == ["MIN", "THE"]
 
     def test_project_without_scored_items_is_listed_but_stays_out_of_the_average(
         self, session_client, workspace, create_user

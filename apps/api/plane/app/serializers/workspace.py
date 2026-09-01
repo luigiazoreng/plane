@@ -92,10 +92,23 @@ class WorkSpaceMemberSerializer(DynamicBaseSerializer):
 
 class WorkspaceMemberMeSerializer(BaseSerializer):
     draft_issue_count = serializers.IntegerField(read_only=True)
+    can_view_workspace_kpi = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkspaceMember
         fields = "__all__"
+
+    def get_can_view_workspace_kpi(self, obj) -> bool:
+        """Whether this member may open the workspace KPI and Executive panels.
+
+        Rides on the bootstrap request the web app already makes, so the sidebar
+        and route guards can ask one flag instead of re-deriving the rule from a
+        role. The backend stays the authority: this only mirrors the decision the
+        KPI endpoints enforce.
+        """
+        from plane.app.kpi.permissions import has_workspace_kpi_access
+
+        return has_workspace_kpi_access(obj.member, obj.workspace.slug)
 
 
 class WorkspaceMemberAdminSerializer(DynamicBaseSerializer):

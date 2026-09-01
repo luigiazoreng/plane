@@ -138,6 +138,7 @@ from .helpdesk import (
 from .kpi import (
     KpiConfigSerializer,
     KpiIssueAttributeSerializer,
+    WorkspaceKpiAccessSerializer,
 )
 from .favorite import UserFavoriteSerializer
 

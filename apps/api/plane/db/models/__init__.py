@@ -121,4 +121,5 @@ from .helpdesk import (
 from .kpi import (
     KpiConfig,
     KpiIssueAttribute,
+    WorkspaceKpiAccess,
 )

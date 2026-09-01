@@ -1,4 +1,5 @@
 # Django imports
+from django.conf import settings
 from django.db import models
 
 # Module imports
@@ -122,3 +123,34 @@ class KpiIssueAttribute(WorkspaceBaseModel):
 
     def __str__(self):
         return f"KpiIssueAttribute <{self.issue_id}>"
+
+
+class WorkspaceKpiAccess(WorkspaceBaseModel):
+    """Explicit grant to the workspace-level KPI panels (general KPI + Executive).
+
+    Those panels carry per-person performance data -- individual scores, a
+    ranking and a "below target" flag -- so the default is workspace ADMIN only.
+    This table holds the exceptions an admin opens, and nothing else: admins are
+    never listed here, their access comes from their workspace role (see
+    plane.app.kpi.permissions.has_workspace_kpi_access).
+
+    There is no ``role`` column, unlike HelpdeskMember which this otherwise
+    mirrors, because the panels are read-only: access is either granted or not.
+    """
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="workspace_kpi_access",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ["workspace", "member", "deleted_at"]
+        verbose_name = "Workspace KPI Access"
+        verbose_name_plural = "Workspace KPI Access"
+        db_table = "workspace_kpi_access"
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"WorkspaceKpiAccess <{self.workspace_id} / {self.member_id}>"

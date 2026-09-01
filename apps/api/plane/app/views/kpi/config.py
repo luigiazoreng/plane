@@ -3,6 +3,7 @@ from rest_framework.response import Response
 
 from plane.app.views.base import BaseAPIView
 from plane.app.permissions import ROLE, allow_permission
+from plane.app.kpi.permissions import require_workspace_kpi_access
 from plane.app.serializers.kpi import KpiConfigSerializer
 from plane.db.models import KpiConfig, Workspace
 from plane.kpi.contract import default_contract
@@ -33,7 +34,7 @@ def _config_payload(cfg, inherited):
 class KpiWorkspaceConfigEndpoint(BaseAPIView):
     """Workspace-default KPI config (project=null)."""
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
+    @require_workspace_kpi_access
     def get(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
         cfg = KpiConfig.objects.filter(workspace=workspace, project__isnull=True).first()

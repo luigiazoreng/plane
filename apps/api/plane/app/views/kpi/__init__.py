@@ -1,3 +1,7 @@
+from .access import (
+    WorkspaceKpiAccessEndpoint,
+    WorkspaceKpiAccessDetailEndpoint,
+)
 from .config import (
     KpiWorkspaceConfigEndpoint,
     KpiProjectConfigEndpoint,
@@ -13,6 +17,8 @@ from .issue import (
 )
 
 __all__ = [
+    "WorkspaceKpiAccessEndpoint",
+    "WorkspaceKpiAccessDetailEndpoint",
     "KpiWorkspaceConfigEndpoint",
     "KpiProjectConfigEndpoint",
     "KpiIssueListEndpoint",
