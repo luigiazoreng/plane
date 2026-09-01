@@ -57,7 +57,7 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
 
     try {
       // Send orchestration request to Plane AI service via REST API endpoint
-      const response = await fetch(`/api/v1/workspaces/${workspaceSlug}/ai/runs/`, {
+      const response = await fetch(`/api/workspaces/${workspaceSlug}/ai/runs/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

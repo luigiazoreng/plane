@@ -54,7 +54,7 @@ export class OpenAIProvider implements ILLMProvider {
 
   async complete(messages: LLMMessage[], options?: LLMRequestOptions): Promise<LLMResponse> {
     if (!this.apiKey) {
-      return new MockProvider().complete(messages, options);
+      throw new Error("OpenAI API key missing. Configure OPENAI_API_KEY environment variable.");
     }
 
     const model = options?.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -102,7 +102,7 @@ export class DeepSeekProvider implements ILLMProvider {
 
   async complete(messages: LLMMessage[], options?: LLMRequestOptions): Promise<LLMResponse> {
     if (!this.apiKey) {
-      return new MockProvider().complete(messages, options);
+      throw new Error("DeepSeek API key missing. Configure DEEPSEEK_API_KEY environment variable.");
     }
 
     const model = options?.model || process.env.DEEPSEEK_MODEL || "deepseek-chat";
@@ -149,7 +149,7 @@ export class AnthropicProvider implements ILLMProvider {
 
   async complete(messages: LLMMessage[], options?: LLMRequestOptions): Promise<LLMResponse> {
     if (!this.apiKey) {
-      return new MockProvider().complete(messages, options);
+      throw new Error("Anthropic API key missing. Configure ANTHROPIC_API_KEY environment variable.");
     }
 
     const model = options?.model || process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022";
@@ -205,7 +205,7 @@ export class GeminiProvider implements ILLMProvider {
 
   async complete(messages: LLMMessage[], options?: LLMRequestOptions): Promise<LLMResponse> {
     if (!this.apiKey) {
-      return new MockProvider().complete(messages, options);
+      throw new Error("Gemini API key missing. Configure GEMINI_API_KEY environment variable.");
     }
 
     const model = options?.model || process.env.GEMINI_MODEL || "gemini-1.5-flash";

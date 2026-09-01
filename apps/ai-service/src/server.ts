@@ -31,11 +31,13 @@ export const createServer = () => {
     if (req.path === "/health") {
       return next();
     }
-    const expectedSecret = process.env.AI_SERVICE_SECRET || "default-ai-service-secret";
+    const expectedSecret = process.env.AI_SERVICE_SECRET;
     const apiKey = req.headers["x-ai-service-key"];
 
-    if (!apiKey || apiKey !== expectedSecret) {
-      return res.status(401).json({ error: "Unauthorized: Invalid or missing X-AI-Service-Key header" });
+    if (!expectedSecret || !apiKey || apiKey !== expectedSecret) {
+      return res
+        .status(401)
+        .json({ error: "Unauthorized: AI_SERVICE_SECRET is missing or invalid X-AI-Service-Key header" });
     }
     next();
   });

@@ -18,8 +18,8 @@ from plane.api.serializers import (
     AIAgentRunCreateSerializer,
     AIAgentRunSerializer,
 )
-from plane.api.views.base import BaseAPIView
 from plane.app.permissions import ROLE, allow_permission
+from plane.app.views.base import BaseAPIView
 from plane.db.models import (
     AIAgentAction,
     AIAgentConversation,
@@ -31,15 +31,23 @@ from plane.db.models import (
 logger = logging.getLogger(__name__)
 
 AI_SERVICE_URL = getattr(settings, "AI_SERVICE_URL", "http://localhost:8001")
-AI_SERVICE_SECRET = getattr(settings, "AI_SERVICE_SECRET", "default-ai-service-secret")
 
 
 def _call_ai_service(endpoint: str, payload: dict) -> dict:
     url = f"{AI_SERVICE_URL.rstrip('/')}{endpoint}"
     data = json.dumps(payload).encode("utf-8")
+    secret = getattr(settings, "AI_SERVICE_SECRET", None) or getattr(process_env_secret(), "secret", None)
+    if not secret:
+        import os
+        secret = os.environ.get("AI_SERVICE_SECRET")
+
+    if not secret:
+        logger.error("[AI Service Error] AI_SERVICE_SECRET is not configured in settings or environment.")
+        return {}
+
     headers = {
         "Content-Type": "application/json",
-        "X-AI-Service-Key": AI_SERVICE_SECRET,
+        "X-AI-Service-Key": secret,
     }
     req = Request(url, data=data, headers=headers, method="POST")
     try:
@@ -51,6 +59,10 @@ def _call_ai_service(endpoint: str, payload: dict) -> dict:
     except Exception as exc:
         logger.error(f"[AI Service Error] {url}: {exc}")
         return {}
+
+
+def process_env_secret():
+    return None
 
 
 class AIAgentRunEndpoint(BaseAPIView):

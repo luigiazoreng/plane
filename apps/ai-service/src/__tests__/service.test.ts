@@ -12,6 +12,7 @@ import { WorkspaceRetriever } from "../retrievers/workspace_retriever";
 import { createServer } from "../server";
 
 async function runTests() {
+  process.env.AI_SERVICE_SECRET = "test-ai-service-secret";
   console.log("🧪 Running plane-ai-service Test Suite...\n");
   let passed = 0;
   let failed = 0;
@@ -133,7 +134,7 @@ async function runTests() {
 
   const defaultHeaders = {
     "Content-Type": "application/json",
-    "X-AI-Service-Key": "default-ai-service-secret",
+    "X-AI-Service-Key": "test-ai-service-secret",
   };
 
   await test("HTTP Server returns 401 Unauthorized when X-AI-Service-Key is missing", async () => {

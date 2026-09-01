@@ -45,10 +45,10 @@ class AIAgentContractTests(APITestCase):
     def test_ai_agent_run_permission_denied(self):
         """Test non-members cannot access AI agent runs"""
         self.client.force_authenticate(user=self.other_user)
-        response = self.client.get(f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/")
+        response = self.client.get(f"/api/workspaces/{self.workspace.slug}/ai/runs/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("plane.api.views.ai._call_ai_service")
+    @patch("plane.app.views.ai._call_ai_service")
     def test_ai_agent_run_create_and_list(self, mock_ai_service):
         """Test creating an AI Agent Run and listing runs"""
         mock_ai_service.return_value = {
@@ -66,7 +66,7 @@ class AIAgentContractTests(APITestCase):
             }
         }
 
-        url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/"
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/"
         payload = {
             "mode": "build",
             "provider": "openai",
@@ -86,7 +86,7 @@ class AIAgentContractTests(APITestCase):
         list_data = list_response.json()
         self.assertGreaterEqual(len(list_data["results"]), 1)
 
-    @patch("plane.api.views.ai._call_ai_service")
+    @patch("plane.app.views.ai._call_ai_service")
     def test_ai_agent_run_approval_flow(self, mock_ai_service):
         """Test approving and rejecting planned actions"""
         mock_ai_service.return_value = {"success": True, "result": {"id": "issue-123", "name": "Created Task"}}
@@ -110,7 +110,7 @@ class AIAgentContractTests(APITestCase):
         )
 
         # Approve action
-        approval_url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/{run.id}/approval/"
+        approval_url = f"/api/workspaces/{self.workspace.slug}/ai/runs/{run.id}/approval/"
         response = self.client.post(approval_url, {"action": "approve"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -137,7 +137,7 @@ class AIAgentContractTests(APITestCase):
             status="planned",
         )
 
-        reject_url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/{run2.id}/approval/"
+        reject_url = f"/api/workspaces/{self.workspace.slug}/ai/runs/{run2.id}/approval/"
         reject_response = self.client.post(reject_url, {"action": "reject"}, format="json")
         self.assertEqual(reject_response.status_code, status.HTTP_200_OK)
 
@@ -148,7 +148,7 @@ class AIAgentContractTests(APITestCase):
 
     def test_ai_agent_conversation_crud(self):
         """Test creating, listing, and deleting AI Agent conversations"""
-        url = f"/api/v1/workspaces/{self.workspace.slug}/ai/conversations/"
+        url = f"/api/workspaces/{self.workspace.slug}/ai/conversations/"
 
         # 1. Create conversation
         create_res = self.client.post(url, {"title": "Mobile App Brainstorm"}, format="json")
@@ -178,7 +178,7 @@ class AIAgentContractTests(APITestCase):
             status="completed",
             input_text="Already finished run",
         )
-        url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/{run.id}/approval/"
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/{run.id}/approval/"
         response = self.client.post(url, {"action": "approve"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("not awaiting approval", response.json()["error"])
@@ -194,7 +194,7 @@ class AIAgentContractTests(APITestCase):
             status="awaiting_approval",
             input_text="Pending run",
         )
-        url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/{run.id}/approval/"
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/{run.id}/approval/"
         response = self.client.post(url, {"action": "unknown_action"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json()["error"], "Invalid action choice")
@@ -203,16 +203,16 @@ class AIAgentContractTests(APITestCase):
         """Test accessing non-existent run ID returns 404"""
         import uuid
         fake_id = uuid.uuid4()
-        url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/{fake_id}/"
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/{fake_id}/"
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch("plane.api.views.ai._call_ai_service")
+    @patch("plane.app.views.ai._call_ai_service")
     def test_ai_agent_run_service_outage_handling(self, mock_ai_service):
         """Test AI service failure sets run status to failed instead of completing"""
         mock_ai_service.return_value = {}  # Simulate service outage / connection failure
 
-        url = f"/api/v1/workspaces/{self.workspace.slug}/ai/runs/"
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/"
         payload = {
             "mode": "ask",
             "provider": "openai",

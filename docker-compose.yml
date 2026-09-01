@@ -49,6 +49,20 @@ services:
       - plane-db
       - plane-redis
 
+  ai-service:
+    container_name: ai-service
+    build:
+      context: ./apps/ai-service
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - AI_SERVICE_SECRET=${AI_SERVICE_SECRET}
+    depends_on:
+      - api
+
   worker:
     container_name: bgworker
     build:
