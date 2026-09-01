@@ -57,7 +57,7 @@ export const SidebarItemBase = observer(function SidebarItemBase({
   ];
   const slug = workspaceSlug?.toString() || "";
 
-  if (!hasPageAccess(slug, item.key)) return null;
+  if (!hasPageAccess(slug, item)) return null;
 
   const isPinned = isWorkspaceItemPinned(item.key);
   if (!isPinned && !staticItems.includes(item.key)) return null;

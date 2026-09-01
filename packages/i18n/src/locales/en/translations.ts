@@ -1500,6 +1500,9 @@ export default {
         free_plan: "You are currently using the free plan",
         view_plans: "View plans",
       },
+      kpi_access: {
+        title: "KPI access",
+      },
       exports: {
         heading: "Exports",
         description: "Export your project data in various formats and access your export history with download links.",

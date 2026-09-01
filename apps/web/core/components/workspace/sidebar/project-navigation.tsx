@@ -137,7 +137,11 @@ export const ProjectNavigation = observer(function ProjectNavigation(props: TPro
         name: "KPI",
         href: `/${_workspaceSlug}/projects/${_projectId}/kpi`,
         icon: Gauge,
-        access: [EUserPermissions.ADMIN, EUserPermissions.MEMBER, EUserPermissions.GUEST],
+        // The panel scores individual people, so it stays with whoever runs the
+        // project. Workspace admins who are members of it are covered: the
+        // permission store promotes them to ADMIN here (getProjectRole), matching
+        // what allow_permission does on the API.
+        access: [EUserPermissions.ADMIN],
         shouldRender: project?.kpi_view ?? false,
         sortOrder: 7,
       },

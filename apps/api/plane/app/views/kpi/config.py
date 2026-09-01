@@ -55,7 +55,7 @@ class KpiWorkspaceConfigEndpoint(BaseAPIView):
 class KpiProjectConfigEndpoint(BaseAPIView):
     """Per-project KPI config with workspace-default inheritance on GET."""
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    @allow_permission([ROLE.ADMIN])
     def get(self, request, slug, project_id):
         workspace = Workspace.objects.get(slug=slug)
         cfg = KpiConfig.objects.filter(workspace=workspace, project_id=project_id).first()
@@ -67,7 +67,7 @@ class KpiProjectConfigEndpoint(BaseAPIView):
             return Response(_config_payload(ws_cfg, inherited=True))
         return Response(_default_payload(inherited=True, project_id=project_id))
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
+    @allow_permission([ROLE.ADMIN])
     def put(self, request, slug, project_id):
         workspace = Workspace.objects.get(slug=slug)
         cfg = KpiConfig.objects.filter(workspace=workspace, project_id=project_id).first()
@@ -76,7 +76,7 @@ class KpiProjectConfigEndpoint(BaseAPIView):
         serializer.save(workspace=workspace, project_id=project_id)
         return Response(_config_payload(serializer.instance, inherited=False))
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
+    @allow_permission([ROLE.ADMIN])
     def delete(self, request, slug, project_id):
         """Remove the project override so it falls back to the workspace default."""
         workspace = Workspace.objects.get(slug=slug)

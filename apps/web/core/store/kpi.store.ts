@@ -18,6 +18,7 @@ import type {
   IKpiPreviewResponse,
   IKpiTaskInput,
   TKpiPeriod,
+  IWorkspaceKpiAccess,
 } from "@plane/types";
 // services
 import { KpiService } from "@plane/services";
@@ -33,6 +34,7 @@ export interface IKpiStore {
   memberAggregates: Record<string, IKpiMemberAggregateResponse>; // projectId -> per-member breakdown
   workspaceMemberAggregates: Record<string, IKpiMemberAggregateResponse>; // workspaceSlug -> per-member breakdown
   workspaceOverview: Record<string, IKpiOverviewResponse>; // workspaceSlug -> consolidated panel
+  accessGrants: Record<string, IWorkspaceKpiAccess[]>; // workspaceSlug -> grants
   issueAttributes: Record<string, IKpiIssueAttribute>; // issueId -> KPI attributes
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
@@ -58,6 +60,10 @@ export interface IKpiStore {
     workspaceSlug: string,
     params?: { period?: TKpiPeriod; start?: string; end?: string }
   ) => Promise<IKpiOverviewResponse>;
+  // access grants
+  fetchAccessGrants: (workspaceSlug: string) => Promise<IWorkspaceKpiAccess[]>;
+  grantAccess: (workspaceSlug: string, memberIds: string[]) => Promise<IWorkspaceKpiAccess[]>;
+  revokeAccess: (workspaceSlug: string, grantId: string) => Promise<void>;
   fetchIssueAttributes: (workspaceSlug: string, projectId: string, issueId: string) => Promise<IKpiIssueAttribute>;
   updateIssueAttributes: (
     workspaceSlug: string,
@@ -81,6 +87,7 @@ export class KpiStore implements IKpiStore {
   memberAggregates: Record<string, IKpiMemberAggregateResponse> = {};
   workspaceMemberAggregates: Record<string, IKpiMemberAggregateResponse> = {};
   workspaceOverview: Record<string, IKpiOverviewResponse> = {};
+  accessGrants: Record<string, IWorkspaceKpiAccess[]> = {};
   issueAttributes: Record<string, IKpiIssueAttribute> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
@@ -96,6 +103,7 @@ export class KpiStore implements IKpiStore {
       memberAggregates: observable,
       workspaceMemberAggregates: observable,
       workspaceOverview: observable,
+      accessGrants: observable,
       issueAttributes: observable,
       loadingState: observable,
       errorState: observable,
@@ -108,6 +116,9 @@ export class KpiStore implements IKpiStore {
       fetchProjectMemberAggregates: action,
       fetchWorkspaceMemberAggregates: action,
       fetchWorkspaceOverview: action,
+      fetchAccessGrants: action,
+      grantAccess: action,
+      revokeAccess: action,
       fetchIssueAttributes: action,
       updateIssueAttributes: action,
       updateIssuePriority: action,
@@ -220,6 +231,39 @@ export class KpiStore implements IKpiStore {
     } finally {
       this._setLoading(`ws-overview-${workspaceSlug}`, false);
     }
+  };
+
+  // --- Access grants -------------------------------------------------------
+  // Admin-only endpoints; a non-admin caller gets a 403 rather than an empty list.
+
+  fetchAccessGrants = async (workspaceSlug: string): Promise<IWorkspaceKpiAccess[]> => {
+    this._setLoading(`kpi-access-${workspaceSlug}`, true);
+    try {
+      const grants = await this.kpiService.getAccessGrants(workspaceSlug);
+      runInAction(() => set(this.accessGrants, [workspaceSlug], grants));
+      return grants;
+    } finally {
+      this._setLoading(`kpi-access-${workspaceSlug}`, false);
+    }
+  };
+
+  grantAccess = async (workspaceSlug: string, memberIds: string[]): Promise<IWorkspaceKpiAccess[]> => {
+    const created = await this.kpiService.grantAccess(workspaceSlug, memberIds);
+    // Re-fetch rather than merge: granting can revive a previously revoked row,
+    // so the response is not always an append to what we already hold.
+    await this.fetchAccessGrants(workspaceSlug);
+    return created;
+  };
+
+  revokeAccess = async (workspaceSlug: string, grantId: string): Promise<void> => {
+    await this.kpiService.revokeAccess(workspaceSlug, grantId);
+    runInAction(() =>
+      set(
+        this.accessGrants,
+        [workspaceSlug],
+        (this.accessGrants[workspaceSlug] ?? []).filter((grant) => grant.id !== grantId)
+      )
+    );
   };
 
   fetchIssueAttributes = async (

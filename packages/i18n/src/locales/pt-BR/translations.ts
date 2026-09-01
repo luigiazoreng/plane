@@ -1665,6 +1665,9 @@ export default {
         free_plan: "Você está usando o plano gratuito atualmente",
         view_plans: "Ver planos",
       },
+      kpi_access: {
+        title: "Acesso ao KPI",
+      },
       exports: {
         title: "Exportações",
         exporting: "Exportando",

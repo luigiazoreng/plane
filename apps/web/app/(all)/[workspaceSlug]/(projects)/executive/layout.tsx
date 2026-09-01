@@ -4,18 +4,36 @@
  * See the LICENSE file for details.
  */
 
-import { useState } from "react";
-import { Outlet } from "react-router";
+import React, { useState } from "react";
+import { observer } from "mobx-react";
+import { useParams, Outlet } from "react-router";
 import { ChevronDown, FileSpreadsheet, HelpCircle, LayoutDashboard, Printer } from "lucide-react";
 import { Menu } from "@plane/propel/menu";
 import { setToast, TOAST_TYPE } from "@plane/propel/toast";
 // components
 import { AppHeader } from "@/components/core/app-header";
+import { NotAuthorizedView } from "@/components/auth-screens/not-authorized-view";
 import { ContentWrapper } from "@/components/core/content-wrapper";
 import { ExecutiveHelpModal } from "@/components/executive/executive-help-modal";
 import { ExecutiveExportProvider, useExecutiveExport } from "@/components/executive/export-context";
 import { excludeMembersFromExport, exportExecutiveExcel } from "@/components/executive/export-excel";
 import { ExportRemoveMembersModal } from "@/components/executive/export-remove-members-modal";
+// hooks
+import { useUserPermissions } from "@/hooks/store/user";
+
+const ExecutiveAccessGuard = observer(function ExecutiveAccessGuard({ children }: { children: React.ReactNode }) {
+  const { workspaceSlug } = useParams();
+  const { hasPageAccess, workspaceInfoBySlug } = useUserPermissions();
+  const slug = workspaceSlug?.toString() || "";
+
+  // Wait for the bootstrap request: until /workspace-members/me/ lands there is
+  // no flag to read, and denying early would flash "not authorized" at people who
+  // do have access.
+  if (!workspaceInfoBySlug(slug)) return null;
+  if (!hasPageAccess(slug, "executive")) return <NotAuthorizedView className="h-full" />;
+
+  return <>{children}</>;
+});
 
 const handlePrint = () => {
   window.print();
@@ -89,32 +107,34 @@ export default function WorkspaceExecutiveLayout() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   return (
-    <ExecutiveExportProvider>
-      <AppHeader
-        header={
-          <div className="flex w-full items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <LayoutDashboard className="size-4 text-tertiary" />
-              <span className="text-sm font-medium text-primary">Executive Dashboard</span>
+    <ExecutiveAccessGuard>
+      <ExecutiveExportProvider>
+        <AppHeader
+          header={
+            <div className="flex w-full items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <LayoutDashboard className="size-4 text-tertiary" />
+                <span className="text-sm font-medium text-primary">Executive Dashboard</span>
+              </div>
+              <div className="hide-on-print flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setIsHelpOpen(true)}
+                  className="text-xs flex items-center gap-1.5 font-medium text-tertiary transition-colors hover:text-primary"
+                >
+                  <HelpCircle className="size-3.5" />
+                  How it works
+                </button>
+                <ExportMenu />
+              </div>
             </div>
-            <div className="hide-on-print flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => setIsHelpOpen(true)}
-                className="text-xs flex items-center gap-1.5 font-medium text-tertiary transition-colors hover:text-primary"
-              >
-                <HelpCircle className="size-3.5" />
-                How it works
-              </button>
-              <ExportMenu />
-            </div>
-          </div>
-        }
-      />
-      <ContentWrapper>
-        <Outlet />
-      </ContentWrapper>
-      <ExecutiveHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
-    </ExecutiveExportProvider>
+          }
+        />
+        <ContentWrapper>
+          <Outlet />
+        </ContentWrapper>
+        <ExecutiveHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      </ExecutiveExportProvider>
+    </ExecutiveAccessGuard>
   );
 }
