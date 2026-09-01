@@ -17,6 +17,7 @@ import type { TIssue } from "@plane/types";
 import { ToggleSwitch } from "@plane/ui";
 import { renderFormattedPayloadDate, getTabIndex } from "@plane/utils";
 // hooks
+import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useProject } from "@/hooks/store/use-project";
 import { useProjectInbox } from "@/hooks/store/use-project-inbox";
 import { useWorkspace } from "@/hooks/store/use-workspace";
@@ -73,11 +74,16 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
   const workspaceId = getWorkspaceBySlug(workspaceSlug)?.id;
   const { isMobile } = usePlatformOS();
   const { getProjectById } = useProject();
+  const { updateIssueEstimatePropertyValue } = useProjectEstimates();
   const { t } = useTranslation();
   // states
   const [createMore, setCreateMore] = useState<boolean>(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formData, setFormData] = useState<Partial<TIssue>>(defaultIssueData);
+  // buffered per-system estimate values -- no issue id exists yet during creation, so
+  // selections are held here and flushed via updateIssueEstimatePropertyValue once the
+  // intake issue is created (mirrors issue-modal/provider.tsx's flush-after-create pattern).
+  const [estimatePropertyValues, setEstimatePropertyValues] = useState<Record<string, string | null>>({});
   const handleFormData = useCallback(
     <T extends keyof Partial<TIssue>>(issueKey: T, issueValue: Partial<TIssue>[T]) => {
       setFormData({
@@ -87,6 +93,9 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
     },
     [formData]
   );
+  const handleEstimatePropertyValue = useCallback((propertyId: string, estimatePointId: string | null) => {
+    setEstimatePropertyValues((prev) => ({ ...prev, [propertyId]: estimatePointId }));
+  }, []);
 
   // derived values
   const projectDetails = projectId ? getProjectById(projectId) : undefined;
@@ -167,12 +176,23 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
           });
           setUploadedAssetIds([]);
         }
+        const issueId = res?.issue?.id;
+        if (issueId) {
+          await Promise.all(
+            Object.entries(estimatePropertyValues).map(([propertyId, estimatePointId]) =>
+              updateIssueEstimatePropertyValue(workspaceSlug, projectId, issueId, propertyId, estimatePointId).catch(
+                () => {}
+              )
+            )
+          );
+        }
         if (!createMore) {
           router.push(`/${workspaceSlug}/projects/${projectId}/intake/?currentTab=open&inboxIssueId=${res?.issue?.id}`);
           handleModalClose();
         } else {
           descriptionEditorRef?.current?.clearEditor();
           setFormData(defaultIssueData);
+          setEstimatePropertyValues({});
         }
         setToast({
           type: TOAST_TYPE.SUCCESS,
@@ -229,7 +249,13 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
                 onEnterKeyPress={() => submitBtnRef?.current?.click()}
                 onAssetUpload={(assetId) => setUploadedAssetIds((prev) => [...prev, assetId])}
               />
-              <InboxIssueProperties projectId={projectId} data={formData} handleData={handleFormData} />
+              <InboxIssueProperties
+                projectId={projectId}
+                data={formData}
+                handleData={handleFormData}
+                estimatePropertyValues={estimatePropertyValues}
+                setEstimatePropertyValue={handleEstimatePropertyValue}
+              />
             </div>
           </div>
           <div className="flex items-center justify-between gap-2 rounded-b-lg border-t-[0.5px] border-subtle bg-surface-1 px-5 py-4">

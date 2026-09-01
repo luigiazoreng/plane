@@ -19,22 +19,27 @@ import type {
   IHelpdeskRequest,
   IHelpdeskRequestFilters,
   IHelpdeskStatus,
+  THelpdeskOrderBy,
 } from "@plane/types";
 import type { TContextMenuItem } from "@plane/ui";
 import { ContextMenu } from "@plane/ui";
 import { cn, copyUrlToClipboard } from "@plane/utils";
 import {
   CalendarDays,
+  Columns3,
   Headset,
   KanbanSquare,
   LayoutList,
   MessageSquareText,
+  Plus,
   Search,
   Settings,
   UserRound,
 } from "lucide-react";
 import { BaseKanbanLayout } from "@/components/base-layouts/kanban/layout";
 import { AppHeader } from "@/components/core/app-header";
+import { HelpdeskSplitView } from "@/components/helpdesk/split";
+import { CreateTicketModal } from "@/components/helpdesk/create-ticket-modal";
 import { HelpdeskAppliedFilters } from "@/components/helpdesk/filters/helpdesk-applied-filters";
 import { HelpdeskDisplayDropdown } from "@/components/helpdesk/filters/helpdesk-display-dropdown";
 import { HelpdeskFiltersDropdown } from "@/components/helpdesk/filters/helpdesk-filters-dropdown";
@@ -50,8 +55,14 @@ import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { useMember } from "@/hooks/store/use-member";
 import type { IHelpdeskStore } from "@/store/helpdesk.store";
 
-type THelpdeskAgentLayout = "list" | "kanban";
+type THelpdeskAgentLayout = "list" | "kanban" | "split";
 type THelpdeskKanbanItem = IHelpdeskRequest & Record<string, unknown>;
+
+const LAYOUT_OPTIONS: { key: THelpdeskAgentLayout; label: string; Icon: typeof LayoutList }[] = [
+  { key: "list", label: "List", Icon: LayoutList },
+  { key: "kanban", label: "Kanban", Icon: KanbanSquare },
+  { key: "split", label: "Split", Icon: Columns3 },
+];
 
 // Derive a stable color set from the status color (hex → tint bg + text)
 function hexToRgb(hex: string) {
@@ -99,7 +110,7 @@ function StatusChip({
 }
 
 const WorkspaceHelpdeskPage = observer(() => {
-  const { workspaceSlug } = useParams();
+  const { workspaceSlug, requestId: routeRequestId } = useParams();
   const navigate = useNavigate();
   const helpdeskStore = useHelpdesk();
   const { getUserDetails } = useMember();
@@ -108,6 +119,7 @@ const WorkspaceHelpdeskPage = observer(() => {
     storageKey,
     "list"
   );
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const { storedValue: storedFilters, setValue: setStoredFilters } = useLocalStorage<IHelpdeskRequestFilters>(
     workspaceSlug ? `helpdesk-filters:${workspaceSlug}` : "helpdesk-filters",
     DEFAULT_HELPDESK_FILTERS
@@ -129,7 +141,18 @@ const WorkspaceHelpdeskPage = observer(() => {
   const listSentinelRef = useRef<HTMLDivElement>(null);
 
   const wSlug = workspaceSlug?.toString() || "";
-  const layout = storedLayout || "list";
+  const selectedRequestId = routeRequestId?.toString() || null;
+  // A ticket in the URL always means split: List and Kanban have no notion of a
+  // selected ticket, so honouring the stored layout would drop the selection.
+  const layout: THelpdeskAgentLayout = selectedRequestId ? "split" : storedLayout || "list";
+
+  const handleSelectRequest = (id: string) => navigate(`/${wSlug}/helpdesk/${id}`, { replace: true });
+  // Leaving split drops the ticket from the URL, otherwise the route would
+  // force us straight back into it.
+  const handleLayoutChange = (next: THelpdeskAgentLayout) => {
+    setStoredLayout(next);
+    if (selectedRequestId) navigate(`/${wSlug}/helpdesk`, { replace: true });
+  };
 
   const statuses = helpdeskStore.getWorkspaceStatuses(wSlug);
   const requests = helpdeskStore.getWorkspaceRequests(wSlug);
@@ -307,6 +330,13 @@ const WorkspaceHelpdeskPage = observer(() => {
   const handleClearFilters = () => setStoredFilters({ ...DEFAULT_HELPDESK_FILTERS });
   const handleDisplayChange = (data: Partial<IHelpdeskDisplayFilters>) =>
     setStoredDisplay({ ...displayFilters, ...data });
+  const handleOrderByChange = (order_by: THelpdeskOrderBy) => handleDisplayChange({ order_by });
+
+  const handleFetchCustomers = useCallback(() => helpdeskStore.fetchCustomers(wSlug), [helpdeskStore, wSlug]);
+  const handleCreateCustomer = useCallback(
+    (data: { name: string; email: string }) => helpdeskStore.createCustomer(wSlug, data),
+    [helpdeskStore, wSlug]
+  );
 
   const handleStatusDrop = async (
     sourceId: string,
@@ -351,19 +381,19 @@ const WorkspaceHelpdeskPage = observer(() => {
         header={
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="bg-custom-sidebar-accent/15 text-custom-sidebar-accent flex size-6 shrink-0 items-center justify-center rounded-md">
+              <div className="bg-accent-subtle text-accent-primary flex size-6 shrink-0 items-center justify-center rounded-md">
                 <Headset className="size-3.5" />
               </div>
-              <span className="text-sm text-text-100 font-semibold">Helpdesk</span>
+              <span className="text-sm text-primary font-semibold">Helpdesk</span>
               <div className="hidden items-center gap-1.5 md:flex">
                 <span className="text-13 text-tertiary">·</span>
                 <span className="rounded-md bg-layer-1 px-2 py-0.5 text-12 text-secondary">
                   {requests.length < totalRequests ? `${requests.length} / ${totalRequests}` : `${totalRequests}`} total
                 </span>
-                <span className="bg-orange-500/10 text-orange-500 rounded-md px-2 py-0.5 text-12">
+                <span className="bg-warning-subtle text-warning-primary rounded-md px-2 py-0.5 text-12">
                   {activeRequests} active
                 </span>
-                <span className="bg-emerald-500/10 text-emerald-500 rounded-md px-2 py-0.5 text-12">
+                <span className="bg-success-subtle text-success-primary rounded-md px-2 py-0.5 text-12">
                   {resolvedRequests} resolved
                 </span>
               </div>
@@ -391,33 +421,34 @@ const WorkspaceHelpdeskPage = observer(() => {
               <HelpdeskDisplayDropdown displayFilters={displayFilters} onChange={handleDisplayChange} />
 
               <div className="flex items-center gap-0.5 rounded-md border border-subtle bg-layer-1 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setStoredLayout("list")}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
-                    layout === "list"
-                      ? "bg-accent-strong shadow-sm text-white"
-                      : "text-secondary hover:bg-layer-2 hover:text-primary"
-                  )}
-                >
-                  <LayoutList className="size-3.5" />
-                  <span className="hidden sm:inline">List</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStoredLayout("kanban")}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
-                    layout === "kanban"
-                      ? "bg-accent-strong shadow-sm text-white"
-                      : "text-secondary hover:bg-layer-2 hover:text-primary"
-                  )}
-                >
-                  <KanbanSquare className="size-3.5" />
-                  <span className="hidden sm:inline">Kanban</span>
-                </button>
+                {LAYOUT_OPTIONS.map(({ key, label, Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleLayoutChange(key)}
+                    aria-pressed={layout === key}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
+                      layout === key
+                        ? "bg-accent-primary shadow-sm text-white"
+                        : "text-secondary hover:bg-layer-2 hover:text-primary"
+                    )}
+                  >
+                    <Icon className="size-3.5" />
+                    <span className="hidden sm:inline">{label}</span>
+                  </button>
+                ))}
               </div>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="ml-1 flex items-center gap-1.5"
+              >
+                <Plus className="size-3.5" />
+                <span>Criar Ticket</span>
+              </Button>
             </div>
           </div>
         }
@@ -456,7 +487,9 @@ const WorkspaceHelpdeskPage = observer(() => {
               Configure
             </button>
           </div>
-        ) : requests.length === 0 && !addingToGroup ? (
+        ) : requests.length === 0 && !addingToGroup && !selectedRequestId ? (
+          // A ticket reached by URL must still render even when the queue comes
+          // back empty (filters, or the ticket living outside the loaded page).
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <MessageSquareText className="mb-4 size-8 text-tertiary" />
             <p className="text-13 font-medium text-primary">No requests found</p>
@@ -471,6 +504,23 @@ const WorkspaceHelpdeskPage = observer(() => {
               <Settings className="size-3.5" />
               Configure portal
             </button>
+          </div>
+        ) : layout === "split" ? (
+          <div className="flex h-full flex-col overflow-hidden">
+            <HelpdeskSplitView
+              workspaceSlug={wSlug}
+              requests={requests}
+              statuses={statuses}
+              statusMap={statusMap}
+              displayFilters={displayFilters}
+              onOrderByChange={handleOrderByChange}
+              hasMore={hasMoreRequests}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={fetchMore}
+              selectedRequestId={selectedRequestId}
+              onSelectRequest={handleSelectRequest}
+              onClearSelection={() => navigate(`/${wSlug}/helpdesk`, { replace: true })}
+            />
           </div>
         ) : layout === "kanban" ? (
           <div className="flex h-full flex-col overflow-hidden">
@@ -556,7 +606,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                           type="button"
                           onClick={() => handleAddRequest(statusId)}
                           disabled={!newRequestTitle.trim() || !defaultPortalId}
-                          className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                          className="bg-accent-primary rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                         >
                           Add
                         </button>
@@ -570,7 +620,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                         >
                           Cancel
                         </button>
-                        {!defaultPortalId && <span className="text-red-400 text-11">No portal configured</span>}
+                        {!defaultPortalId && <span className="text-danger-primary text-11">No portal configured</span>}
                       </div>
                     </div>
                   );
@@ -730,7 +780,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                               type="button"
                               onClick={() => handleAddRequest(group.id)}
                               disabled={!newRequestTitle.trim() || !defaultPortalId}
-                              className="bg-accent-strong rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                              className="bg-accent-primary rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                             >
                               Add
                             </button>
@@ -782,6 +832,27 @@ const WorkspaceHelpdeskPage = observer(() => {
           </div>
         )}
       </div>
+
+      <CreateTicketModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        workspaceSlug={wSlug}
+        portals={portals}
+        forms={forms}
+        statuses={statuses}
+        teams={helpdeskStore.getWorkspaceTeams(wSlug)}
+        customers={helpdeskStore.getWorkspaceCustomers(wSlug)}
+        onFetchCustomers={handleFetchCustomers}
+        onCreateCustomer={handleCreateCustomer}
+        onSubmit={async (payload) => {
+          try {
+            await helpdeskStore.createRequest(wSlug, payload);
+            setToast({ type: TOAST_TYPE.SUCCESS, title: "Sucesso", message: "Ticket criado com sucesso." });
+          } catch (_error) {
+            setToast({ type: TOAST_TYPE.ERROR, title: "Erro", message: "Falha ao criar ticket." });
+          }
+        }}
+      />
     </div>
   );
 });

@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react";
 import { useNavigate, useParams } from "react-router";
-import { Headset } from "lucide-react";
+import { BarChart2 } from "lucide-react";
 import type { IHelpdeskAnalyticsFilters } from "@plane/types";
 import { AppHeader } from "@/components/core/app-header";
 import { HelpdeskAnalyticsView } from "@/components/helpdesk/analytics";
@@ -44,7 +44,7 @@ const WorkspaceHelpdeskAnalyticsPage = observer(() => {
   const isLoading = helpdeskAnalyticsStore.isLoading(wSlug, filters);
 
   return (
-    <div className="bg-custom-background-90 flex h-full w-full flex-col">
+    <div className="bg-surface-1 flex h-full w-full flex-col">
       <AppHeader
         header={
           <div className="flex w-full items-center justify-between gap-4">
@@ -52,14 +52,14 @@ const WorkspaceHelpdeskAnalyticsPage = observer(() => {
               <button
                 type="button"
                 onClick={() => navigate(`/${wSlug}/helpdesk`)}
-                className="text-xs text-custom-text-300 hover:text-custom-text-200 transition-colors"
+                className="text-xs text-tertiary hover:text-primary font-medium transition-colors"
               >
                 Helpdesk
               </button>
-              <span className="text-custom-text-400">/</span>
+              <span className="text-placeholder text-xs">/</span>
               <div className="flex items-center gap-1.5">
-                <Headset className="text-custom-text-300 size-3.5" />
-                <span className="text-sm text-custom-text-100 font-semibold">Analytics</span>
+                <BarChart2 className="text-secondary size-4" />
+                <span className="text-sm text-primary font-semibold tracking-tight">Analytics</span>
               </div>
             </div>
             <AnalyticsFilters filters={filters} portals={portals} onChange={setFilters} />

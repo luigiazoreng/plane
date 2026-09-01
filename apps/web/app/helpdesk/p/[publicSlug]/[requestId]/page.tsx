@@ -4,14 +4,18 @@
  * See the LICENSE file for details.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router";
 import { observer } from "mobx-react";
 import { ArrowLeft, Send, Lock } from "lucide-react";
+import { cn } from "@plane/utils";
 import { PublicHelpdeskService } from "@plane/services";
 import type { IHelpdeskRequest, IHelpdeskRequestComment, IHelpdeskPortal } from "@plane/types";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { publicHelpdeskStore } from "@/store/public-helpdesk.store";
+import { AttachmentPicker } from "@/components/helpdesk/attachments/attachment-picker";
+import { CommentAttachments, PendingAttachmentChips } from "@/components/helpdesk/attachments/attachment-chips";
+import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attachment-upload";
 
 const publicHelpdeskService = new PublicHelpdeskService();
 
@@ -26,6 +30,7 @@ const HelpdeskPublicRequestPage = observer(() => {
 
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
     if (publicSlug && requestId) {
@@ -59,6 +64,27 @@ const HelpdeskPublicRequestPage = observer(() => {
     }
   }, [publicSlug, requestId]);
 
+  const attachmentTransport = useMemo(
+    () => ({
+      getCredentials: (data: { name: string; type: string; size: number }) =>
+        publicHelpdeskService.getAssetUploadCredentials(
+          publicSlug || "",
+          data,
+          publicHelpdeskStore.customerToken || undefined
+        ),
+      markUploaded: (assetId: string) =>
+        publicHelpdeskService.markAssetUploaded(
+          publicSlug || "",
+          assetId,
+          publicHelpdeskStore.customerToken || undefined
+        ),
+      // No remove: the public endpoint deliberately exposes no delete, so an
+      // abandoned upload is collected by the daily unbound-asset sweep instead.
+    }),
+    [publicSlug]
+  );
+  const attachments = useAttachmentUpload(attachmentTransport);
+
   const handleAddComment = async () => {
     if (!newComment.trim() || !publicSlug || !requestId) return;
     setSubmitting(true);
@@ -68,11 +94,13 @@ const HelpdeskPublicRequestPage = observer(() => {
         requestId,
         {
           content: newComment,
+          asset_ids: attachments.assetIds,
         },
         publicHelpdeskStore.customerToken || undefined
       );
       setComments((prev) => [...prev, response]);
       setNewComment("");
+      attachments.clear();
     } catch (_err) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to post comment." });
     } finally {
@@ -80,10 +108,54 @@ const HelpdeskPublicRequestPage = observer(() => {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files: File[] = [];
+    if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+      for (let i = 0; i < e.clipboardData.files.length; i++) {
+        const file = e.clipboardData.files[i];
+        if (file) files.push(file);
+      }
+    } else if (e.clipboardData?.items) {
+      for (let i = 0; i < e.clipboardData.items.length; i++) {
+        const item = e.clipboardData.items[i];
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      attachments.upload(files);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      attachments.upload(files);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-40 items-center justify-center">
-        <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
+        <div className="border-accent-subtle h-8 w-8 animate-spin rounded-full border-b-2"></div>
       </div>
     );
   }
@@ -93,18 +165,18 @@ const HelpdeskPublicRequestPage = observer(() => {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <div className="mb-4 flex justify-center">
-          <div className="bg-primary/10 flex h-14 w-14 items-center justify-center rounded-full">
+          <div className="bg-accent-subtle flex h-14 w-14 items-center justify-center rounded-full">
             <Lock className="size-7 text-primary" />
           </div>
         </div>
-        <h2 className="text-xl text-text-100 font-bold">Sign in to view this ticket</h2>
-        <p className="text-text-400 text-sm mt-2">
+        <h2 className="text-xl text-primary font-bold">Sign in to view this ticket</h2>
+        <p className="text-placeholder text-sm mt-2">
           You need an account to access ticket details and follow the conversation.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button
             onClick={() => navigate(loginUrl)}
-            className="bg-primary hover:bg-primary-hover text-sm rounded-md px-5 py-2 font-medium text-white transition-colors"
+            className="bg-accent-primary hover:bg-accent-primary-hover text-sm rounded-md px-5 py-2 font-medium text-white transition-colors"
           >
             Sign in
           </button>
@@ -114,12 +186,12 @@ const HelpdeskPublicRequestPage = observer(() => {
                 `/helpdesk/p/${publicSlug}/register?next=${encodeURIComponent(`/helpdesk/p/${publicSlug}/${requestId}`)}`
               )
             }
-            className="text-sm text-text-200 rounded-md border border-subtle px-5 py-2 font-medium transition-colors hover:bg-surface-2"
+            className="text-sm text-secondary rounded-md border border-subtle px-5 py-2 font-medium transition-colors hover:bg-surface-2"
           >
             Create account
           </button>
         </div>
-        <Link to={`/helpdesk/p/${publicSlug}`} className="text-sm text-text-400 mt-6 block hover:underline">
+        <Link to={`/helpdesk/p/${publicSlug}`} className="text-sm text-placeholder mt-6 block hover:underline">
           Return to Portal
         </Link>
       </div>
@@ -148,7 +220,7 @@ const HelpdeskPublicRequestPage = observer(() => {
           <ArrowLeft className="size-5" />
         </Link>
         <h1 className="text-2xl flex-1 font-bold text-primary">{request.title}</h1>
-        <span className="bg-primary/10 text-sm rounded-full px-3 py-1 font-medium text-primary">
+        <span className="bg-accent-subtle text-sm rounded-full px-3 py-1 font-medium text-accent-primary">
           {request.status_detail?.name || "Open"}
         </span>
       </div>
@@ -171,21 +243,38 @@ const HelpdeskPublicRequestPage = observer(() => {
           </p>
         ) : (
           <div className="space-y-4">
-            {publicComments.map((comment) => (
-              <div key={comment.id} className={`flex ${!comment.actor ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`shadow-sm max-w-[85%] rounded-lg border p-4 ${!comment.actor ? "bg-primary/5 border-primary/20" : "border-subtle bg-surface-1"}`}
-                >
-                  <div className="mb-2 flex items-baseline justify-between gap-4">
-                    <span className="text-sm font-semibold text-primary">
-                      {!comment.actor ? "You" : "Support Team"}
-                    </span>
-                    <span className="text-xs text-tertiary">{new Date(comment.created_at).toLocaleString()}</span>
+            {publicComments.map((comment) => {
+              // Authorship drives four separate decisions here -- side, colour,
+              // label and surface -- and all of them used to derive from the
+              // single boolean `!comment.actor`. That made a comment with
+              // neither an actor nor a customer render as the customer's own
+              // message: in a chat layout, position and colour assert "this is
+              // yours" far more strongly than any caption, so correcting only
+              // the label would have produced an inconsistency rather than a
+              // fix. Three states, every decision derived from them.
+              const authorKind = comment.actor ? "agent" : comment.customer ? "customer" : "unattributed";
+              const isOwnMessage = authorKind === "customer";
+              // Neutral, not an accusation: an unattributed message is most
+              // often benign (a reply posted without a valid portal token),
+              // and treating it identically to a spoofed one is deliberate --
+              // it denies an attacker any feedback about detection.
+              const authorLabel =
+                authorKind === "customer" ? "You" : authorKind === "agent" ? "Support Team" : "Participant";
+              return (
+                <div key={comment.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`shadow-sm max-w-[85%] rounded-lg border p-4 ${isOwnMessage ? "bg-accent-subtle border-accent-subtle" : "border-subtle bg-surface-1"}`}
+                  >
+                    <div className="mb-2 flex items-baseline justify-between gap-4">
+                      <span className="text-sm font-semibold text-primary">{authorLabel}</span>
+                      <span className="text-xs text-tertiary">{new Date(comment.created_at).toLocaleString()}</span>
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap text-secondary">{comment.content}</div>
+                    <CommentAttachments attachments={comment.attachments} />
                   </div>
-                  <div className="text-sm whitespace-pre-wrap text-secondary">{comment.content}</div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -193,19 +282,32 @@ const HelpdeskPublicRequestPage = observer(() => {
       {/* Reply Input */}
       {portal?.enable_chat && (
         <div className="mt-8">
-          <div className="focus-within:border-primary focus-within:ring-primary/20 shadow-sm relative flex flex-col gap-2 rounded-md border border-subtle bg-surface-1 transition-all focus-within:ring-1">
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "focus-within:border-accent-subtle focus-within:ring-accent-primary/20 shadow-sm relative flex flex-col gap-2 rounded-md border border-subtle bg-surface-1 transition-all focus-within:ring-1",
+              isDragOver && "border-accent-primary bg-accent-subtle/50 border-dashed"
+            )}
+          >
             <textarea
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
+              onPaste={handlePaste}
               placeholder="Type your reply here..."
               className="text-sm min-h-[120px] w-full resize-none bg-transparent p-4 text-primary outline-none"
             />
+            <PendingAttachmentChips attachments={attachments.pending} onRemove={attachments.remove} />
             <div className="flex items-center justify-between px-4 pb-3">
-              <span className="text-xs text-tertiary">We usually reply within 24 hours.</span>
+              <div className="flex items-center gap-2">
+                <AttachmentPicker onSelect={attachments.upload} disabled={submitting} />
+                <span className="text-xs text-tertiary">We usually reply within 24 hours.</span>
+              </div>
               <button
                 onClick={handleAddComment}
                 disabled={submitting || !newComment.trim()}
-                className="bg-primary text-sm hover:bg-primary-hover flex items-center gap-2 rounded-md px-4 py-2 font-medium text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                className="bg-accent-primary text-sm hover:bg-accent-primary-hover flex items-center gap-2 rounded-md px-4 py-2 font-medium text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span>Send Reply</span>
                 <Send className="size-4" />

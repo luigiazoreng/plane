@@ -21,6 +21,8 @@ type TCoreHookProps = Pick<
   | "handleEditorReady"
   | "isTouchDevice"
   | "onEditorFocus"
+  | "onAttachmentFile"
+  | "treatImagesAsAttachments"
 >;
 
 export type TEditorHookProps = TCoreHookProps &

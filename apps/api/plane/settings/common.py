@@ -123,6 +123,14 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "30/minute",
         "asset_id": "5/minute",
+        # Inbound email webhook: SendGrid delivers legitimate bursts well above
+        # the anonymous default, and a 429 there just triggers a retry.
+        "helpdesk_inbound": "600/minute",
+        # Portal customers upload attachments unauthenticated on public portals.
+        # Without a dedicated bucket this endpoint is free storage for anyone.
+        "helpdesk_public_asset": "30/minute",
+        # Rate limit for public helpdesk customer authentication & password reset.
+        "helpdesk_public_auth": "10/minute",
     },
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
@@ -142,7 +150,7 @@ ROOT_URLCONF = "plane.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": ["templates"],
+        "DIRS": [os.path.join(os.path.dirname(BASE_DIR), "templates"), "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -181,9 +189,11 @@ SITE_ID = 1
 AUTH_USER_MODEL = "db.User"
 
 # Database
+conn_max_age = int(os.environ.get("DATABASE_CONN_MAX_AGE", "600"))
+
 if bool(os.environ.get("DATABASE_URL")):
     # Parse database configuration from $DATABASE_URL
-    DATABASES = {"default": dj_database_url.config()}
+    DATABASES = {"default": dj_database_url.config(conn_max_age=conn_max_age)}
 else:
     DATABASES = {
         "default": {
@@ -193,6 +203,7 @@ else:
             "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
             "HOST": os.environ.get("POSTGRES_HOST"),
             "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": conn_max_age,
         }
     }
 
@@ -328,9 +339,47 @@ CELERY_IMPORTS = (
     # issue version tasks
     "plane.bgtasks.issue_version_sync",
     "plane.bgtasks.issue_description_version_sync",
+    # helpdesk tasks
+    # comment.py imports send_helpdesk_comment_email inside perform_create, so
+    # only the API process ever loads the module. Without this entry the worker
+    # never registers the task, discards the message as unregistered, and the
+    # comment stays PENDING forever -- it never reaches FAILED either, so the
+    # UI shows no error. Eager-mode tests cannot catch this.
+    "plane.bgtasks.helpdesk_email_task",
+    "plane.bgtasks.helpdesk_imap_task",
 )
 
 FILE_SIZE_LIMIT = int(os.environ.get("FILE_SIZE_LIMIT", 5242880))
+
+# --- Helpdesk attachments ---
+# The inbound email webhook carries the whole message -- headers, bodies and
+# every attachment -- in a single multipart POST, so FILE_SIZE_LIMIT (a
+# per-file limit, and the ceiling for every other endpoint on the instance) is
+# the wrong bound for it. 30MB matches SendGrid Inbound Parse's own limit.
+# Requires the route to be listed in BODY_SIZE_EXEMPT_PATHS below, otherwise
+# RequestBodySizeLimitMiddleware rejects it first.
+HELPDESK_INBOUND_MAX_BODY_SIZE = int(os.environ.get("HELPDESK_INBOUND_MAX_BODY_SIZE", 31457280))
+# Total bytes of attachments carried on one outbound email. Beyond this the
+# remaining files are omitted and the body points the customer at the portal.
+HELPDESK_OUTBOUND_ATTACHMENT_MAX_TOTAL_SIZE = int(
+    os.environ.get("HELPDESK_OUTBOUND_ATTACHMENT_MAX_TOTAL_SIZE", 10485760)
+)
+HELPDESK_MAX_ATTACHMENTS_PER_COMMENT = int(os.environ.get("HELPDESK_MAX_ATTACHMENTS_PER_COMMENT", 10))
+
+# The authserv-id of our own receiving MTA, e.g. "mx.sendgrid.net". An
+# Authentication-Results header is only read when its authserv-id matches this
+# value (RFC 7601 section 5: discard A-R from outside the trust boundary, and
+# validate the authserv-id). Left empty the header is ignored entirely, which
+# is the fail-closed default -- it never affects the `pass` path, since that
+# comes exclusively from the provider's own `dkim` multipart field.
+HELPDESK_INBOUND_AUTHSERV_ID = os.environ.get("HELPDESK_INBOUND_AUTHSERV_ID", "")
+
+# Routes that opt out of RequestBodySizeLimitMiddleware. That middleware
+# touches request.body on every request, which makes DATA_UPLOAD_MAX_MEMORY_SIZE
+# apply to multipart uploads too -- Django normally exempts them so large files
+# stream to disk instead of RAM. Exempting a route restores that behaviour; the
+# route is then responsible for bounding its own body.
+BODY_SIZE_EXEMPT_PATHS = ["/api/helpdesk/public/inbound/"]
 
 # Unsplash Access key
 UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY")

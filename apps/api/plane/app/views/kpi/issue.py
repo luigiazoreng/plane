@@ -1,57 +1,120 @@
+from datetime import date, datetime, time, timedelta
+
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
 from plane.app.views.base import BaseAPIView
 from plane.app.permissions import ROLE, allow_permission
+from plane.app.kpi.permissions import require_workspace_kpi_access
 from plane.app.serializers.kpi import KpiIssueAttributeSerializer
-from plane.db.models import EstimatePoint, Issue, KpiIssueAttribute, Workspace
-from plane.kpi.contract import resolve_contract
+from plane.db.models import (
+    EstimateProperty,
+    EstimatePropertyRole,
+    Issue,
+    IssueEstimatePropertyValue,
+    KpiIssueAttribute,
+    Project,
+    Workspace,
+)
+from plane.kpi.contract import resolve_contract, resolve_contracts_bulk
 from plane.kpi.engine import calcular, sample_curve
 
 
-def _issue_type_name(issue, attribute):
+def _issue_labels(issue, attribute):
     if attribute is not None and attribute.type_override:
-        return attribute.type_override
-    if issue.type_id and issue.type is not None:
-        return issue.type.name
+        # Fallback to scalar override if it exists (legacy compatibility)
+        return [attribute.type_override]
+    return [str(label.id) for label in issue.labels.all()]
+
+
+class KpiPropertyResolver:
+    """Bulk-resolves the project's Difficulty/Repetitive EstimateProperty and each
+    issue's selected IssueEstimatePropertyValue, to avoid N+1 queries across
+    KpiIssueListEndpoint / KpiMemberAggregateEndpoint /
+    WorkspaceKpiMemberAggregateEndpoint. `issues` must be a materialized list
+    (not a lazy queryset), since every issue's id/project_id is needed upfront.
+    """
+
+    def __init__(self, issues):
+        project_ids = {issue.project_id for issue in issues}
+        self._property_ids_by_project = {pid: {} for pid in project_ids}
+        for row in EstimateProperty.objects.filter(project_id__in=project_ids, kpi_role__isnull=False).values(
+            "project_id", "kpi_role", "id"
+        ):
+            self._property_ids_by_project[row["project_id"]][row["kpi_role"]] = row["id"]
+
+        all_property_ids = {pid for roles in self._property_ids_by_project.values() for pid in roles.values()}
+        self._points = {}
+        if all_property_ids:
+            issue_ids = [issue.id for issue in issues]
+            for value in IssueEstimatePropertyValue.objects.filter(
+                issue_id__in=issue_ids, property_id__in=all_property_ids, estimate_point__isnull=False
+            ).select_related("estimate_point"):
+                self._points[(value.issue_id, value.property_id)] = value.estimate_point
+
+    def points_for(self, issue):
+        """Returns (difficulty_point, repetitive_point), either an EstimatePoint or None."""
+        roles = self._property_ids_by_project.get(issue.project_id, {})
+        difficulty_property_id = roles.get(EstimatePropertyRole.DIFFICULTY)
+        repetitive_property_id = roles.get(EstimatePropertyRole.REPETITIVE)
+        difficulty_point = self._points.get((issue.id, difficulty_property_id)) if difficulty_property_id else None
+        repetitive_point = self._points.get((issue.id, repetitive_property_id)) if repetitive_property_id else None
+        return difficulty_point, repetitive_point
+
+
+def _difficulty_lookup_key(issue, difficulty_point):
+    """Difficulty key for config.tables.difficulty = the resolved Difficulty
+    EstimateProperty's point id, falling back to the native Issue.estimate_point id.
+
+    Keyed by EstimatePoint id, not value, so renaming a point's value doesn't
+    silently zero its configured contribution to Vp (see migration
+    0145_kpi_difficulty_rekey_by_point_id). Use _difficulty_display_value for the
+    human-readable value instead -- this key is for the engine lookup only.
+    """
+    if difficulty_point is not None:
+        return str(difficulty_point.id)
+    if issue.estimate_point_id and issue.estimate_point is not None:
+        return str(issue.estimate_point_id)
     return None
 
 
-def _difficulty_value(issue, attribute):
-    """Difficulty key = KPI difficulty estimate point, falling back to native estimate.
-
-    The selected estimate point value is looked up in ``config.tables.difficulty``.
-    Fallback to Issue.estimate_point preserves historical KPI data.
-    """
-    if (
-        attribute is not None
-        and attribute.difficulty_estimate_point_id
-        and attribute.difficulty_estimate_point is not None
-    ):
-        return attribute.difficulty_estimate_point.value
+def _difficulty_display_value(issue, difficulty_point):
+    """Human-readable difficulty value for display; not used in Vp calculation."""
+    if difficulty_point is not None:
+        return difficulty_point.value
     if issue.estimate_point_id and issue.estimate_point is not None:
         return issue.estimate_point.value
     return None
 
 
-def _repetitive_value(attribute):
-    if (
-        attribute is not None
-        and attribute.repetitive_estimate_point_id
-        and attribute.repetitive_estimate_point is not None
-    ):
-        return attribute.repetitive_estimate_point.value
+def _repetitive_lookup_key(attribute, repetitive_point):
+    """Repetitive key for config.tables.repetitive = the resolved Repetitive
+    EstimateProperty's point id when configured, else the legacy free-text label.
+    Keyed by point id (not value) for the same rename-safety reason as
+    _difficulty_lookup_key.
+    """
+    if repetitive_point is not None:
+        return str(repetitive_point.id)
     return attribute.repetitive if attribute else None
 
 
-def _build_task(issue, attribute):
+def _repetitive_display_value(attribute, repetitive_point):
+    """Human-readable repetitive value for display; not used in Vp calculation."""
+    if repetitive_point is not None:
+        return repetitive_point.value
+    return attribute.repetitive if attribute else None
+
+
+def _build_task(issue, attribute, difficulty_point, repetitive_point):
     return {
         "priority": issue.priority,
         "due_date": issue.target_date,
         "delivered_date": issue.completed_at,
-        "difficulty": _difficulty_value(issue, attribute),
-        "repetitive": _repetitive_value(attribute),
-        "type": _issue_type_name(issue, attribute),
+        "difficulty": _difficulty_lookup_key(issue, difficulty_point),
+        "repetitive": _repetitive_lookup_key(attribute, repetitive_point),
+        "type": _issue_labels(issue, attribute),
     }
 
 
@@ -65,26 +128,190 @@ def _status_of(completed_at, d):
     return "on_time"
 
 
+def _empty_counts():
+    return {"on_time": 0, "early": 0, "late": 0, "pending": 0}
+
+
+def _accumulate_member_buckets(issue, calc, row_status, buckets):
+    """Add an issue's Vp/Vf to each of its assignees' buckets, split equally.
+
+    A work item with N assignees gives each of them Vp/N and Vf/N, so the sum of
+    every member's score matches the project-wide total. Returns False when the
+    issue has no assignee (the caller counts those separately) -- a mixed
+    "Unassigned" row would distort a ranking of real people.
+
+    Only delivered items (``calc["d"] is not None``) contribute to Vp/Vf here,
+    matching the project-level rule in KpiIssueListEndpoint /
+    WorkspaceKpiOverviewEndpoint. A member's raw open-work volume must not by
+    itself lower their efficiency -- only their delivered work's Vf/Vp ratio
+    does. Pending items still count toward `counts["pending"]` so the workload
+    stays visible, it just no longer feeds the score.
+    """
+    assignees = list(issue.assignees.all())
+    if not assignees:
+        return False
+
+    n = len(assignees)
+    delivered = calc["d"] is not None
+    vp_share = calc["Vp"] / n if delivered else 0.0
+    vf_share = (calc["Vf"] / n) if delivered and calc["Vf"] is not None else None
+
+    for user in assignees:
+        bucket = buckets.setdefault(
+            str(user.id),
+            {
+                "user_id": str(user.id),
+                "display_name": user.display_name,
+                "avatar_url": user.avatar_url,
+                "sum_vp": 0.0,
+                "sum_vf": 0.0,
+                "counts": _empty_counts(),
+            },
+        )
+        bucket["sum_vp"] += vp_share
+        if vf_share is not None:
+            bucket["sum_vf"] += vf_share
+        bucket["counts"][row_status] += 1
+    return True
+
+
+def _finalize_member_buckets(buckets, decimals):
+    """Round the accumulated buckets, derive efficiency and rank by final score."""
+    results = []
+    for bucket in buckets.values():
+        bucket["sum_vp"] = round(bucket["sum_vp"], decimals)
+        bucket["sum_vf"] = round(bucket["sum_vf"], decimals)
+        bucket["efficiency"] = round(bucket["sum_vf"] / bucket["sum_vp"], 4) if bucket["sum_vp"] else None
+        results.append(bucket)
+
+    results.sort(key=lambda r: r["sum_vf"], reverse=True)
+    return results
+
+
+def _active_kpi_projects(workspace, user):
+    """Projects of the workspace whose KPI panel is enabled AND the user belongs to.
+
+    Every filter matters: ``kpi_view`` is the per-project feature toggle (the
+    "active KPIs" the workspace panel consolidates); the membership filter keeps
+    a workspace-wide endpoint from leaking scores of projects the requester
+    cannot open; and archived projects are dropped so finished work stops moving
+    the current number. All three mirror the guards other workspace-level
+    endpoints apply (see plane.app.views.workspace).
+    """
+    return (
+        Project.objects.filter(
+            workspace=workspace,
+            kpi_view=True,
+            archived_at__isnull=True,
+            project_projectmember__member=user,
+            project_projectmember__is_active=True,
+        )
+        .distinct()
+        .order_by("name")
+    )
+
+
+def _workspace_kpi_projects(workspace):
+    """Projects feeding the workspace-level panels (general KPI + Executive).
+
+    Deliberately unfiltered by membership, unlike _active_kpi_projects. The
+    access gate already ran at the endpoint entrance, and the point of an
+    executive panel is precisely to cover projects the requester does not work
+    on -- an admin who belongs to no project would otherwise open the panel and
+    see nothing. Granting workspace KPI access therefore grants visibility into
+    every project with the KPI panel enabled.
+    """
+    return (
+        Project.objects.filter(
+            workspace=workspace,
+            kpi_view=True,
+            archived_at__isnull=True,
+        )
+        .distinct()
+        .order_by("name")
+    )
+
+
+# Period presets, in days. "all" disables the filter.
+PERIOD_DAYS = {"7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365}
+DEFAULT_PERIOD = "90d"
+PERIOD_ERROR = "Invalid period. Use period=7d|30d|90d|180d|365d|all or start=&end= as YYYY-MM-DD."
+
+
+def _resolve_period(request, default=DEFAULT_PERIOD):
+    """Resolve the requested reporting window.
+
+    Accepts either ``?period=7d|30d|90d|180d|365d|all`` or an explicit
+    ``?start=YYYY-MM-DD&end=YYYY-MM-DD``. Returns
+    ``(key, start_date_or_None, end_date_or_None)``; both dates are None for
+    the "all" window. ``default`` is what an absent ``period`` param means --
+    the project endpoints pass "all" so that callers predating the parameter
+    keep their previous unfiltered behaviour.
+    """
+    start_param = request.GET.get("start")
+    end_param = request.GET.get("end")
+    if start_param and end_param:
+        try:
+            start = date.fromisoformat(start_param)
+            end = date.fromisoformat(end_param)
+        except ValueError:
+            return None, None, None
+        if start > end:
+            return None, None, None
+        return "custom", start, end
+
+    period = request.GET.get("period", default)
+    if period == "all":
+        return "all", None, None
+    if period not in PERIOD_DAYS:
+        return None, None, None
+
+    end = timezone.now().date()
+    return period, end - timedelta(days=PERIOD_DAYS[period]), end
+
+
+def _period_filter(start, end):
+    """Q object selecting the issues that belong to the reporting window.
+
+    A delivered item is placed by ``completed_at``; an open one has no delivery
+    date, so it is placed by its due date instead. That keeps pending work whose
+    deadline falls in the window while dropping items delivered long ago.
+    """
+    if start is None or end is None:
+        return Q()
+    start_dt = timezone.make_aware(datetime.combine(start, time.min))
+    end_dt = timezone.make_aware(datetime.combine(end, time.max))
+    return Q(completed_at__gte=start_dt, completed_at__lte=end_dt) | Q(
+        completed_at__isnull=True, target_date__gte=start, target_date__lte=end
+    )
+
+
 class KpiIssueListEndpoint(BaseAPIView):
-    """List a project's work items with computed Vp/d/p/Vf plus aggregates."""
+    """List a project's work items with computed Vp/d/p/Vf plus aggregates.
+
+    Honours the same ``?period=``/``?start=&end=`` window as the workspace
+    panel; omitting it defaults to ``all`` so existing callers keep the
+    unfiltered, whole-project view they were written against.
+    """
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def get(self, request, slug, project_id):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)
 
-        issues = (
+        period_key, start, end = _resolve_period(request, default="all")
+        if period_key is None:
+            return Response({"error": PERIOD_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+
+        issues = list(
             Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
-            .select_related(
-                "type",
-                "state",
-                "kpi_attribute",
-                "kpi_attribute__difficulty_estimate_point",
-                "kpi_attribute__repetitive_estimate_point",
-                "estimate_point",
-            )
+            .filter(_period_filter(start, end))
+            .select_related("state", "kpi_attribute", "estimate_point")
             .order_by("-created_at")
         )
+        resolver = KpiPropertyResolver(issues)
+
+        aggregates_only = request.GET.get("aggregates_only", "false").lower() == "true"
 
         results = []
         sum_vp = 0.0
@@ -93,7 +320,8 @@ class KpiIssueListEndpoint(BaseAPIView):
 
         for issue in issues:
             attribute = getattr(issue, "kpi_attribute", None)
-            task = _build_task(issue, attribute)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
             counts[row_status] += 1
@@ -101,36 +329,29 @@ class KpiIssueListEndpoint(BaseAPIView):
                 sum_vp += calc["Vp"]
                 sum_vf += calc["Vf"] if calc["Vf"] is not None else 0.0
 
-            results.append(
-                {
-                    "id": str(issue.id),
-                    "name": issue.name,
-                    "sequence_id": issue.sequence_id,
-                    "priority": issue.priority,
-                    "target_date": issue.target_date,
-                    "completed_at": issue.completed_at,
-                    "state_group": issue.state.group if issue.state_id else None,
-                    "estimate_point": str(issue.estimate_point_id) if issue.estimate_point_id else None,
-                    "difficulty_estimate_point": (
-                        str(attribute.difficulty_estimate_point_id)
-                        if attribute and attribute.difficulty_estimate_point_id
-                        else None
-                    ),
-                    "repetitive_estimate_point": (
-                        str(attribute.repetitive_estimate_point_id)
-                        if attribute and attribute.repetitive_estimate_point_id
-                        else None
-                    ),
-                    "difficulty": task["difficulty"],
-                    "repetitive": task["repetitive"],
-                    "type": task["type"],
-                    "vp": calc["Vp"],
-                    "d": calc["d"],
-                    "p": calc["p"],
-                    "vf": calc["Vf"],
-                    "status": row_status,
-                }
-            )
+            if not aggregates_only:
+                results.append(
+                    {
+                        "id": str(issue.id),
+                        "name": issue.name,
+                        "sequence_id": issue.sequence_id,
+                        "priority": issue.priority,
+                        "target_date": issue.target_date,
+                        "completed_at": issue.completed_at,
+                        "state_group": issue.state.group if issue.state_id else None,
+                        "estimate_point": str(issue.estimate_point_id) if issue.estimate_point_id else None,
+                        "difficulty_estimate_point": str(difficulty_point.id) if difficulty_point else None,
+                        "repetitive_estimate_point": str(repetitive_point.id) if repetitive_point else None,
+                        "difficulty": _difficulty_display_value(issue, difficulty_point),
+                        "repetitive": _repetitive_display_value(attribute, repetitive_point),
+                        "type": task["type"],
+                        "vp": calc["Vp"],
+                        "d": calc["d"],
+                        "p": calc["p"],
+                        "vf": calc["Vf"],
+                        "status": row_status,
+                    }
+                )
 
         decimals = contract["params"].get("vf_decimals", 2)
         efficiency = round(sum_vf / sum_vp, 4) if sum_vp else None
@@ -143,7 +364,12 @@ class KpiIssueListEndpoint(BaseAPIView):
                     "sum_vf": round(sum_vf, decimals),
                     "efficiency": efficiency,
                     "counts": counts,
-                    "total": len(results),
+                    "total": len(issues),
+                },
+                "period": {
+                    "key": period_key,
+                    "start": start.isoformat() if start else None,
+                    "end": end.isoformat() if end else None,
                 },
             }
         )
@@ -164,135 +390,236 @@ class KpiMemberAggregateEndpoint(BaseAPIView):
         workspace = Workspace.objects.get(slug=slug)
         contract, _ = resolve_contract(workspace, project_id)
 
-        issues = Issue.issue_objects.filter(workspace=workspace, project_id=project_id).select_related(
-            "type",
-            "state",
-            "kpi_attribute",
-            "kpi_attribute__difficulty_estimate_point",
-            "kpi_attribute__repetitive_estimate_point",
-            "estimate_point",
-        ).prefetch_related("assignees")
+        period_key, start, end = _resolve_period(request, default="all")
+        if period_key is None:
+            return Response({"error": PERIOD_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+
+        issues = list(
+            Issue.issue_objects.filter(workspace=workspace, project_id=project_id)
+            .filter(_period_filter(start, end))
+            .select_related("kpi_attribute", "estimate_point")
+            .prefetch_related("assignees", "labels")
+        )
+        resolver = KpiPropertyResolver(issues)
 
         buckets = {}
         unassigned_count = 0
 
         for issue in issues:
             attribute = getattr(issue, "kpi_attribute", None)
-            task = _build_task(issue, attribute)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
 
-            assignees = list(issue.assignees.all())
-            if not assignees:
+            if not _accumulate_member_buckets(issue, calc, row_status, buckets):
                 unassigned_count += 1
-                continue
-
-            n = len(assignees)
-            vp_share = calc["Vp"] / n
-            vf_share = (calc["Vf"] / n) if calc["Vf"] is not None else None
-
-            for user in assignees:
-                bucket = buckets.setdefault(
-                    str(user.id),
-                    {
-                        "user_id": str(user.id),
-                        "display_name": user.display_name,
-                        "avatar_url": user.avatar_url,
-                        "sum_vp": 0.0,
-                        "sum_vf": 0.0,
-                        "counts": {"on_time": 0, "early": 0, "late": 0, "pending": 0},
-                    },
-                )
-                bucket["sum_vp"] += vp_share
-                if vf_share is not None:
-                    bucket["sum_vf"] += vf_share
-                bucket["counts"][row_status] += 1
 
         decimals = contract["params"].get("vf_decimals", 2)
-        results = []
-        for bucket in buckets.values():
-            bucket["sum_vp"] = round(bucket["sum_vp"], decimals)
-            bucket["sum_vf"] = round(bucket["sum_vf"], decimals)
-            bucket["efficiency"] = round(bucket["sum_vf"] / bucket["sum_vp"], 4) if bucket["sum_vp"] else None
-            results.append(bucket)
-
-        results.sort(key=lambda r: r["sum_vf"], reverse=True)
-
-        return Response({"results": results, "unassigned_count": unassigned_count})
+        return Response(
+            {
+                "results": _finalize_member_buckets(buckets, decimals),
+                "unassigned_count": unassigned_count,
+                "period": {
+                    "key": period_key,
+                    "start": start.isoformat() if start else None,
+                    "end": end.isoformat() if end else None,
+                },
+            }
+        )
 
 
 class WorkspaceKpiMemberAggregateEndpoint(BaseAPIView):
-    """Per-member breakdown of Vp/Vf across ALL projects in a workspace."""
+    """Per-member breakdown of Vp/Vf across the workspace's active KPI projects.
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    Covers every project with ``kpi_view`` enabled (see _workspace_kpi_projects),
+    not just the requester's own, because the access gate rather than project
+    membership is what bounds this endpoint.
+
+    Guarded by the same gate as WorkspaceKpiOverviewEndpoint on purpose: both
+    return per-person figures, and a weaker gate on either one makes the other
+    decorative.
+    """
+
+    @require_workspace_kpi_access
     def get(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
+        project_ids = list(_workspace_kpi_projects(workspace).values_list("id", flat=True))
+        contracts = resolve_contracts_bulk(workspace, project_ids)
 
-        issues = Issue.issue_objects.filter(workspace=workspace).select_related(
-            "type",
-            "state",
-            "kpi_attribute",
-            "kpi_attribute__difficulty_estimate_point",
-            "kpi_attribute__repetitive_estimate_point",
-            "estimate_point",
-        ).prefetch_related("assignees")
+        issues = list(
+            Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
+            .select_related("kpi_attribute", "estimate_point")
+            .prefetch_related("assignees", "labels")
+        )
+        resolver = KpiPropertyResolver(issues)
 
         buckets = {}
         unassigned_count = 0
-        contracts_by_project = {}
-
-        def get_contract(project_id):
-            if project_id not in contracts_by_project:
-                contract, _ = resolve_contract(workspace, project_id)
-                contracts_by_project[project_id] = contract
-            return contracts_by_project[project_id]
 
         for issue in issues:
             attribute = getattr(issue, "kpi_attribute", None)
-            task = _build_task(issue, attribute)
-            contract = get_contract(issue.project_id)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
+            contract, _ = contracts[issue.project_id]
             calc = calcular(task, contract)
             row_status = _status_of(issue.completed_at, calc["d"])
 
-            assignees = list(issue.assignees.all())
-            if not assignees:
+            if not _accumulate_member_buckets(issue, calc, row_status, buckets):
                 unassigned_count += 1
-                continue
-
-            n = len(assignees)
-            vp_share = calc["Vp"] / n
-            vf_share = (calc["Vf"] / n) if calc["Vf"] is not None else None
-
-            for user in assignees:
-                bucket = buckets.setdefault(
-                    str(user.id),
-                    {
-                        "user_id": str(user.id),
-                        "display_name": user.display_name,
-                        "avatar_url": user.avatar_url,
-                        "sum_vp": 0.0,
-                        "sum_vf": 0.0,
-                        "counts": {"on_time": 0, "early": 0, "late": 0, "pending": 0},
-                    },
-                )
-                bucket["sum_vp"] += vp_share
-                if vf_share is not None:
-                    bucket["sum_vf"] += vf_share
-                bucket["counts"][row_status] += 1
 
         ws_contract, _ = resolve_contract(workspace, None)
         decimals = ws_contract["params"].get("vf_decimals", 2)
-        
-        results = []
-        for bucket in buckets.values():
-            bucket["sum_vp"] = round(bucket["sum_vp"], decimals)
-            bucket["sum_vf"] = round(bucket["sum_vf"], decimals)
-            bucket["efficiency"] = round(bucket["sum_vf"] / bucket["sum_vp"], 4) if bucket["sum_vp"] else None
-            results.append(bucket)
+        return Response(
+            {
+                "results": _finalize_member_buckets(buckets, decimals),
+                "unassigned_count": unassigned_count,
+            }
+        )
 
-        results.sort(key=lambda r: r["sum_vf"], reverse=True)
 
-        return Response({"results": results, "unassigned_count": unassigned_count})
+class WorkspaceKpiOverviewEndpoint(BaseAPIView):
+    """Consolidated KPI panel for the whole workspace.
+
+    Vf is NOT comparable across projects: ``tables.difficulty`` is keyed by each
+    project's own EstimatePoint ids, and priority points / ``b`` / ``k`` /
+    ``penalty_mode`` may diverge per project. Summing Vf would silently let the
+    project with the largest point tables dominate the number.
+
+    Efficiency (Vf/Vp) is dimensionless, so the unified KPI is the mean of each
+    project's efficiency weighted by how many scored work items it contributed::
+
+        eff_p = sum(Vf_p) / sum(Vp_p)        # scored items only
+        KPI   = sum(eff_p * n_p) / sum(n_p)
+
+    Projects with no scored item (or a zero Vp total) have no defined efficiency
+    and are listed with ``efficiency: null`` while staying out of the average.
+
+    One pass over the issues feeds all three blocks -- per project, per member
+    and the unified summary -- so the panel costs a single scan.
+
+    ``projects``/``unified`` and ``members`` now agree: all three blocks count
+    only delivered items in Vp/Vf (see ``_accumulate_member_buckets``). A
+    member's raw open-work volume never lowers their efficiency by itself --
+    carrying a larger backlog than a teammate must not make someone look less
+    efficient than someone who simply has less assigned to them. Open work
+    still surfaces via ``counts["pending"]``, just not via Vp/Vf.
+    """
+
+    @require_workspace_kpi_access
+    def get(self, request, slug):
+        workspace = Workspace.objects.get(slug=slug)
+
+        period_key, start, end = _resolve_period(request)
+        if period_key is None:
+            return Response({"error": PERIOD_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+
+        projects = list(_workspace_kpi_projects(workspace))
+        project_ids = [project.id for project in projects]
+        contracts = resolve_contracts_bulk(workspace, project_ids)
+
+        issues = list(
+            Issue.issue_objects.filter(workspace=workspace, project_id__in=project_ids)
+            .filter(_period_filter(start, end))
+            .select_related("kpi_attribute", "estimate_point")
+            .prefetch_related("assignees", "labels")
+        )
+        resolver = KpiPropertyResolver(issues)
+
+        stats = {
+            pid: {"sum_vp": 0.0, "sum_vf": 0.0, "scored_items": 0, "counts": _empty_counts()} for pid in project_ids
+        }
+        buckets = {}
+        unassigned_count = 0
+        total_counts = _empty_counts()
+
+        for issue in issues:
+            attribute = getattr(issue, "kpi_attribute", None)
+            difficulty_point, repetitive_point = resolver.points_for(issue)
+            task = _build_task(issue, attribute, difficulty_point, repetitive_point)
+            contract, _ = contracts[issue.project_id]
+            calc = calcular(task, contract)
+            row_status = _status_of(issue.completed_at, calc["d"])
+
+            stat = stats[issue.project_id]
+            stat["counts"][row_status] += 1
+            total_counts[row_status] += 1
+            # Only delivered items carry a multiplier; pending ones would drag
+            # efficiency toward zero for work that simply is not due yet.
+            if calc["d"] is not None:
+                stat["sum_vp"] += calc["Vp"]
+                stat["sum_vf"] += calc["Vf"] if calc["Vf"] is not None else 0.0
+                stat["scored_items"] += 1
+
+            if not _accumulate_member_buckets(issue, calc, row_status, buckets):
+                unassigned_count += 1
+
+        ws_contract, _ = resolve_contract(workspace, None)
+        decimals = ws_contract["params"].get("vf_decimals", 2)
+
+        total_scored = sum(stat["scored_items"] for stat in stats.values())
+
+        project_rows = []
+        weighted_efficiency_sum = 0.0
+        projects_in_average = 0
+        for project in projects:
+            stat = stats[project.id]
+            contract, cfg = contracts[project.id]
+            efficiency = round(stat["sum_vf"] / stat["sum_vp"], 4) if stat["sum_vp"] else None
+
+            if efficiency is not None:
+                weighted_efficiency_sum += efficiency * stat["scored_items"]
+                projects_in_average += 1
+
+            project_rows.append(
+                {
+                    "project_id": str(project.id),
+                    "name": project.name,
+                    "identifier": project.identifier,
+                    "logo_props": project.logo_props,
+                    "sum_vp": round(stat["sum_vp"], decimals),
+                    "sum_vf": round(stat["sum_vf"], decimals),
+                    "efficiency": efficiency,
+                    "scored_items": stat["scored_items"],
+                    "counts": stat["counts"],
+                    "contribution": (
+                        round(efficiency * stat["scored_items"] / total_scored, 4)
+                        if efficiency is not None and total_scored
+                        else None
+                    ),
+                    "penalty_mode": contract["params"]["penalty_mode"],
+                    "k": contract["params"]["k"],
+                    "inherited_config": cfg is None or cfg.project_id is None,
+                }
+            )
+
+        project_rows.sort(key=lambda row: (row["efficiency"] is None, -(row["efficiency"] or 0)))
+
+        unified = {
+            "kpi": round(weighted_efficiency_sum / total_scored, 4) if total_scored else None,
+            "method": "item_weighted_efficiency",
+            "scored_items": total_scored,
+            "project_count": len(projects),
+            "projects_in_average": projects_in_average,
+            # Mixed-scale totals: informative, but never the basis of `kpi`.
+            "sum_vp_raw": round(sum(stat["sum_vp"] for stat in stats.values()), decimals),
+            "sum_vf_raw": round(sum(stat["sum_vf"] for stat in stats.values()), decimals),
+            "counts": total_counts,
+        }
+
+        return Response(
+            {
+                "period": {
+                    "key": period_key,
+                    "start": start.isoformat() if start else None,
+                    "end": end.isoformat() if end else None,
+                },
+                "unified": unified,
+                "projects": project_rows,
+                "members": _finalize_member_buckets(buckets, decimals),
+                "unassigned_count": unassigned_count,
+            }
+        )
 
 
 class KpiIssueAttributeEndpoint(BaseAPIView):
@@ -310,25 +637,6 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
                 return f"'{value}' is not a valid level for {field}."
         return None
 
-    def _validate_estimate_points(self, data, config, project_id):
-        checks = [
-            ("difficulty_estimate_point", "difficulty_estimate"),
-            ("repetitive_estimate_point", "repetitive_estimate"),
-        ]
-        for point_field, estimate_field in checks:
-            if point_field not in data:
-                continue
-            point_id = data.get(point_field)
-            if point_id in (None, ""):
-                continue
-            configured_estimate_id = getattr(config, f"{estimate_field}_id", None) if config else None
-            if configured_estimate_id is None:
-                return f"No {estimate_field} is configured for this project."
-            point = EstimatePoint.objects.filter(id=point_id, project_id=project_id).first()
-            if point is None or str(point.estimate_id) != str(configured_estimate_id):
-                return f"{point_field} is not valid for the configured {estimate_field}."
-        return None
-
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def get(self, request, slug, project_id, issue_id):
         attribute = KpiIssueAttribute.objects.filter(
@@ -339,8 +647,6 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
                 {
                     "issue": str(issue_id),
                     "repetitive": None,
-                    "difficulty_estimate_point": None,
-                    "repetitive_estimate_point": None,
                     "type_override": None,
                 }
             )
@@ -350,11 +656,8 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
     def put(self, request, slug, project_id, issue_id):
         workspace = Workspace.objects.get(slug=slug)
         # Validate categorical levels against the effective config.
-        contract, config = resolve_contract(workspace, project_id)
+        contract, _ = resolve_contract(workspace, project_id)
         error = self._validate_levels(request.data, contract)
-        if error:
-            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-        error = self._validate_estimate_points(request.data, config, project_id)
         if error:
             return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -369,110 +672,6 @@ class KpiIssueAttributeEndpoint(BaseAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(workspace=workspace, project_id=project_id, issue=issue)
         return Response(serializer.data)
-
-
-def _get_issue_and_attribute(slug, project_id, issue_id):
-    issue = Issue.objects.filter(workspace__slug=slug, project_id=project_id, id=issue_id).first()
-    if issue is None:
-        return None, None
-    attribute, _ = KpiIssueAttribute.objects.get_or_create(
-        workspace=issue.workspace,
-        project_id=project_id,
-        issue=issue,
-    )
-    return issue, attribute
-
-
-def _configured_estimate_error(config, estimate_field):
-    if config is None or getattr(config, f"{estimate_field}_id", None) is None:
-        return f"No {estimate_field} is configured for this project."
-    return None
-
-
-def _estimate_point_for_config(point_id, project_id, estimate_id):
-    if point_id in (None, ""):
-        return None
-    return EstimatePoint.objects.filter(id=point_id, project_id=project_id, estimate_id=estimate_id).first()
-
-
-class KpiIssueEstimateEndpoint(BaseAPIView):
-    """Set KPI Difficulty estimate point without changing Issue.estimate_point.
-
-    This keeps the legacy route as a compatibility alias. Body:
-    ``{"estimate_point": "<id>" | null}``.
-    """
-
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
-    def put(self, request, slug, project_id, issue_id):
-        workspace = Workspace.objects.get(slug=slug)
-        _, config = resolve_contract(workspace, project_id)
-        issue, attribute = _get_issue_and_attribute(slug, project_id, issue_id)
-        if issue is None:
-            return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        estimate_point_id = request.data.get("estimate_point")
-
-        if estimate_point_id in (None, ""):
-            attribute.difficulty_estimate_point = None
-            attribute.save(update_fields=["difficulty_estimate_point", "updated_at"])
-            return Response(
-                {"issue": str(issue_id), "estimate_point": None, "difficulty_estimate_point": None}
-            )
-
-        error = _configured_estimate_error(config, "difficulty_estimate")
-        if error:
-            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-
-        point = _estimate_point_for_config(estimate_point_id, project_id, config.difficulty_estimate_id)
-        if point is None:
-            return Response(
-                {"error": "estimate_point is not valid for the configured difficulty_estimate."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        attribute.difficulty_estimate_point = point
-        attribute.save(update_fields=["difficulty_estimate_point", "updated_at"])
-        return Response(
-            {
-                "issue": str(issue_id),
-                "estimate_point": str(point.id),
-                "difficulty_estimate_point": str(point.id),
-            }
-        )
-
-
-class KpiIssueRepetitiveEstimateEndpoint(BaseAPIView):
-    """Set KPI Repetitive estimate point without using the legacy text field."""
-
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
-    def put(self, request, slug, project_id, issue_id):
-        workspace = Workspace.objects.get(slug=slug)
-        _, config = resolve_contract(workspace, project_id)
-        issue, attribute = _get_issue_and_attribute(slug, project_id, issue_id)
-        if issue is None:
-            return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        estimate_point_id = request.data.get("estimate_point")
-
-        if estimate_point_id in (None, ""):
-            attribute.repetitive_estimate_point = None
-            attribute.save(update_fields=["repetitive_estimate_point", "updated_at"])
-            return Response({"issue": str(issue_id), "repetitive_estimate_point": None})
-
-        error = _configured_estimate_error(config, "repetitive_estimate")
-        if error:
-            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
-
-        point = _estimate_point_for_config(estimate_point_id, project_id, config.repetitive_estimate_id)
-        if point is None:
-            return Response(
-                {"error": "estimate_point is not valid for the configured repetitive_estimate."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        attribute.repetitive_estimate_point = point
-        attribute.save(update_fields=["repetitive_estimate_point", "updated_at"])
-        return Response({"issue": str(issue_id), "repetitive_estimate_point": str(point.id)})
 
 
 ALLOWED_PRIORITIES = {"urgent", "high", "medium", "low", "none"}

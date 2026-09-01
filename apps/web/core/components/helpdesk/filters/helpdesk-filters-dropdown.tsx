@@ -15,10 +15,11 @@ import type {
   THelpdeskRequestSource,
 } from "@plane/types";
 import { Avatar } from "@plane/ui";
+import { PriorityIcon } from "@plane/propel/icons";
 import { FiltersDropdown } from "@/components/issues/issue-layouts/filters/header/helpers/dropdown";
 import { FilterHeader } from "@/components/issues/issue-layouts/filters/header/helpers/filter-header";
 import { FilterOption } from "@/components/issues/issue-layouts/filters/header/helpers/filter-option";
-import { hasActiveHelpdeskFilters } from "@/helpers/helpdesk/filters";
+import { HELPDESK_PRIORITIES, hasActiveHelpdeskFilters } from "@/helpers/helpdesk/filters";
 import { useMember } from "@/hooks/store/use-member";
 
 type Props = {
@@ -51,6 +52,7 @@ export const HelpdeskFiltersDropdown = observer(function HelpdeskFiltersDropdown
     portal: false,
     form: false,
     source: false,
+    priority: true,
     created_at: false,
   });
   const togglePreview = (key: keyof typeof previews) => setPreviews((p) => ({ ...p, [key]: !p[key] }));
@@ -173,6 +175,26 @@ export const HelpdeskFiltersDropdown = observer(function HelpdeskFiltersDropdown
                   isChecked={filters.source.includes(opt.value)}
                   onClick={() => onChange("source", toggle(filters.source, opt.value))}
                   title={opt.label}
+                  multiple
+                />
+              ))}
+          </div>
+
+          {/* Priority */}
+          <div>
+            <FilterHeader
+              title={`Priority${filters.priority.length ? ` (${filters.priority.length})` : ""}`}
+              isPreviewEnabled={previews.priority}
+              handleIsPreviewEnabled={() => togglePreview("priority")}
+            />
+            {previews.priority &&
+              HELPDESK_PRIORITIES.map((opt) => (
+                <FilterOption
+                  key={opt.id}
+                  isChecked={filters.priority.includes(opt.id)}
+                  onClick={() => onChange("priority", toggle(filters.priority, opt.id))}
+                  icon={<PriorityIcon priority={opt.id} size={12} withContainer />}
+                  title={opt.name}
                   multiple
                 />
               ))}

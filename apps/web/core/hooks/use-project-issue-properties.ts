@@ -19,7 +19,7 @@ export const useProjectIssueProperties = () => {
   const { fetchProjectLabels } = useLabel();
   const { fetchAllCycles: fetchProjectAllCycles } = useCycle();
   const { fetchModules: fetchProjectAllModules } = useModule();
-  const { getProjectEstimates } = useProjectEstimates();
+  const { getProjectEstimates, getProjectEstimateProperties } = useProjectEstimates();
 
   // fetching project states
   const fetchStates = async (
@@ -74,6 +74,7 @@ export const useProjectIssueProperties = () => {
   ) => {
     if (workspaceSlug && projectId) {
       await getProjectEstimates(workspaceSlug.toString(), projectId.toString());
+      await getProjectEstimateProperties(workspaceSlug.toString(), projectId.toString());
     }
   };
 

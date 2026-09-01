@@ -25,7 +25,7 @@ export const ExtendedAppSidebar = observer(function ExtendedAppSidebar() {
   const { workspaceSlug } = useParams();
   // store hooks
   const { isExtendedSidebarOpened, toggleExtendedSidebar } = useAppTheme();
-  const { allowPermissions } = useUserPermissions();
+  const { hasPageAccess } = useUserPermissions();
   const { preferences: workspacePreferences, updateWorkspaceItemSortOrder } = useWorkspaceNavigationPreferences();
 
   // derived values
@@ -34,12 +34,7 @@ export const ExtendedAppSidebar = observer(function ExtendedAppSidebar() {
   const sortedNavigationItems = useMemo(() => {
     const slug = workspaceSlug.toString();
 
-    return WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.filter((item) => {
-      // Permission check
-      const hasPermission = allowPermissions(item.access, EUserPermissionsLevel.WORKSPACE, slug);
-
-      return hasPermission;
-    })
+    return WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.filter((item) => hasPageAccess(slug, item.key))
       .map((item) => {
         const preference = currentWorkspaceNavigationPreferences?.[item.key];
         return {

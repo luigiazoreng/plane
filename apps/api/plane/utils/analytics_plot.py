@@ -8,7 +8,7 @@ from itertools import groupby
 
 # Django import
 from django.db import models
-from django.db.models import Case, CharField, Count, F, Sum, Value, When, FloatField
+from django.db.models import Case, CharField, Count, F, Q, Sum, Value, When, FloatField
 from django.db.models.functions import (
     Coalesce,
     Concat,
@@ -20,7 +20,7 @@ from django.db.models.functions import (
 from django.utils import timezone
 
 # Module imports
-from plane.db.models import Issue, Project
+from plane.db.models import Issue, NUMERIC_ESTIMATE_TYPES, project_has_active_numeric_estimate
 
 VALID_ANALYTICS_FIELDS = [
     "state_id",
@@ -108,7 +108,15 @@ def build_graph_plot(queryset, x_axis, y_axis, segment=None):
 
     # Estimate
     else:
-        queryset = queryset.annotate(estimate=Sum(Cast("estimate_point__value", FloatField()))).order_by(x_axis)
+        # Only Points/Time estimate values are numeric; scope the Sum via `filter=`
+        # (not the base queryset) so dimensions with only Categories-estimated or
+        # unestimated issues still appear in the output, with a 0/None total.
+        queryset = queryset.annotate(
+            estimate=Sum(
+                Cast("estimate_point__value", FloatField()),
+                filter=Q(estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES),
+            )
+        ).order_by(x_axis)
         queryset = queryset.annotate(segment=F(segment)) if segment else queryset
         queryset = (
             queryset.values("dimension", "segment", "estimate") if segment else queryset.values("dimension", "estimate")
@@ -123,13 +131,8 @@ def build_graph_plot(queryset, x_axis, y_axis, segment=None):
 def burndown_plot(queryset, slug, project_id, plot_type, cycle_id=None, module_id=None):
     # Total Issues in Cycle or Module
     total_issues = queryset.total_issues
-    # check whether the estimate is a point or not
-    estimate_type = Project.objects.filter(
-        workspace__slug=slug,
-        pk=project_id,
-        estimate__isnull=False,
-        estimate__type="points",
-    ).exists()
+    # check whether the estimate is a numeric (points/time) type or not
+    estimate_type = project_has_active_numeric_estimate(slug, project_id)
     if estimate_type and plot_type == "points" and cycle_id:
         issue_estimates = Issue.issue_objects.filter(
             workspace__slug=slug,
@@ -137,6 +140,7 @@ def burndown_plot(queryset, slug, project_id, plot_type, cycle_id=None, module_i
             issue_cycle__cycle_id=cycle_id,
             issue_cycle__deleted_at__isnull=True,
             estimate_point__isnull=False,
+            estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
         ).values_list("estimate_point__value", flat=True)
 
         issue_estimates = [float(value) for value in issue_estimates]
@@ -149,6 +153,7 @@ def burndown_plot(queryset, slug, project_id, plot_type, cycle_id=None, module_i
             issue_module__module_id=module_id,
             issue_module__deleted_at__isnull=True,
             estimate_point__isnull=False,
+            estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
         ).values_list("estimate_point__value", flat=True)
 
         issue_estimates = [float(value) for value in issue_estimates]
@@ -174,6 +179,7 @@ def burndown_plot(queryset, slug, project_id, plot_type, cycle_id=None, module_i
                     issue_cycle__cycle_id=cycle_id,
                     issue_cycle__deleted_at__isnull=True,
                     estimate_point__isnull=False,
+                    estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 )
                 .annotate(date=TruncDate("completed_at"))
                 .values("date")
@@ -212,6 +218,7 @@ def burndown_plot(queryset, slug, project_id, plot_type, cycle_id=None, module_i
                     issue_module__module_id=module_id,
                     issue_module__deleted_at__isnull=True,
                     estimate_point__isnull=False,
+                    estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 )
                 .annotate(date=TruncDate("completed_at"))
                 .values("date")

@@ -52,3 +52,37 @@ def resolve_contract(workspace, project_id):
     if cfg is None:
         return default_contract(), None
     return model_to_contract(cfg), cfg
+
+
+def resolve_contracts_bulk(workspace, project_ids):
+    """Resolve the effective contract for many projects in a single query.
+
+    Same resolution order as ``resolve_contract`` (project -> workspace default
+    -> seed), but fetches every relevant ``KpiConfig`` of the workspace at once
+    instead of issuing up to two queries per project. Used by the workspace-wide
+    endpoints, which resolve one contract per project on every request.
+
+    Returns ``{project_id: (contract_dict, source_config_or_None)}``.
+    """
+    from django.db.models import Q
+
+    from plane.db.models.kpi import KpiConfig
+
+    project_ids = list(project_ids)
+    configs = KpiConfig.objects.filter(workspace=workspace).filter(
+        Q(project_id__in=project_ids) | Q(project__isnull=True)
+    )
+
+    workspace_default = None
+    by_project = {}
+    for cfg in configs:
+        if cfg.project_id is None:
+            workspace_default = cfg
+        else:
+            by_project[cfg.project_id] = cfg
+
+    resolved = {}
+    for project_id in project_ids:
+        cfg = by_project.get(project_id) or workspace_default
+        resolved[project_id] = (model_to_contract(cfg), cfg) if cfg else (default_contract(), None)
+    return resolved

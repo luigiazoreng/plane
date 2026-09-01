@@ -198,3 +198,35 @@
     0 0 4px --alpha(var(--background-color-accent-primary) / 40%) !important;
   will-change: transform, opacity;
 }
+
+/* Print styles for Executive Dashboard — scoped to the dashboard wrapper class */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Only hide UI chrome when the executive dashboard is the active page */
+  .executive-dashboard-print ~ nav,
+  .executive-dashboard-print ~ aside,
+  body:has(.executive-dashboard-print) nav,
+  body:has(.executive-dashboard-print) aside,
+  body:has(.executive-dashboard-print) .hide-on-print {
+    display: none !important;
+  }
+
+  /* Reset layout for printing */
+  body:has(.executive-dashboard-print) main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Print margins for A4 Landscape */
+  @page {
+    size: A4 landscape;
+    margin: 1cm;
+  }
+}
+

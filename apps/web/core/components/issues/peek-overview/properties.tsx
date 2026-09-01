@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import { useEffect } from "react";
 import { observer } from "mobx-react";
 // i18n
 import { useTranslation } from "@plane/i18n";
@@ -31,6 +32,7 @@ import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { StateDropdown } from "@/components/dropdowns/state/dropdown";
 import { SidebarPropertyListItem } from "@/components/common/layout/sidebar/property-list-item";
 // helpers
+import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useMember } from "@/hooks/store/use-member";
 import { useProject } from "@/hooks/store/use-project";
@@ -64,13 +66,31 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
   } = useIssueDetail();
   const { getStateById } = useProjectState();
   const { getUserDetails } = useMember();
+  const {
+    activeEstimatePropertyIdsByProjectId,
+    estimateSystemPropertyIdsByProjectId,
+    estimatePropertyById,
+    estimateById,
+    issueEstimatePropertyValueFor,
+    getIssueEstimatePropertyValues,
+    updateIssueEstimatePropertyValue,
+  } = useProjectEstimates();
   // derived values
   const issue = getIssueById(issueId);
+
+  useEffect(() => {
+    if (!workspaceSlug || !projectId || !issueId) return;
+    // force: true -- a user opening a single work item expects current
+    // data, not a value the list coalescer cached earlier this session.
+    getIssueEstimatePropertyValues(workspaceSlug, projectId, issueId, true).catch(() => {});
+  }, [workspaceSlug, projectId, issueId, getIssueEstimatePropertyValues]);
+
   if (!issue) return <></>;
   const createdByDetails = getUserDetails(issue?.created_by);
   const projectDetails = getProjectById(issue.project_id);
-  const isEstimateEnabled = projectDetails?.estimate;
   const stateDetails = getStateById(issue.state_id);
+  const estimateSystemPropertyIds = (projectId && estimateSystemPropertyIdsByProjectId(projectId)) || [];
+  const estimatePropertyIds = (projectId && activeEstimatePropertyIdsByProjectId(projectId)) || [];
 
   const minDate = getDate(issue.start_date);
   minDate?.setDate(minDate.getDate());
@@ -189,24 +209,63 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
           </div>
         </SidebarPropertyListItem>
 
-        {isEstimateEnabled && (
-          <SidebarPropertyListItem icon={EstimatePropertyIcon} label={t("common.estimate")}>
-            <EstimateDropdown
-              value={issue.estimate_point ?? undefined}
-              onChange={(val) => issueOperations.update(workspaceSlug, projectId, issueId, { estimate_point: val })}
-              projectId={projectId}
-              disabled={disabled}
-              buttonVariant="transparent-with-text"
-              className="group w-full grow"
-              buttonContainerClassName="w-full text-left h-7.5"
-              buttonClassName={`text-body-xs-medium ${issue?.estimate_point !== undefined ? "" : "text-placeholder"}`}
-              placeholder="None"
-              hideIcon
-              dropdownArrow
-              dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
-            />
-          </SidebarPropertyListItem>
-        )}
+        {estimateSystemPropertyIds.map((propertyId) => {
+          const property = estimatePropertyById(propertyId);
+          if (!property) return null;
+          const systemName = estimateById(property.estimate)?.name ?? t("common.estimate");
+          const value = issueEstimatePropertyValueFor(issueId, propertyId);
+          return (
+            <SidebarPropertyListItem key={propertyId} icon={EstimatePropertyIcon} label={systemName}>
+              <EstimateDropdown
+                value={value?.estimate_point ?? undefined}
+                estimateId={property.estimate}
+                onChange={(val) =>
+                  updateIssueEstimatePropertyValue(workspaceSlug, projectId, issueId, propertyId, val ?? null)
+                }
+                projectId={projectId}
+                disabled={disabled}
+                buttonVariant="transparent-with-text"
+                className="group w-full grow"
+                buttonContainerClassName="w-full text-left h-7.5"
+                buttonClassName={`text-body-xs-medium ${value?.estimate_point ? "" : "text-placeholder"}`}
+                placeholder="None"
+                hideIcon
+                dropdownArrow
+                dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
+              />
+            </SidebarPropertyListItem>
+          );
+        })}
+
+        {estimatePropertyIds.map((propertyId) => {
+          const property = estimatePropertyById(propertyId);
+          if (!property) return null;
+          // KPI-reserved properties (Difficulty/Repetitive) only show while the project's KPI feature is on;
+          // custom properties are independent of that toggle.
+          if (property.kpi_role && !projectDetails?.kpi_view) return null;
+          const value = issueEstimatePropertyValueFor(issueId, propertyId);
+          return (
+            <SidebarPropertyListItem key={propertyId} icon={EstimatePropertyIcon} label={property.name}>
+              <EstimateDropdown
+                value={value?.estimate_point ?? undefined}
+                estimateId={property.estimate}
+                onChange={(val) =>
+                  updateIssueEstimatePropertyValue(workspaceSlug, projectId, issueId, propertyId, val ?? null)
+                }
+                projectId={projectId}
+                disabled={disabled}
+                buttonVariant="transparent-with-text"
+                className="group w-full grow"
+                buttonContainerClassName="w-full text-left h-7.5"
+                buttonClassName={`text-body-xs-medium ${value?.estimate_point ? "" : "text-placeholder"}`}
+                placeholder="None"
+                hideIcon
+                dropdownArrow
+                dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
+              />
+            </SidebarPropertyListItem>
+          );
+        })}
 
         {projectDetails?.module_view && (
           <SidebarPropertyListItem icon={ModuleIcon} label={t("common.modules")}>

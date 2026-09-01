@@ -2,13 +2,17 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from datetime import timedelta
+from unittest import mock
+
 import jwt
 import pytest
 from django.conf import settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 
-from plane.db.models import User, WorkspaceMember
+from plane.db.models import FileAsset, User, WorkspaceMember
 from plane.db.models.helpdesk import (
     HelpdeskCustomer,
     HelpdeskForm,
@@ -506,3 +510,322 @@ class TestPublicHelpdeskForms:
         assert response.status_code == status.HTTP_201_CREATED
         created_request = HelpdeskRequest.objects.get(id=response.data["id"])
         assert created_request.assignees.count() == 0
+
+
+@pytest.fixture
+def make_request(workspace, portal, open_status, create_user):
+    """Factory for helpdesk requests, so priority tests can build a small queue."""
+
+    def _make(title, priority="none", status_obj=None):
+        return HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            title=title,
+            priority=priority,
+            status=status_obj or open_status,
+            created_by=create_user,
+        )
+
+    return _make
+
+
+@pytest.mark.contract
+class TestHelpdeskRequestPriorityAPI:
+    @pytest.mark.django_db
+    def test_priority_defaults_to_none(self, session_client, workspace, make_request):
+        request_obj = make_request("Sem prioridade definida")
+
+        response = session_client.get(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["priority"] == "none"
+
+    @pytest.mark.django_db
+    def test_update_priority(self, session_client, workspace, make_request):
+        request_obj = make_request("Erro 500 na API")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"priority": "urgent"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["priority"] == "urgent"
+        request_obj.refresh_from_db()
+        assert request_obj.priority == "urgent"
+
+    @pytest.mark.django_db
+    def test_rejects_unknown_priority(self, session_client, workspace, make_request):
+        request_obj = make_request("Prioridade inválida")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"priority": "critical"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "priority" in response.data
+        request_obj.refresh_from_db()
+        assert request_obj.priority == "none"
+
+    @pytest.mark.django_db
+    def test_filter_by_priority(self, session_client, workspace, make_request):
+        make_request("Urgente", priority="urgent")
+        make_request("Alta", priority="high")
+        make_request("Baixa", priority="low")
+
+        response = session_client.get(
+            reverse("helpdesk-request", kwargs={"slug": workspace.slug}),
+            {"priority": "urgent,high"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        returned = {item["title"] for item in response.data["results"]}
+        assert returned == {"Urgente", "Alta"}
+
+    @pytest.mark.django_db
+    def test_order_by_priority_uses_severity_not_alphabetical(self, session_client, workspace, make_request):
+        # Alphabetically this would be high < low < none < urgent, which is
+        # meaningless for triage. Severity order must win.
+        make_request("Baixa", priority="low")
+        make_request("Urgente", priority="urgent")
+        make_request("Sem", priority="none")
+        make_request("Media", priority="medium")
+        make_request("Alta", priority="high")
+
+        response = session_client.get(
+            reverse("helpdesk-request", kwargs={"slug": workspace.slug}),
+            {"order_by": "priority"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert [item["priority"] for item in response.data["results"]] == [
+            "urgent",
+            "high",
+            "medium",
+            "low",
+            "none",
+        ]
+
+
+@pytest.fixture
+def waiting_status(workspace, create_user):
+    """A status that pauses the SLA clock, mirroring the default 'Waiting' seed."""
+    return HelpdeskStatus.objects.create(
+        workspace=workspace,
+        name="Waiting",
+        color="#8B5CF6",
+        sequence=15000,
+        is_default=False,
+        pauses_sla=True,
+        created_by=create_user,
+    )
+
+
+@pytest.mark.contract
+class TestHelpdeskRequestSlaPauseAPI:
+    """A ticket sitting in a pauses_sla status (e.g. Waiting) must not accrue
+    SLA breach time -- see request.py `partial_update`."""
+
+    @pytest.mark.django_db
+    def test_moving_to_pausing_status_starts_the_pause(self, session_client, workspace, make_request, waiting_status):
+        request_obj = make_request("Aguardando retorno do cliente")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"status": str(waiting_status.id)},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        request_obj.refresh_from_db()
+        assert request_obj.sla_paused_at is not None
+        assert request_obj.total_paused_duration == timedelta(0)
+
+    @pytest.mark.django_db
+    def test_leaving_pausing_status_accumulates_duration_and_clears_paused_at(
+        self, session_client, workspace, make_request, waiting_status, open_status
+    ):
+        request_obj = make_request("Ticket voltou da espera", status_obj=waiting_status)
+        paused_at = timezone.now() - timedelta(hours=3)
+        HelpdeskRequest.objects.filter(id=request_obj.id).update(sla_paused_at=paused_at)
+
+        with mock.patch(
+            "plane.app.views.helpdesk.request.timezone.now", return_value=paused_at + timedelta(hours=3)
+        ):
+            response = session_client.patch(
+                reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+                {"status": str(open_status.id)},
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        request_obj.refresh_from_db()
+        assert request_obj.sla_paused_at is None
+        assert request_obj.total_paused_duration == timedelta(hours=3)
+
+    @pytest.mark.django_db
+    def test_moving_between_two_pausing_statuses_keeps_the_original_paused_at(
+        self, session_client, workspace, make_request, waiting_status, create_user
+    ):
+        other_pausing_status = HelpdeskStatus.objects.create(
+            workspace=workspace, name="On Hold", pauses_sla=True, sequence=16000, created_by=create_user
+        )
+        request_obj = make_request("Fica pausado trocando de status", status_obj=waiting_status)
+        original_paused_at = timezone.now() - timedelta(hours=5)
+        HelpdeskRequest.objects.filter(id=request_obj.id).update(sla_paused_at=original_paused_at)
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"status": str(other_pausing_status.id)},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        request_obj.refresh_from_db()
+        assert request_obj.sla_paused_at == original_paused_at
+        assert request_obj.total_paused_duration == timedelta(0)
+
+    @pytest.mark.django_db
+    def test_moving_from_pausing_status_directly_to_terminal_closes_pause_and_resolves(
+        self, session_client, workspace, make_request, waiting_status, create_user
+    ):
+        terminal_status = HelpdeskStatus.objects.create(
+            workspace=workspace, name="Resolved", is_terminal=True, sequence=40000, created_by=create_user
+        )
+        request_obj = make_request("Resolvido direto da espera", status_obj=waiting_status)
+        paused_at = timezone.now() - timedelta(hours=2)
+        HelpdeskRequest.objects.filter(id=request_obj.id).update(sla_paused_at=paused_at)
+
+        with mock.patch(
+            "plane.app.views.helpdesk.request.timezone.now", return_value=paused_at + timedelta(hours=2)
+        ):
+            response = session_client.patch(
+                reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+                {"status": str(terminal_status.id)},
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        request_obj.refresh_from_db()
+        assert request_obj.sla_paused_at is None
+        assert request_obj.total_paused_duration == timedelta(hours=2)
+        assert request_obj.resolved_at is not None
+
+    @pytest.mark.django_db
+    def test_total_paused_seconds_reflects_closed_pause_duration(self, session_client, workspace, make_request):
+        request_obj = make_request("Ticket com pausa acumulada")
+        HelpdeskRequest.objects.filter(id=request_obj.id).update(total_paused_duration=timedelta(hours=1, minutes=30))
+
+        response = session_client.get(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id})
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["total_paused_seconds"] == 5400
+
+    @pytest.mark.django_db
+    def test_sla_paused_at_and_total_paused_duration_are_not_client_writable(
+        self, session_client, workspace, make_request
+    ):
+        request_obj = make_request("Cliente não deve setar isso manualmente")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"sla_paused_at": timezone.now().isoformat(), "title": "Cliente não deve setar isso manualmente"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        request_obj.refresh_from_db()
+        assert request_obj.sla_paused_at is None
+
+
+@pytest.mark.contract
+class TestHelpdeskRequestTargetDateAPI:
+    @pytest.mark.django_db
+    def test_update_target_date(self, session_client, workspace, make_request):
+        request_obj = make_request("Ticket sem prazo definido")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"target_date": "2026-09-01"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["target_date"] == "2026-09-01"
+        request_obj.refresh_from_db()
+        assert str(request_obj.target_date) == "2026-09-01"
+
+    @pytest.mark.django_db
+    def test_rejects_target_date_before_start_date(self, session_client, workspace, make_request):
+        request_obj = make_request("Prazo inconsistente")
+
+        response = session_client.patch(
+            reverse("helpdesk-request-detail", kwargs={"slug": workspace.slug, "pk": request_obj.id}),
+            {"start_date": "2026-09-10", "target_date": "2026-09-01"},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        request_obj.refresh_from_db()
+        assert request_obj.target_date is None
+
+
+@pytest.mark.contract
+class TestUploadCredentials:
+    """entity_type do FileAsset criado por HelpdeskAssetEndpoint.post.
+
+    Bloqueador do plano (feat 2026-08-04-helpdesk-editor-anexos-ticket): o
+    default do endpoint é COMMENT_ENTITY. Callers de formulário de request
+    (editor de descrição, campo de anexo dedicado) DEVEM passar entity_type
+    explícito, senão o anexo vira silenciosamente um anexo de comentário.
+    Estes testes documentam esse contrato para o frontend (Stage B2).
+    """
+
+    def _payload(self, **overrides):
+        payload = {"name": "screenshot.png", "type": "image/png", "size": 1024}
+        payload.update(overrides)
+        return payload
+
+    @pytest.mark.django_db
+    def test_defaults_to_comment_entity_when_unspecified(self, session_client, workspace):
+        response = session_client.post(
+            reverse("helpdesk-asset", kwargs={"slug": workspace.slug}),
+            self._payload(),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        asset_id = response.data["asset_id"]
+        asset = FileAsset.objects.get(id=asset_id)
+        assert asset.entity_type == FileAsset.EntityTypeContext.HELPDESK_COMMENT_ATTACHMENT
+
+    @pytest.mark.django_db
+    def test_accepts_explicit_request_entity_type(self, session_client, workspace):
+        response = session_client.post(
+            reverse("helpdesk-asset", kwargs={"slug": workspace.slug}),
+            self._payload(entity_type=FileAsset.EntityTypeContext.HELPDESK_REQUEST_ATTACHMENT),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        asset_id = response.data["asset_id"]
+        asset = FileAsset.objects.get(id=asset_id)
+        assert asset.entity_type == FileAsset.EntityTypeContext.HELPDESK_REQUEST_ATTACHMENT
+
+    @pytest.mark.django_db
+    def test_rejects_unknown_entity_type(self, session_client, workspace):
+        response = session_client.post(
+            reverse("helpdesk-asset", kwargs={"slug": workspace.slug}),
+            self._payload(entity_type="not_a_real_entity_type"),
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Invalid entity type."

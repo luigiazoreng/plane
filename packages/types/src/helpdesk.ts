@@ -4,6 +4,9 @@
  * See the LICENSE file for details.
  */
 
+import type { IUserLite } from "./users";
+import type { TIssuePriorities } from "./issues";
+
 export type IHelpdeskAutoAssignmentType = "load_balance" | "round_robin" | "capacity";
 
 export interface IHelpdeskAutoAssignmentConfig {
@@ -26,6 +29,24 @@ export interface IHelpdeskPortal {
   auto_assignment_config: IHelpdeskAutoAssignmentConfig;
   sla_first_response_hours: number | null;
   sla_resolution_hours: number | null;
+  no_reply_email_address: string | null;
+  default_agent_email_address: string | null;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  smtp_password?: string | null; // Optional, might be write-only on backend
+  smtp_use_tls: boolean;
+  smtp_use_ssl: boolean;
+  is_imap_enabled: boolean;
+  imap_host: string | null;
+  imap_port: number | null;
+  imap_username: string | null;
+  imap_password?: string | null;
+  imap_use_tls: boolean;
+  imap_use_ssl: boolean;
+  imap_archive_folder: string | null;
+  /** Attachment ceiling in bytes. Null means the instance limit applies. */
+  max_attachment_size: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -39,7 +60,8 @@ export type IHelpdeskFieldType =
   | "select"
   | "checkbox"
   | "date"
-  | "cascade_select";
+  | "cascade_select"
+  | "attachment";
 
 export interface IHelpdeskFormFieldOption {
   label: string;
@@ -97,7 +119,7 @@ export interface IHelpdeskCustomer {
 }
 
 export type THelpdeskRequestSource = "public_form" | "internal_form";
-export type THelpdeskAgentLayout = "list" | "kanban";
+export type THelpdeskAgentLayout = "list" | "kanban" | "split";
 
 export interface IHelpdeskStatus {
   id: string;
@@ -107,6 +129,8 @@ export interface IHelpdeskStatus {
   sequence: number;
   is_default: boolean;
   is_terminal: boolean;
+  /** While a request sits in a status with pauses_sla, the SLA clock stops. */
+  pauses_sla: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -117,6 +141,9 @@ export interface IHelpdeskRequest {
   form?: string | null;
   workspace: string;
   customer?: string | null;
+  customer_detail?: { id: string; name?: string; email: string } | null;
+  created_by?: string | null;
+  created_by_detail?: IUserLite | null;
   contact_email?: string | null;
   title: string;
   description: string;
@@ -128,18 +155,63 @@ export interface IHelpdeskRequest {
   status_detail: IHelpdeskStatus | null;
   form_detail: IHelpdeskForm | null;
   source: THelpdeskRequestSource;
+  /** Same value set as work items, so PriorityIcon / PriorityDropdown are reused as-is. */
+  priority: TIssuePriorities;
   form_responses: Record<string, unknown>;
   assignees: string[];
+  labels: string[];
+  label_detail?: { id: string; name: string; color: string }[];
+  team?: string | null;
+  team_detail?: { id: string; name: string; color: string } | null;
+  is_unread?: boolean;
+  is_bookmarked?: boolean;
+  snoozed_until?: string | null;
   start_date: string | null;
   target_date: string | null;
+  /** Set while the request sits in a pauses_sla status; null otherwise. */
+  sla_paused_at: string | null;
+  /** Closed pause time only, in seconds -- does not include an in-progress pause. */
+  total_paused_seconds: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IHelpdeskTeam {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  workspace: string;
+  members: string[];
+  members_detail?: { id: string; name?: string; display_name?: string; avatar_url?: string; email?: string }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IHelpdeskMacro {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  is_public: boolean;
+  actions: { type: string; value: string }[];
+  sequence: number;
+  workspace: string;
   created_at: string;
   updated_at: string;
 }
 
 // --- List filters & display ---
 
-export type THelpdeskGroupBy = "status" | "assignee" | "portal" | "form" | "source" | "none";
-export type THelpdeskOrderBy = "-created_at" | "created_at" | "-updated_at" | "updated_at" | "title";
+export type THelpdeskGroupBy = "status" | "assignee" | "portal" | "form" | "source" | "priority" | "none";
+export type THelpdeskOrderBy =
+  | "-created_at"
+  | "created_at"
+  | "-updated_at"
+  | "updated_at"
+  | "title"
+  | "priority"
+  | "-priority";
 
 export interface IHelpdeskRequestFilters {
   status: string[];
@@ -147,6 +219,7 @@ export interface IHelpdeskRequestFilters {
   portal: string[];
   form: string[];
   source: THelpdeskRequestSource[];
+  priority: TIssuePriorities[];
   /** ["after:YYYY-MM-DD", "before:YYYY-MM-DD"] — same date filter shape used by work items */
   created_at: string[];
 }
@@ -156,13 +229,94 @@ export interface IHelpdeskDisplayFilters {
   order_by: THelpdeskOrderBy;
 }
 
+export interface IHelpdeskAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  /** API path that 302s to a presigned download; prefix with getFileURL(). */
+  asset_url: string | null;
+  created_at: string;
+}
+
+export interface IHelpdeskRequestActivity {
+  id: string;
+  request: string;
+  actor: string | null;
+  actor_detail?: { id: string; name?: string; display_name?: string; avatar_url?: string; email?: string } | null;
+  verb: string;
+  field: string;
+  old_value: string;
+  new_value: string;
+  old_identifier: string | null;
+  new_identifier: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IHelpdeskCustomerStats {
+  total: number;
+  open: number;
+  resolved: number;
+  firstContactAt: string | null;
+}
+
+/** Response from the helpdesk asset upload endpoints. */
+export interface IHelpdeskAssetUploadResponse {
+  asset_id: string;
+  upload_data: {
+    url: string;
+    fields: Record<string, string>;
+  };
+  attributes: {
+    name: string;
+    type: string;
+    size: number;
+  };
+}
+
+export interface IHelpdeskCommentActor {
+  id: string;
+  first_name: string;
+  last_name: string;
+  display_name: string;
+  avatar: string | null;
+  avatar_url: string | null;
+  is_bot: boolean;
+}
+
+export interface IHelpdeskCommentCustomer {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface IHelpdeskRequestComment {
   id: string;
   request: string;
   actor?: string | null;
   customer?: string | null;
+  /** Populated by the API for display; null for the counterpart role. */
+  actor_detail?: IHelpdeskCommentActor | null;
+  customer_detail?: IHelpdeskCommentCustomer | null;
+  /** Files delivered with this message. Read-only. */
+  attachments?: IHelpdeskAttachment[];
+  /** Write-only: ids of already-uploaded assets to attach on create. */
+  asset_ids?: string[];
   content: string;
   is_internal: boolean;
+  delivery_channels?: string[];
+  email_status?: "not_sent" | "pending" | "sent" | "failed";
+  email_sent_at?: string | null;
+  email_message_id?: string | null;
+  email_error?: string | null;
+  /**
+   * Authenticity of the sender of an inbound email. Optional because the
+   * public comment serializer deliberately withholds it: telling the sender
+   * whether a spoof was detected would hand the attacker a detection oracle.
+   * Only the admin-only email logs endpoint populates it.
+   */
+  sender_verification?: "pass" | "fail" | "unverified" | "not_applicable";
   created_at: string;
   updated_at: string;
 }
@@ -214,7 +368,14 @@ export interface IHelpdeskFormSubmission {
 
 // --- Analytics ---
 
-export type THelpdeskDateFilter = "yesterday" | "last_7_days" | "last_30_days" | "last_3_months";
+export type THelpdeskDateFilter =
+  | "yesterday"
+  | "last_7_days"
+  | "last_30_days"
+  | "last_3_months"
+  | "last_6_months"
+  | "last_12_months"
+  | "custom";
 
 export interface IHelpdeskKPIMetric {
   current: number | null;
@@ -266,6 +427,10 @@ export interface IHelpdeskAgentChartPoint {
   agent_id: string;
   display_name: string;
   count: number;
+  /** % of this agent's resolved tickets that met the portal's first-response SLA, or null if no SLA is configured. */
+  sla_first_response_pct: number | null;
+  /** % of this agent's resolved tickets that met the portal's resolution SLA, or null if no SLA is configured. */
+  sla_resolution_pct: number | null;
 }
 
 export interface IHelpdeskCharts {
@@ -285,6 +450,8 @@ export interface IHelpdeskAnalyticsResponse {
 export interface IHelpdeskAnalyticsFilters {
   date_filter: THelpdeskDateFilter;
   portal_id?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export enum EHelpdeskMemberRole {
@@ -332,4 +499,14 @@ export interface IHelpdeskPaginatedResponse {
   total_results: number;
   count: number;
   total_pages: number;
+}
+
+export interface IHelpdeskIMAPSyncLog {
+  id: string;
+  portal: string;
+  status: "success" | "error";
+  emails_fetched: number;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
 }

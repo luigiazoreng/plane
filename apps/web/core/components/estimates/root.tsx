@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { observer } from "mobx-react";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 // plane imports
 import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
@@ -26,6 +26,7 @@ import { DeleteEstimateModal } from "./delete/modal";
 import { EstimateDisableSwitch } from "./estimate-disable-switch";
 import { EstimateList } from "./estimate-list";
 import { EstimateLoaderScreen } from "./loader-screen";
+import { EstimatePropertiesSection } from "./properties/root";
 
 type TEstimateRoot = {
   workspaceSlug: string;
@@ -74,6 +75,10 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
       });
     }
     await updateProject(workspaceSlug, projectId, { estimate: estimateId });
+    // F4a: activation can auto-create the estimate's system-default
+    // EstimateProperty server-side -- revalidate the Properties panel's SWR
+    // key so it appears without a full page reload.
+    mutate(`PROJECT_ESTIMATE_PROPERTIES_${workspaceSlug}_${projectId}`);
   };
 
   const handleToggleEstimateActive = async (estimateId: string, isActive: boolean) => {
@@ -85,13 +90,13 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
 
     if (isActive && !currentProjectDetails?.estimate) {
       await updateProject(workspaceSlug, projectId, { estimate: estimateId });
-      return;
-    }
-
-    if (!isActive && currentProjectDetails?.estimate === estimateId) {
+    } else if (!isActive && currentProjectDetails?.estimate === estimateId) {
       const replacementEstimateId = activeEstimateIds.find((id) => id !== estimateId) ?? null;
       await updateProject(workspaceSlug, projectId, { estimate: replacementEstimateId });
     }
+
+    // F4a: see handleSetDefaultEstimate above.
+    mutate(`PROJECT_ESTIMATE_PROPERTIES_${workspaceSlug}_${projectId}`);
   };
 
   return (
@@ -138,6 +143,8 @@ export const EstimateRoot = observer(function EstimateRoot(props: TEstimateRoot)
                   onToggleActiveClick={handleToggleEstimateActive}
                 />
               </div>
+
+              <EstimatePropertiesSection workspaceSlug={workspaceSlug} projectId={projectId} isAdmin={isAdmin} />
             </>
           ) : (
             <EmptyStateCompact

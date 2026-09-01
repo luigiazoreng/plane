@@ -88,3 +88,29 @@ export type TEstimateTypeErrorObject = {
 };
 
 export type TEstimateTypeError = Record<number, TEstimateTypeErrorObject> | undefined;
+
+// Estimate Properties -- dynamic, named work-item estimate rows. Difficulty and
+// Repetitive are the two KPI-reserved ones (kpi_role set); any further rows are
+// free-form, admin-defined properties unrelated to KPI.
+export type TEstimatePropertyKpiRole = "difficulty" | "repetitive";
+
+export interface IEstimateProperty {
+  id: string;
+  name: string;
+  estimate: string;
+  project: string;
+  workspace: string;
+  is_active: boolean;
+  sort_order: number;
+  kpi_role: TEstimatePropertyKpiRole | null;
+  is_estimate_default: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface IIssueEstimatePropertyValue {
+  id: string;
+  issue: string;
+  property: string;
+  estimate_point: string | null;
+}

@@ -18,7 +18,7 @@ from .. import BaseViewSet, BaseAPIView
 from plane.app.serializers import StateSerializer
 from plane.app.permissions import ROLE, allow_permission
 from plane.db.models import State, Issue
-from plane.utils.cache import invalidate_cache
+from plane.utils.cache import cache_response, invalidate_cache
 
 
 class StateViewSet(BaseViewSet):
@@ -58,6 +58,7 @@ class StateViewSet(BaseViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+    @invalidate_cache(path="workspaces/:slug/states/", url_params=True, user=False)
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def partial_update(self, request, slug, project_id, pk):
         try:
@@ -74,6 +75,7 @@ class StateViewSet(BaseViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+    @cache_response(timeout=60 * 60, user=False)
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def list(self, request, slug, project_id):
         states = StateSerializer(self.get_queryset(), many=True).data

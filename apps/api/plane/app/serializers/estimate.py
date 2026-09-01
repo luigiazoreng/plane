@@ -5,7 +5,7 @@
 # Module imports
 from .base import BaseSerializer
 
-from plane.db.models import Estimate, EstimatePoint
+from plane.db.models import Estimate, EstimatePoint, EstimateProperty, IssueEstimatePropertyValue, NUMERIC_ESTIMATE_TYPES
 
 from rest_framework import serializers
 
@@ -14,7 +14,14 @@ class EstimateSerializer(BaseSerializer):
     class Meta:
         model = Estimate
         fields = "__all__"
-        read_only_fields = ["workspace", "project"]
+        # deleted_at is part of Estimate's unique_together (name, project,
+        # deleted_at) for the soft-delete-aware uniqueness constraint. DRF's
+        # auto-generated UniqueTogetherValidator treats any unique_together
+        # field that isn't read_only as required+writable, which would force
+        # clients to supply this internal soft-delete bookkeeping field on
+        # every create -- read_only excludes it from that (matching how
+        # `project`, also in unique_together, is already handled).
+        read_only_fields = ["workspace", "project", "deleted_at"]
 
 
 class EstimatePointSerializer(BaseSerializer):
@@ -24,6 +31,21 @@ class EstimatePointSerializer(BaseSerializer):
         value = data.get("value")
         if value and len(value) > 20:
             raise serializers.ValidationError("Value can't be more than 20 characters")
+
+        # Points/Time estimates feed numeric analytics aggregations (Cast to float),
+        # so their point values must be numeric. Caller passes the parent estimate's
+        # type via context since it isn't always resolvable from self.instance (e.g.
+        # on create, before the point exists).
+        estimate_type = self.context.get("estimate_type")
+        if estimate_type is None and self.instance is not None:
+            estimate_type = self.instance.estimate.type
+        if value and estimate_type in NUMERIC_ESTIMATE_TYPES:
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError("Value must be a number for points/time estimates")
+            if numeric_value <= 0:
+                raise serializers.ValidationError("Value must be greater than 0")
         return data
 
     class Meta:
@@ -48,3 +70,32 @@ class WorkspaceEstimateSerializer(BaseSerializer):
         model = Estimate
         fields = "__all__"
         read_only_fields = ["points", "name", "description"]
+
+
+class EstimatePropertySerializer(BaseSerializer):
+    class Meta:
+        model = EstimateProperty
+        fields = "__all__"
+        # kpi_role and is_estimate_default are both reserved/system-managed --
+        # kpi_role is only set by the KPI-role upsert path, is_estimate_default
+        # is only set by _ensure_estimate_default_property (estimate/base.py).
+        # The general create/update flow (custom, admin-defined properties)
+        # can't set or change either via this serializer.
+        read_only_fields = ["workspace", "project", "deleted_at", "kpi_role", "is_estimate_default"]
+
+
+class IssueEstimatePropertyValueSerializer(BaseSerializer):
+    def validate(self, data):
+        estimate_point = data.get("estimate_point")
+        property_instance = self.context.get("property") or (self.instance.property if self.instance else None)
+        if estimate_point is not None and property_instance is not None:
+            if estimate_point.estimate_id != property_instance.estimate_id:
+                raise serializers.ValidationError(
+                    {"estimate_point": "This point does not belong to the property's configured estimate."}
+                )
+        return data
+
+    class Meta:
+        model = IssueEstimatePropertyValue
+        fields = "__all__"
+        read_only_fields = ["workspace", "project", "issue", "property", "deleted_at"]

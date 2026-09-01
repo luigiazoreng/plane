@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import Prefetch
+from django.db.models import BooleanField, Case, Exists, F, IntegerField, OuterRef, Prefetch, Subquery, Value, When
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -12,14 +12,19 @@ from plane.db.models.helpdesk import (
     HelpdeskPortal,
     HelpdeskRequest,
     HelpdeskRequestAssignee,
+    HelpdeskRequestBookmark,
+    HelpdeskRequestReadReceipt,
     HelpdeskStatus,
 )
 from plane.app.serializers.helpdesk import HelpdeskRequestSerializer
+from plane.app.helpdesk.attachments import REQUEST_ENTITY, bind_assets
 from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatically
 from .form import get_customer_from_token
 from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, generate_ticket_display_id
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
+from plane.app.helpdesk.activity import diff_and_record_activities
+from plane.utils.order_queryset import PRIORITY_ORDER
 
 HELPDESK_ARCHIVABLE_STATUS_NAMES = ("resolved", "closed", "completed", "canceled", "cancelled")
 
@@ -46,6 +51,8 @@ class HelpdeskRequestViewSet(BaseViewSet):
         "updated_at",
         "-updated_at",
         "title",
+        "priority",
+        "-priority",
     }
 
     # comma-separated multi-value params -> queryset lookups (Plane convention)
@@ -55,6 +62,7 @@ class HelpdeskRequestViewSet(BaseViewSet):
         "form": "form__in",
         "source": "source__in",
         "assignees": "assignees__in",
+        "priority": "priority__in",
     }
 
     def get_queryset(self):
@@ -87,20 +95,64 @@ class HelpdeskRequestViewSet(BaseViewSet):
         order_by = self.request.query_params.get("order_by", "-created_at")
         if order_by not in self.ALLOWED_ORDER_BY:
             order_by = "-created_at"
-        queryset = queryset.order_by(order_by)
+        if order_by in ("priority", "-priority"):
+            # Sorting on the raw column would order alphabetically
+            # (high < low < medium < none < urgent), which is meaningless for
+            # triage. Rank by severity instead, the same way work items do.
+            queryset = queryset.annotate(
+                priority_order=Case(
+                    *[When(priority=p, then=Value(i)) for i, p in enumerate(PRIORITY_ORDER)],
+                    default=Value(len(PRIORITY_ORDER)),
+                    output_field=IntegerField(),
+                )
+            ).order_by("priority_order" if order_by == "priority" else "-priority_order", "-created_at")
+        else:
+            queryset = queryset.order_by(order_by)
 
         # distinct() guards against duplicate rows when filtering by the assignees M2M
         queryset = queryset.distinct()
 
         # Eager-load related objects to avoid N+1 queries on serialization.
         # _prefetched_assignees is read by HelpdeskRequestSerializer.to_representation.
-        queryset = queryset.select_related("status", "portal", "form").prefetch_related(
+        queryset = queryset.select_related("status", "portal", "form", "created_by", "customer").prefetch_related(
             Prefetch(
                 "request_assignees",
                 queryset=HelpdeskRequestAssignee.objects.filter(deleted_at__isnull=True),
                 to_attr="_prefetched_assignees",
-            )
+            ),
+            Prefetch(
+                "labels",
+                to_attr="_prefetched_labels",
+            ),
         )
+
+        if self.request and self.request.user and self.request.user.is_authenticated:
+            user_bookmark = HelpdeskRequestBookmark.objects.filter(
+                request=OuterRef("pk"),
+                user=self.request.user,
+                deleted_at__isnull=True,
+            ).values("id")[:1]
+
+            user_receipt = HelpdeskRequestReadReceipt.objects.filter(
+                request=OuterRef("pk"),
+                user=self.request.user,
+                deleted_at__isnull=True,
+            ).values("last_read_at")[:1]
+
+            queryset = queryset.annotate(
+                is_bookmarked=Case(
+                    When(Exists(user_bookmark), then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+                last_read_at=Subquery(user_receipt),
+                is_unread=Case(
+                    When(last_read_at__isnull=True, then=Value(True)),
+                    When(last_read_at__lt=F("updated_at"), then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+            )
 
         return queryset
 
@@ -168,21 +220,97 @@ class HelpdeskRequestViewSet(BaseViewSet):
         publish(slug or "", {"type": "request.updated", "request_id": str(instance.id)})
         return Response({"archived_at": None}, status=status.HTTP_200_OK)
 
+    def mark_read(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        if get_helpdesk_role(request.user, slug) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        receipt, _ = HelpdeskRequestReadReceipt.objects.update_or_create(
+            request=instance,
+            user=request.user,
+            workspace_id=instance.workspace_id,
+            defaults={"deleted_at": None},
+        )
+        receipt.save()  # auto_now updates last_read_at
+        return Response({"is_unread": False, "last_read_at": receipt.last_read_at.isoformat()}, status=status.HTTP_200_OK)
+
+    def toggle_bookmark(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        if get_helpdesk_role(request.user, slug) is None:
+            return Response({"error": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        bookmark = HelpdeskRequestBookmark.objects.filter(
+            request=instance, user=request.user, deleted_at__isnull=True
+        ).first()
+        if bookmark:
+            bookmark.delete()
+            return Response({"is_bookmarked": False}, status=status.HTTP_200_OK)
+        else:
+            HelpdeskRequestBookmark.objects.create(
+                request=instance, user=request.user, workspace_id=instance.workspace_id
+            )
+            return Response({"is_bookmarked": True}, status=status.HTTP_200_OK)
+
+    def snooze(self, request, *args, **kwargs):
+        slug = self.kwargs.get("slug")
+        role = get_helpdesk_role(request.user, slug)
+        if role is None or role < MEMBER:
+            return Response({"error": "Helpdesk Members or Admins can snooze requests."}, status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        snoozed_until = request.data.get("snoozed_until")
+        instance.snoozed_until = snoozed_until
+        instance.save(update_fields=["snoozed_until", "updated_at"])
+        publish(slug or "", {"type": "request.updated", "request_id": str(instance.id)})
+        return Response({"snoozed_until": instance.snoozed_until}, status=status.HTTP_200_OK)
+
     def partial_update(self, request, *args, **kwargs):
         slug = self.kwargs.get("slug")
         role = get_helpdesk_role(request.user, slug)
         if role is None or role < MEMBER:
             return Response({"error": "Helpdesk Members or Admins can update requests."}, status=status.HTTP_403_FORBIDDEN)
         instance = self.get_object()
-        old_status_id = str(instance.status_id) if instance.status_id else None
+        # Snapshot before the update for activity diff
+        old_snapshot = {
+            "status_id": str(instance.status_id) if instance.status_id else None,
+            "priority": instance.priority,
+            "assignee_ids": sorted(
+                str(uid) for uid in instance.assignees.values_list("id", flat=True)
+            ),
+            "label_ids": sorted(
+                str(uid) for uid in instance.labels.values_list("id", flat=True)
+            ),
+            "team_id": str(instance.team_id) if instance.team_id else None,
+        }
+        old_status_id = old_snapshot["status_id"]
+        old_status = HelpdeskStatus.objects.filter(id=old_status_id).first() if old_status_id else None
         response = super().partial_update(request, *args, **kwargs)
         new_status_id = request.data.get("status")
         if new_status_id and new_status_id != old_status_id:
             new_status = HelpdeskStatus.objects.filter(id=new_status_id).first()
+            update_fields = {}
             if new_status and new_status.is_terminal:
-                HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=timezone.now())
+                update_fields["resolved_at"] = timezone.now()
             elif new_status and not new_status.is_terminal:
-                HelpdeskRequest.objects.filter(id=instance.id).update(resolved_at=None)
+                update_fields["resolved_at"] = None
+
+            # SLA pause: close out the running pause when leaving a
+            # pauses_sla status, start one when entering a new (different)
+            # pauses_sla status. Two pauses_sla statuses in a row keep the
+            # clock running instead of resetting it.
+            was_paused = bool(old_status and old_status.pauses_sla)
+            will_pause = bool(new_status and new_status.pauses_sla and not new_status.is_terminal)
+            if was_paused and not will_pause and instance.sla_paused_at:
+                update_fields["total_paused_duration"] = instance.total_paused_duration + (
+                    timezone.now() - instance.sla_paused_at
+                )
+                update_fields["sla_paused_at"] = None
+            if will_pause and not was_paused:
+                update_fields["sla_paused_at"] = timezone.now()
+
+            if update_fields:
+                HelpdeskRequest.objects.filter(id=instance.id).update(**update_fields)
+        # Record activity for any changed fields
+        diff_and_record_activities(instance, request.user, old_snapshot, request.data)
         publish(self.kwargs.get("slug", ""), {"type": "request.updated", "request_id": str(instance.id)})
         return response
 
@@ -301,9 +429,18 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                 if display_id:
                     HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(display_id=display_id)
                     helpdesk_request.display_id = display_id
+                bind_assets(
+                    request.data.get("asset_ids"),
+                    workspace_id=portal.workspace_id,
+                    entity_type=REQUEST_ENTITY,
+                    entity_identifier=helpdesk_request.id,
+                )
                 assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
                 publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
-                return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
+                return Response(
+                    HelpdeskRequestSerializer(helpdesk_request, context={"public_slug": public_slug}).data,
+                    status=status.HTTP_201_CREATED,
+                )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = HelpdeskRequestSerializer(data=request.data)
@@ -313,7 +450,16 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                 workspace=portal.workspace,
                 customer=customer,
             )
+            bind_assets(
+                request.data.get("asset_ids"),
+                workspace_id=portal.workspace_id,
+                entity_type=REQUEST_ENTITY,
+                entity_identifier=helpdesk_request.id,
+            )
             assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
             publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
-            return Response(HelpdeskRequestSerializer(helpdesk_request).data, status=status.HTTP_201_CREATED)
+            return Response(
+                HelpdeskRequestSerializer(helpdesk_request, context={"public_slug": public_slug}).data,
+                status=status.HTTP_201_CREATED,
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

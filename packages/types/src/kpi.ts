@@ -4,6 +4,8 @@
  * See the LICENSE file for details.
  */
 
+import type { TLogoProps } from "./common";
+
 export type TKpiPenaltyMode = "continuous" | "dead_zone";
 export type TKpiDayCount = "calendar" | "business";
 export type TKpiDayRounding = "truncate" | "round" | "ceil";
@@ -35,8 +37,6 @@ export interface IKpiConfig {
   max_multiplier: number | null;
   vf_decimals: number;
   is_active: boolean;
-  difficulty_estimate: string | null;
-  repetitive_estimate: string | null;
   project?: string | null;
   // Resolution metadata returned by the API
   is_default_seed?: boolean;
@@ -99,20 +99,60 @@ export interface IKpiMemberAggregateResponse {
   unassigned_count: number;
 }
 
+// ── Workspace overview ───────────────────────────────────────────────────────
+
+export type TKpiPeriod = "7d" | "30d" | "90d" | "180d" | "365d" | "all" | "custom";
+
+export interface IKpiPeriod {
+  key: TKpiPeriod;
+  start: string | null;
+  end: string | null;
+}
+
+export interface IKpiWorkspaceProjectRow {
+  project_id: string;
+  name: string;
+  identifier: string;
+  logo_props: TLogoProps;
+  sum_vp: number;
+  sum_vf: number;
+  /** Dimensionless (Vf/Vp) — the only cross-project comparable figure. */
+  efficiency: number | null;
+  scored_items: number;
+  counts: Record<TKpiIssueStatus, number>;
+  /** This project's share of the unified KPI: efficiency × items / total items. */
+  contribution: number | null;
+  penalty_mode: TKpiPenaltyMode;
+  k: number;
+  inherited_config: boolean;
+}
+
+export interface IKpiUnifiedSummary {
+  /** Mean of project efficiencies weighted by scored item count. */
+  kpi: number | null;
+  method: "item_weighted_efficiency";
+  scored_items: number;
+  project_count: number;
+  projects_in_average: number;
+  /** Mixed point scales across projects — informative only, never the KPI. */
+  sum_vp_raw: number;
+  sum_vf_raw: number;
+  counts: Record<TKpiIssueStatus, number>;
+}
+
+export interface IKpiOverviewResponse {
+  period: IKpiPeriod;
+  unified: IKpiUnifiedSummary;
+  projects: IKpiWorkspaceProjectRow[];
+  members: IKpiMemberAggregate[];
+  unassigned_count: number;
+}
+
 export interface IKpiIssueAttribute {
   id?: string;
   issue?: string;
   repetitive: string | null;
-  difficulty_estimate_point: string | null;
-  repetitive_estimate_point: string | null;
   type_override: string | null;
-}
-
-export interface IKpiIssueEstimate {
-  issue: string;
-  estimate_point?: string | null;
-  difficulty_estimate_point?: string | null;
-  repetitive_estimate_point?: string | null;
 }
 
 export interface IKpiIssuePriority {

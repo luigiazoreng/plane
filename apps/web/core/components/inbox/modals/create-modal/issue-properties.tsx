@@ -31,12 +31,24 @@ type TInboxIssueProperties = {
   data: Partial<TIssue>;
   handleData: (issueKey: keyof Partial<TIssue>, issueValue: Partial<TIssue>[keyof Partial<TIssue>]) => void;
   isVisible?: boolean;
+  // buffered estimate-property values -- this create form has no issue id yet, so
+  // per-system estimate selections are held here (owned by the parent create-root, so
+  // it can flush them via updateIssueEstimatePropertyValue after the issue is created)
+  // and flushed on submit, mirroring issue-modal/provider.tsx's buffer-then-flush pattern.
+  estimatePropertyValues: Record<string, string | null>;
+  setEstimatePropertyValue: (propertyId: string, estimatePointId: string | null) => void;
 };
 
 export const InboxIssueProperties = observer(function InboxIssueProperties(props: TInboxIssueProperties) {
-  const { projectId, data, handleData, isVisible = false } = props;
+  const { projectId, data, handleData, isVisible = false, estimatePropertyValues, setEstimatePropertyValue } =
+    props;
   // hooks
-  const { areEstimateEnabledByProjectId } = useProjectEstimates();
+  const {
+    activeEstimatePropertyIdsByProjectId,
+    estimateSystemPropertyIdsByProjectId,
+    estimatePropertyById,
+    estimateById,
+  } = useProjectEstimates();
   const { isMobile } = usePlatformOS();
   // states
   const [parentIssueModalOpen, setParentIssueModalOpen] = useState(false);
@@ -52,6 +64,9 @@ export const InboxIssueProperties = observer(function InboxIssueProperties(props
 
   const maxDate = getDate(targetDate);
   maxDate?.setDate(maxDate.getDate());
+
+  const estimateSystemPropertyIds = (projectId && estimateSystemPropertyIdsByProjectId(projectId)) || [];
+  const estimatePropertyIds = (projectId && activeEstimatePropertyIdsByProjectId(projectId)) || [];
 
   return (
     <div className="relative flex flex-wrap items-center gap-2">
@@ -157,19 +172,50 @@ export const InboxIssueProperties = observer(function InboxIssueProperties(props
         </div>
       )}
 
-      {/* estimate */}
-      {isVisible && projectId && areEstimateEnabledByProjectId(projectId) && (
-        <div className="h-7">
-          <EstimateDropdown
-            value={data?.estimate_point || undefined}
-            onChange={(estimatePoint) => handleData("estimate_point", estimatePoint)}
-            projectId={projectId}
-            buttonVariant="border-with-text"
-            placeholder="Estimate"
-            tabIndex={getIndex("estimate_point")}
-          />
-        </div>
-      )}
+      {/* estimates -- one per active system, buffered until the intake issue is created */}
+      {isVisible &&
+        projectId &&
+        estimateSystemPropertyIds.map((propertyId) => {
+          const property = estimatePropertyById(propertyId);
+          if (!property) return null;
+          const systemName = estimateById(property.estimate)?.name ?? "Estimate";
+          const currentValue = estimatePropertyValues[propertyId] ?? null;
+          return (
+            <div key={propertyId} className="h-7">
+              <EstimateDropdown
+                value={currentValue ?? undefined}
+                estimateId={property.estimate}
+                onChange={(estimatePoint) => setEstimatePropertyValue(propertyId, estimatePoint ?? null)}
+                projectId={projectId}
+                buttonVariant="border-with-text"
+                placeholder={systemName}
+              />
+            </div>
+          );
+        })}
+
+      {/* custom estimate properties */}
+      {isVisible &&
+        projectId &&
+        estimatePropertyIds.map((propertyId) => {
+          const property = estimatePropertyById(propertyId);
+          if (!property) return null;
+          // Note: KPI-reserved properties are omitted here if kpi_view is false in issue-detail/sidebar,
+          // but for intake, we just show active ones (or we could fetch projectDetails, but keeping it simple).
+          const currentValue = estimatePropertyValues[propertyId] ?? null;
+          return (
+            <div key={propertyId} className="h-7">
+              <EstimateDropdown
+                value={currentValue ?? undefined}
+                estimateId={property.estimate}
+                onChange={(estimatePoint) => setEstimatePropertyValue(propertyId, estimatePoint ?? null)}
+                projectId={projectId}
+                buttonVariant="border-with-text"
+                placeholder={property.name}
+              />
+            </div>
+          );
+        })}
 
       {/* add parent */}
       {isVisible && (

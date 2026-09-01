@@ -70,7 +70,8 @@
     "smooth-scroll-into-view-if-needed": "^2.0.2",
     "swr": "catalog:",
     "use-font-face-observer": "^1.2.2",
-    "uuid": "catalog:"
+    "uuid": "catalog:",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@plane/tailwind-config": "workspace:*",

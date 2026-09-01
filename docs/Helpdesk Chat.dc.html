@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; background: oklch(0.1689 0.0021 230.81); }
+  body { font-family:"Inter", ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing:antialiased; color: oklch(0.9235 0.0017 230.68); }
+  a { color: oklch(0.6311 0.1263 238.01); text-decoration:none; }
+  a:hover { color: oklch(0.7408 0.1003 233.89); }
+  * { box-sizing:border-box; }
+  textarea, input, button { font-family:inherit; }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:20px;padding:40px 44px 72px">
+  <div style="display:flex;flex-direction:column;gap:6px;max-width:900px">
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:oklch(0.6835 0.0074 230.81)">Turn 3 · Helpdesk analytics</span>
+    <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.01em;color:oklch(0.9235 0.0017 230.68)">Tela de Analytics do Helpdesk</h1>
+    <p style="margin:0;font-size:13px;line-height:1.5;color:oklch(0.7655 0.0054 230.76);text-wrap:pretty">KPIs, SLA e gráficos no mesmo shell (sidebar + AppHeader) e nos mesmos tokens do resto do app. Cores reaproveitadas dos badges de prioridade/status já usados na fila de tickets.</p>
+  </div>
+
+  <div style="display:flex;gap:44px;align-items:flex-start;flex-wrap:wrap">
+    <div id="3a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.2029 0.03 232.24);color:oklch(0.6311 0.1263 238.01);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500">3a</span>
+        <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">Analytics — KPIs, SLA e gráficos</span>
+        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">filtro de período + portal · cards e gráficos com dados de exemplo</span>
+      </div>
+
+      <div style="width:1440px;height:1000px;background:oklch(0.1689 0.0021 230.81);padding:6px;display:flex">
+        <div style="flex:1;display:flex;overflow:hidden;border:1px solid oklch(0.2593 0.0033 230.84);border-radius:8px;background:oklch(0.1932 0.002 230.81)">
+
+          <!-- ---------- Plane app sidebar ---------- -->
+          <div style="width:250px;min-width:250px;display:flex;flex-direction:column;background:oklch(0.1932 0.002 230.81);border-right:1px solid oklch(0.2593 0.0033 230.84);padding-top:12px;overflow:hidden">
+            <div style="display:flex;flex-direction:column;gap:12px;padding:0 12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 8px">
+                <span style="padding-top:4px;font-size:16px;font-weight:500;color:oklch(0.9235 0.0017 230.68)">Projects</span>
+                <div style="display:flex;align-items:center;gap:4px">
+                  <span style="display:inline-block;flex:none;width:16px;height:16px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/sliders-horizontal.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/sliders-horizontal.svg) center/contain no-repeat"></span>
+                  <span style="display:inline-block;flex:none;width:16px;height:16px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/panel-left.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/panel-left.svg) center/contain no-repeat"></span>
+                </div>
+              </div>
+              <button type="button" style="display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.3415 0.0049 230.86);background:oklch(0.2378 0.0029 230.83);color:oklch(0.8455 0.0035 230.72);font-size:14px;font-weight:500;box-shadow:0px 1px 6px -1px #00000014" style-hover="background:oklch(0.2593 0.0033 230.84)">
+                <span style="display:inline-block;flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/square-pen.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/square-pen.svg) center/contain no-repeat"></span>
+                <span>New work item</span>
+              </button>
+            </div>
+
+            <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 12px 2px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                  <span style="display:inline-block;flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/house.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/house.svg) center/contain no-repeat"></span>
+                  <span style="font-size:13px;line-height:20px;font-weight:500">Home</span>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Workspace</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                    <span style="display:inline-block;flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/layers.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/layers.svg) center/contain no-repeat"></span>
+                    <span style="font-size:13px;line-height:20px;font-weight:500">Projects</span>
+                  </div>
+
+                  <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:6px;background:oklch(1 0 0 / 10%);color:oklch(0.9235 0.0017 230.68)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Helpdesk</span>
+                    </div>
+                    <span style="display:inline-block;flex:none;width:12px;height:12px;transform:rotate(90deg);background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-right.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-right.svg) center/contain no-repeat"></span>
+                  </div>
+
+                  <div style="display:flex;flex-direction:column;gap:2px;padding-left:28px;margin-top:2px">
+                    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/ticket.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/ticket.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Tickets</span>
+                    </div>
+                    <div style="position:relative;display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;background:oklch(1 0 0 / 10%);color:oklch(0.9235 0.0017 230.68)">
+                      <span style="position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:16px;border-radius:9999px;background:oklch(0.6311 0.1263 238.01)"></span>
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chart-column.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chart-column.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Analytics</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/settings.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/settings.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Settings</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/users.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/users.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Users</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Inbox</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <sc-for list="{{ inboxViews }}" as="v" hint-placeholder-count="3">
+                    <div style="{{ v.rowStyle }}" onClick="{{ v.onClick }}">
+                      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                        <span style="{{ v.iconStyle }}"></span>
+                        <span style="font-size:13px;line-height:20px;font-weight:500">{{ v.label }}</span>
+                      </div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ v.count }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Quick filters</span>
+                  <span style="display:inline-block;flex:none;width:12px;height:12px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/plus.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/plus.svg) center/contain no-repeat"></span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <sc-for list="{{ quickFilters }}" as="f" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                        <span style="{{ f.dotStyle }}"></span>
+                        <span style="font-size:13px;line-height:20px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.label }}</span>
+                      </div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ f.count }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Channels</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <sc-for list="{{ channels }}" as="c" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                        <span style="{{ c.iconStyle }}"></span>
+                        <span style="font-size:13px;line-height:20px;font-weight:500">{{ c.label }}</span>
+                      </div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ c.count }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;height:48px;align-items:center;justify-content:space-between;gap:8px;padding:12px;border-top:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81)">
+              <span style="display:inline-flex;align-items:center;height:28px;padding:0 8px;border-radius:6px;background:oklch(0.2593 0.0033 230.84);color:oklch(0.8455 0.0035 230.72);font-size:13px;font-weight:500">Community</span>
+            </div>
+          </div>
+
+          <!-- ---------- Main: Analytics ---------- -->
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:oklch(0.1932 0.002 230.81)">
+
+            <div style="display:flex;height:44px;min-height:44px;align-items:center;gap:8px;padding:0 21.6px;border-bottom:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81)">
+              <div style="display:flex;flex:1;min-width:0;align-items:center;gap:10px">
+                <div style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;border-radius:6px;background:oklch(0.2029 0.03 232.24);color:oklch(0.6311 0.1263 238.01)">
+                  <span style="display:inline-block;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat"></span>
+                </div>
+                <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">Helpdesk</span>
+                <span style="display:inline-block;flex:none;width:12px;height:12px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-right.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-right.svg) center/contain no-repeat"></span>
+                <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">Analytics</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <button type="button" onClick="{{ cycleDateFilter }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82);color:oklch(0.8455 0.0035 230.72);font-size:12px;font-weight:500;cursor:pointer">
+                  <span style="display:inline-block;flex:none;width:13px;height:13px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/calendar.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/calendar.svg) center/contain no-repeat"></span>
+                  {{ dateFilterLabel }}
+                  <span style="display:inline-block;flex:none;width:12px;height:12px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                </button>
+                <button type="button" onClick="{{ cyclePortal }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82);color:oklch(0.8455 0.0035 230.72);font-size:12px;font-weight:500;cursor:pointer">
+                  <span style="display:inline-block;flex:none;width:13px;height:13px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/globe.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/globe.svg) center/contain no-repeat"></span>
+                  {{ portalLabel }}
+                  <span style="display:inline-block;flex:none;width:12px;height:12px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                </button>
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px;background:oklch(0.1932 0.002 230.81)">
+
+              <!-- KPI row -->
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">
+                <div style="display:flex;flex-direction:column;gap:12px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:14px">
+                  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:oklch(0.2029 0.03 232.24);color:oklch(0.6311 0.1263 238.01)">
+                        <span style="display:inline-block;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/inbox.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/inbox.svg) center/contain no-repeat"></span>
+                      </div>
+                      <span style="font-size:11px;font-weight:500;color:oklch(0.7655 0.0054 230.76)">Total requests</span>
+                    </div>
+                    <span style="display:inline-flex;align-items:center;gap:2px;height:18px;padding:0 6px;border-radius:9999px;background:oklch(0.2721 0.0673 152.52);color:oklch(0.9258 0.0845 155.86);font-size:11px;font-weight:500">
+                      <span style="display:inline-block;flex:none;width:10px;height:10px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/trending-up.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/trending-up.svg) center/contain no-repeat"></span>
+                      12%
+                    </span>
+                  </div>
+                  <span style="font-size:20px;font-weight:600;color:oklch(0.9235 0.0017 230.68);font-variant-numeric:tabular-nums">245</span>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:14px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:oklch(0.2896 0.0746 51.86);color:oklch(0.6802 0.1633 50.67)">
+                      <span style="display:inline-block;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/clock.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/clock.svg) center/contain no-repeat"></span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.7655 0.0054 230.76)">Open</span>
+                  </div>
+                  <span style="font-size:20px;font-weight:600;color:oklch(0.9235 0.0017 230.68);font-variant-numeric:tabular-nums">38</span>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:14px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:oklch(0.2721 0.0673 152.52);color:oklch(0.5296 0.1495 148.99)">
+                      <span style="display:inline-block;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/check-circle-2.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/check-circle-2.svg) center/contain no-repeat"></span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.7655 0.0054 230.76)">Resolved</span>
+                  </div>
+                  <span style="font-size:20px;font-weight:600;color:oklch(0.9235 0.0017 230.68);font-variant-numeric:tabular-nums">207</span>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:14px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:oklch(0.3142 0.0586 82.21);color:oklch(0.79 0.1466 82.04)">
+                      <span style="display:inline-block;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/zap.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/zap.svg) center/contain no-repeat"></span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.7655 0.0054 230.76)">Avg first response</span>
+                  </div>
+                  <div style="display:flex;align-items:baseline;gap:4px">
+                    <span style="font-size:20px;font-weight:600;color:oklch(0.9235 0.0017 230.68);font-variant-numeric:tabular-nums">2.4</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">hours</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:14px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:oklch(0.2861 0.0795 287.41);color:oklch(0.8808 0.0343 293.03)">
+                      <span style="display:inline-block;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/timer.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/timer.svg) center/contain no-repeat"></span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.7655 0.0054 230.76)">Avg resolution</span>
+                  </div>
+                  <div style="display:flex;align-items:baseline;gap:4px">
+                    <span style="font-size:20px;font-weight:600;color:oklch(0.9235 0.0017 230.68);font-variant-numeric:tabular-nums">18.6</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">hours</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Row: SLA + Requests over time -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:stretch">
+                <div style="display:flex;flex-direction:column;gap:16px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.5296 0.1495 148.99);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/shield-check.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/shield-check.svg) center/contain no-repeat"></span>
+                      <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.9235 0.0017 230.68)">SLA Compliance</span>
+                    </div>
+                    <span style="display:inline-flex;align-items:center;height:18px;padding:0 8px;border-radius:9999px;background:oklch(0.2721 0.0673 152.52);color:oklch(0.9258 0.0845 155.86);font-size:11px;font-weight:500">85% Overall</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:16px">
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <div style="display:flex;align-items:center;justify-content:space-between">
+                        <span style="font-size:12px;font-weight:500;color:oklch(0.8455 0.0035 230.72)">First Response Compliance</span>
+                        <span style="border-radius:4px;background:oklch(0.2158 0.0025 230.82);color:oklch(0.7655 0.0054 230.76);padding:2px 6px;font-size:11px;font-weight:500">within 4h</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <div style="height:8px;width:100%;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden">
+                          <div style="height:100%;width:92%;border-radius:9999px;background:oklch(0.5296 0.1495 148.99)"></div>
+                        </div>
+                        <span style="min-width:38px;text-align:right;font-size:14px;font-weight:700;color:oklch(0.5296 0.1495 148.99)">92%</span>
+                      </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <div style="display:flex;align-items:center;justify-content:space-between">
+                        <span style="font-size:12px;font-weight:500;color:oklch(0.8455 0.0035 230.72)">Resolution Compliance</span>
+                        <span style="border-radius:4px;background:oklch(0.2158 0.0025 230.82);color:oklch(0.7655 0.0054 230.76);padding:2px 6px;font-size:11px;font-weight:500">within 24h</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <div style="height:8px;width:100%;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden">
+                          <div style="height:100%;width:78%;border-radius:9999px;background:oklch(0.79 0.1466 82.04)"></div>
+                        </div>
+                        <span style="min-width:38px;text-align:right;font-size:14px;font-weight:700;color:oklch(0.79 0.1466 82.04)">78%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:flex-start;gap:8px;border-top:1px solid oklch(0.2593 0.0033 230.84);padding-top:12px">
+                    <span style="display:inline-block;flex:none;margin-top:2px;width:13px;height:13px;background:oklch(0.6835 0.0074 230.81);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/info.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/info.svg) center/contain no-repeat"></span>
+                    <span style="font-size:11px;line-height:1.5;color:oklch(0.6835 0.0074 230.81)">SLA calculado com base nos últimos 30 dias.</span>
+                  </div>
+                </div>
+
+                <div style="grid-column:span 2;display:flex;flex-direction:column;gap:16px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/trending-up.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/trending-up.svg) center/contain no-repeat"></span>
+                      <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.9235 0.0017 230.68)">Requests Volume Over Time</span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.6835 0.0074 230.81)">Daily trend</span>
+                  </div>
+                  <svg viewBox="0 0 640 200" style="width:100%;height:200px;display:block" preserveAspectRatio="none">
+                    <line x1="0" y1="40" x2="640" y2="40" stroke="oklch(0.2593 0.0033 230.84)" stroke-dasharray="3 4"></line>
+                    <line x1="0" y1="110" x2="640" y2="110" stroke="oklch(0.2593 0.0033 230.84)" stroke-dasharray="3 4"></line>
+                    <line x1="0" y1="180" x2="640" y2="180" stroke="oklch(0.2593 0.0033 230.84)"></line>
+                    <path d="M0,105 L106.7,89 L213.3,97 L320,73 L426.7,41 L533.3,60 L640,25 L640,180 L0,180 Z" fill="oklch(0.6311 0.1263 238.01 / 16%)"></path>
+                    <path d="M0,105 L106.7,89 L213.3,97 L320,73 L426.7,41 L533.3,60 L640,25" fill="none" stroke="oklch(0.6311 0.1263 238.01)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>
+                  </svg>
+                  <div style="display:flex;justify-content:space-between;padding:0 2px;margin-top:-8px">
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">28/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">29/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">30/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">31/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">01/08</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">02/08</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">03/08</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Row: By status + By source -->
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:stretch">
+                <div style="display:flex;flex-direction:column;gap:16px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/bar-chart-3.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/bar-chart-3.svg) center/contain no-repeat"></span>
+                      <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.9235 0.0017 230.68)">Requests by Status</span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.6835 0.0074 230.81)">Current breakdown</span>
+                  </div>
+                  <div style="display:flex;align-items:flex-end;gap:24px;height:150px;padding:0 12px">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end">
+                      <span style="font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">52</span>
+                      <div style="width:100%;max-width:56px;height:60px;border-radius:6px 6px 0 0;background:oklch(0.6802 0.1633 50.67)"></div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81);text-align:center">Aberto</span>
+                    </div>
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end">
+                      <span style="font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">38</span>
+                      <div style="width:100%;max-width:56px;height:43px;border-radius:6px 6px 0 0;background:oklch(0.6311 0.1263 238.01)"></div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81);text-align:center">Em andamento</span>
+                    </div>
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end">
+                      <span style="font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">24</span>
+                      <div style="width:100%;max-width:56px;height:27px;border-radius:6px 6px 0 0;background:oklch(0.7655 0.0054 230.76)"></div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81);text-align:center">Aguardando</span>
+                    </div>
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end">
+                      <span style="font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">131</span>
+                      <div style="width:100%;max-width:56px;height:150px;border-radius:6px 6px 0 0;background:oklch(0.5296 0.1495 148.99)"></div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81);text-align:center">Resolvido</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:16px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/pie-chart.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/pie-chart.svg) center/contain no-repeat"></span>
+                      <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.9235 0.0017 230.68)">Requests by Channel Source</span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.6835 0.0074 230.81)">Inbound origin</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:28px;height:150px">
+                    <div style="position:relative;width:150px;height:150px;flex:none;border-radius:9999px;background:conic-gradient(oklch(0.6311 0.1263 238.01) 0% 61%, oklch(0.42 0.1303 287.25) 61% 92%, oklch(0.7655 0.0054 230.76) 92% 100%)">
+                      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:88px;height:88px;border-radius:9999px;background:oklch(0.1689 0.0021 230.81)"></div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:12px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="display:inline-block;flex:none;width:8px;height:8px;border-radius:9999px;background:oklch(0.6311 0.1263 238.01)"></span>
+                        <span style="font-size:12px;color:oklch(0.8455 0.0035 230.72)">Public form</span>
+                        <span style="margin-left:auto;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">148</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="display:inline-block;flex:none;width:8px;height:8px;border-radius:9999px;background:oklch(0.42 0.1303 287.25)"></span>
+                        <span style="font-size:12px;color:oklch(0.8455 0.0035 230.72)">Internal form</span>
+                        <span style="margin-left:auto;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">76</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="display:inline-block;flex:none;width:8px;height:8px;border-radius:9999px;background:oklch(0.7655 0.0054 230.76)"></span>
+                        <span style="font-size:12px;color:oklch(0.8455 0.0035 230.72)">Direct / Other</span>
+                        <span style="margin-left:auto;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">21</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Row: Resolution trend + Top agents -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:stretch">
+                <div style="grid-column:span 2;display:flex;flex-direction:column;gap:16px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/clock.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/clock.svg) center/contain no-repeat"></span>
+                      <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.9235 0.0017 230.68)">Average Resolution Time Trend</span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.6835 0.0074 230.81)">In hours</span>
+                  </div>
+                  <svg viewBox="0 0 640 200" style="width:100%;height:200px;display:block" preserveAspectRatio="none">
+                    <line x1="0" y1="40" x2="640" y2="40" stroke="oklch(0.2593 0.0033 230.84)" stroke-dasharray="3 4"></line>
+                    <line x1="0" y1="110" x2="640" y2="110" stroke="oklch(0.2593 0.0033 230.84)" stroke-dasharray="3 4"></line>
+                    <line x1="0" y1="180" x2="640" y2="180" stroke="oklch(0.2593 0.0033 230.84)"></line>
+                    <path d="M0,41 L106.7,52 L213.3,71 L320,84 L426.7,73 L533.3,95 L640,105 L640,180 L0,180 Z" fill="oklch(0.2861 0.0795 287.41 / 55%)"></path>
+                    <path d="M0,41 L106.7,52 L213.3,71 L320,84 L426.7,73 L533.3,95 L640,105" fill="none" stroke="oklch(0.42 0.1303 287.25)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>
+                  </svg>
+                  <div style="display:flex;justify-content:space-between;padding:0 2px;margin-top:-8px">
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">28/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">29/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">30/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">31/07</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">01/08</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">02/08</span>
+                    <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">03/08</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:16px;border-radius:8px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1689 0.0021 230.81);padding:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/trophy.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/trophy.svg) center/contain no-repeat"></span>
+                      <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.9235 0.0017 230.68)">Top Performing Agents</span>
+                    </div>
+                    <span style="font-size:11px;font-weight:500;color:oklch(0.6835 0.0074 230.81)">Resolved count</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="width:56px;flex:none;font-size:12px;color:oklch(0.8455 0.0035 230.72)">Laura</span>
+                      <div style="flex:1;height:8px;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden"><div style="height:100%;width:100%;border-radius:9999px;background:oklch(0.5296 0.1495 148.99)"></div></div>
+                      <span style="width:22px;text-align:right;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">42</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="width:56px;flex:none;font-size:12px;color:oklch(0.8455 0.0035 230.72)">Bruno</span>
+                      <div style="flex:1;height:8px;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden"><div style="height:100%;width:83%;border-radius:9999px;background:oklch(0.5296 0.1495 148.99)"></div></div>
+                      <span style="width:22px;text-align:right;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">35</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="width:56px;flex:none;font-size:12px;color:oklch(0.8455 0.0035 230.72)">Camila</span>
+                      <div style="flex:1;height:8px;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden"><div style="height:100%;width:69%;border-radius:9999px;background:oklch(0.5296 0.1495 148.99)"></div></div>
+                      <span style="width:22px;text-align:right;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">29</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="width:56px;flex:none;font-size:12px;color:oklch(0.8455 0.0035 230.72)">Diego</span>
+                      <div style="flex:1;height:8px;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden"><div style="height:100%;width:43%;border-radius:9999px;background:oklch(0.5296 0.1495 148.99)"></div></div>
+                      <span style="width:22px;text-align:right;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">18</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="width:56px;flex:none;font-size:12px;color:oklch(0.8455 0.0035 230.72)">Fernanda</span>
+                      <div style="flex:1;height:8px;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden"><div style="height:100%;width:29%;border-radius:9999px;background:oklch(0.5296 0.1495 148.99)"></div></div>
+                      <span style="width:22px;text-align:right;font-size:12px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">12</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:20px;padding:40px 44px 72px">
+  <div style="display:flex;flex-direction:column;gap:6px;max-width:900px">
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:oklch(0.6835 0.0074 230.81)">Turn 2 · Helpdesk ticket detail</span>
+    <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.01em;color:oklch(0.9235 0.0017 230.68)">Tela de conversa do Helpdesk</h1>
+    <p style="margin:0;font-size:13px;line-height:1.5;color:oklch(0.7655 0.0054 230.76);text-wrap:pretty">Usa os tokens reais do Plane (surface/layer/border/text, escala 11–16px, altura de header 44px, sidebar 250px) — nada aqui é maior que o resto do app. Labels em inglês, dados em português.</p>
+  </div>
+
+  <div style="display:flex;gap:44px;align-items:flex-start;flex-wrap:wrap">
+
+    <!-- ============================== OPTION 1A ============================== -->
+    <div id="2a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.2029 0.03 232.24);color:oklch(0.6311 0.1263 238.01);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500">2a</span>
+        <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">Triage — três colunas</span>
+        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">fila sempre visível · painel direito em seções colapsáveis</span>
+      </div>
+
+      <div style="width:1440px;height:900px;background:oklch(0.1689 0.0021 230.81);padding:6px;display:flex">
+        <div style="flex:1;display:flex;overflow:hidden;border:1px solid oklch(0.2593 0.0033 230.84);border-radius:8px;background:oklch(0.1932 0.002 230.81)">
+
+          <!-- ---------- Plane app sidebar ---------- -->
+          <div style="width:250px;min-width:250px;display:flex;flex-direction:column;background:oklch(0.1932 0.002 230.81);border-right:1px solid oklch(0.2593 0.0033 230.84);padding-top:12px;overflow:hidden">
+            <div style="display:flex;flex-direction:column;gap:12px;padding:0 12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 8px">
+                <span style="padding-top:4px;font-size:16px;font-weight:500;color:oklch(0.9235 0.0017 230.68)">Projects</span>
+                <div style="display:flex;align-items:center;gap:4px">
+                  <span style="display:inline-block;flex:none;width:16px;height:16px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/sliders-horizontal.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/sliders-horizontal.svg) center/contain no-repeat"></span>
+                  <span style="display:inline-block;flex:none;width:16px;height:16px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/panel-left.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/panel-left.svg) center/contain no-repeat"></span>
+                </div>
+              </div>
+              <button type="button" style="display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.3415 0.0049 230.86);background:oklch(0.2378 0.0029 230.83);color:oklch(0.8455 0.0035 230.72);font-size:14px;font-weight:500;box-shadow:0px 1px 6px -1px #00000014" style-hover="background:oklch(0.2593 0.0033 230.84)">
+                <span style="display:inline-block;flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/square-pen.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/square-pen.svg) center/contain no-repeat"></span>
+                <span>New work item</span>
+              </button>
+            </div>
+
+            <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 12px 2px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex:none"><path d="M9.36825 8.5908C9.3668 8.57319 9.36465 8.5605 9.36337 8.55174C9.36224 8.55047 9.36073 8.54993 9.35946 8.54881C9.35064 8.54753 9.33797 8.54536 9.3204 8.54393C9.24062 8.53741 9.13053 8.53709 8.93368 8.53709H7.06649C6.86964 8.53709 6.75955 8.53741 6.67977 8.54393C6.66156 8.54542 6.64858 8.54751 6.63974 8.54881C6.63851 8.54993 6.63691 8.55048 6.63583 8.55174C6.63456 8.5605 6.63336 8.57328 6.63192 8.5908C6.6254 8.67062 6.62509 8.78148 6.62509 8.9785V13.2871H9.37509V8.9785C9.37509 8.78148 9.37477 8.67061 9.36825 8.5908ZM10.6251 13.2871H11.8663C12.2499 13.2871 12.5005 13.2861 12.6915 13.2705C12.8752 13.2555 12.9486 13.2292 12.9884 13.209L13.0831 13.1513C13.173 13.086 13.247 13.0003 13.2979 12.9004C13.3182 12.8605 13.3444 12.7869 13.3595 12.6035C13.3751 12.4125 13.3751 12.162 13.3751 11.7783V6.95506C13.3751 6.53721 13.3695 6.44728 13.3487 6.37303C13.3255 6.29014 13.2876 6.21187 13.2364 6.14256C13.1906 6.08059 13.123 6.02126 12.7931 5.76463L8.27157 2.24803C8.14754 2.15155 8.08003 2.09893 8.02841 2.06444C8.01732 2.05703 8.00875 2.05221 8.00302 2.04881C8.00102 2.04867 7.99915 2.04867 7.99716 2.04881C7.99143 2.05221 7.98285 2.05703 7.97177 2.06444C7.92015 2.09893 7.85263 2.15155 7.7286 2.24803L3.20712 5.76463C2.8772 6.02125 2.80961 6.08057 2.76376 6.14256C2.71257 6.2118 2.67466 6.29012 2.65145 6.37303C2.63071 6.44726 2.62509 6.53709 2.62509 6.95506V11.7783C2.62509 12.162 2.62511 12.4125 2.64071 12.6035C2.65567 12.7862 2.68197 12.8595 2.70224 12.8994C2.77013 13.0326 2.87866 13.1411 3.01181 13.209L3.10653 13.2422C3.15275 13.253 3.21704 13.263 3.30868 13.2705C3.49965 13.2861 3.75025 13.2871 4.13388 13.2871H5.37509V8.9785C5.37509 8.80211 5.37418 8.63176 5.38583 8.48924C5.39807 8.33956 5.42717 8.16607 5.51571 7.99217L5.56552 7.9033C5.68964 7.70078 5.8676 7.53611 6.08016 7.42772L6.21005 7.37108C6.33947 7.32494 6.46577 7.30702 6.57821 7.29783C6.72062 7.28621 6.8903 7.28709 7.06649 7.28709H8.93368C9.10988 7.28709 9.27956 7.28621 9.42196 7.29783C9.5344 7.30702 9.66071 7.32494 9.79013 7.37108L9.92001 7.42772L10.0089 7.47752C10.2111 7.60162 10.3761 7.77956 10.4845 7.99217C10.573 8.16607 10.6021 8.33956 10.6143 8.48924C10.626 8.63176 10.6251 8.80211 10.6251 8.9785V13.2871ZM14.6251 11.7783C14.6251 12.1413 14.6253 12.4514 14.6046 12.7051C14.5832 12.966 14.5362 13.2224 14.4112 13.4678C14.2235 13.836 13.9241 14.1356 13.5558 14.3232C13.3104 14.4482 13.054 14.4953 12.7931 14.5166C12.5394 14.5373 12.2292 14.5371 11.8663 14.5371H4.13388C3.77098 14.5371 3.46075 14.5373 3.20712 14.5166C2.94616 14.4953 2.6898 14.4482 2.44442 14.3232C2.07603 14.1356 1.7767 13.836 1.58895 13.4678C1.46397 13.2224 1.41693 12.966 1.39559 12.7051C1.37487 12.4514 1.37509 12.1413 1.37509 11.7783V6.95506C1.37509 6.60766 1.36953 6.31438 1.44735 6.03611C1.51154 5.80678 1.61729 5.59086 1.75888 5.3994C1.93074 5.16703 2.16527 4.99065 2.43954 4.77733L6.96102 1.26072C7.14957 1.11407 7.38218 0.918674 7.6622 0.842755C7.88326 0.782884 8.11691 0.782884 8.33798 0.842755C8.618 0.918674 8.8506 1.11407 9.03915 1.26072L13.5606 4.77733C13.8349 4.99063 14.0694 5.16701 14.2413 5.3994L14.3409 5.54686C14.4333 5.69906 14.5046 5.86401 14.5528 6.03611C14.6306 6.31436 14.6251 6.60762 14.6251 6.95506V11.7783Z" fill="currentColor"></path></svg>
+                  <span style="font-size:13px;line-height:20px;font-weight:500">Home</span>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Workspace</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex:none"><path d="M14.041 9.77251C13.6575 9.86273 13.1544 9.9762 12.5771 10.0879C11.271 10.3407 9.55874 10.5996 8 10.5997C6.44125 10.5997 4.7291 10.3408 3.42285 10.0879C2.84526 9.97614 2.34163 9.86276 1.95801 9.77251V11.8409C1.95801 12.2244 1.95804 12.4751 1.97363 12.6661C1.98864 12.8498 2.01488 12.9231 2.03516 12.9629C2.10308 13.0962 2.21151 13.2046 2.34473 13.2725L2.43945 13.3047C2.48568 13.3156 2.54989 13.3265 2.6416 13.334C2.83257 13.3496 3.0832 13.3497 3.4668 13.3497H12.5332C12.9165 13.3497 13.1665 13.3496 13.3574 13.334C13.5407 13.319 13.6144 13.2928 13.6543 13.2725C13.7875 13.2046 13.896 13.0961 13.9639 12.9629L13.9971 12.8682C14.0079 12.822 14.0179 12.7577 14.0254 12.6661C14.041 12.4751 14.041 12.2245 14.041 11.8409V9.77251ZM3.4668 5.26665C3.08319 5.26665 2.83257 5.26668 2.6416 5.28227C2.45792 5.29728 2.38454 5.32351 2.34473 5.34379C2.22354 5.40557 2.12394 5.50122 2.05566 5.61821C2.05373 5.62932 2.0514 5.64383 2.04883 5.66215C2.03783 5.74053 2.02735 5.85115 2.01758 5.99126C1.99814 6.26994 1.98459 6.63077 1.97559 7.01372C1.96343 7.53069 1.96026 8.07474 1.95898 8.48833C2.00287 8.49907 2.0493 8.51164 2.09863 8.52348C2.48215 8.61553 3.02514 8.73847 3.66016 8.86137C4.9372 9.10854 6.55887 9.34965 8 9.34965C9.44093 9.34962 11.062 9.1085 12.3389 8.86137C12.9737 8.7385 13.5169 8.61552 13.9004 8.52348C13.9493 8.51175 13.9955 8.49898 14.0391 8.48833C14.0378 8.07474 14.0356 7.53069 14.0234 7.01372C14.0144 6.63077 14.0009 6.26994 13.9814 5.99126C13.9717 5.85117 13.9612 5.74052 13.9502 5.66215C13.9475 5.6432 13.9444 5.62848 13.9424 5.61723C13.8741 5.50082 13.7751 5.40536 13.6543 5.34379C13.6145 5.32353 13.5409 5.29727 13.3574 5.28227C13.1665 5.26671 12.9165 5.26665 12.5332 5.26665H3.4668ZM7.375 7.73442V7.72465C7.375 7.37948 7.65482 7.09965 8 7.09965C8.34503 7.09983 8.625 7.37958 8.625 7.72465V7.73442C8.625 8.07949 8.34503 8.35924 8 8.35942C7.65482 8.35942 7.375 8.0796 7.375 7.73442ZM8 2.59965C7.34034 2.59965 7.13232 2.60514 6.97754 2.64653C6.50307 2.77367 6.13203 3.14468 6.00488 3.61919C5.981 3.70849 5.97063 3.81544 5.96484 4.01665H10.0342C10.0284 3.8154 10.018 3.70851 9.99414 3.61919C9.86702 3.14477 9.49683 2.77373 9.02246 2.64653C8.86766 2.60505 8.65998 2.59966 8 2.59965ZM15.291 11.8409C15.291 12.2037 15.2922 12.514 15.2715 12.7676C15.2502 13.0285 15.2031 13.285 15.0781 13.5303C14.8904 13.8988 14.5902 14.1981 14.2217 14.3858C13.9764 14.5107 13.7208 14.5578 13.46 14.5791C13.2063 14.5999 12.8962 14.5997 12.5332 14.5997H3.4668C3.10389 14.5997 2.79368 14.5998 2.54004 14.5791C2.27905 14.5578 2.02275 14.5108 1.77734 14.3858C1.4089 14.1981 1.10958 13.8987 0.921875 13.5303C0.796827 13.2849 0.749839 13.0286 0.728516 12.7676C0.707814 12.514 0.708008 12.2038 0.708008 11.8409V8.97465C0.708008 8.60181 0.708206 7.76501 0.726563 6.98442C0.735721 6.59503 0.749071 6.21171 0.770508 5.90434C0.781165 5.75155 0.794714 5.60812 0.811524 5.48833C0.82359 5.40234 0.849238 5.22862 0.921875 5.08598L0.99707 4.95122C1.18524 4.64429 1.45479 4.39388 1.77734 4.22954C2.0227 4.10455 2.27911 4.0575 2.54004 4.03618C2.79366 4.01548 3.10391 4.01665 3.4668 4.01665H4.71387C4.72148 3.7397 4.74113 3.50667 4.79785 3.29497C5.04064 2.3894 5.74777 1.68228 6.65332 1.4395C7.00717 1.34469 7.42024 1.34965 8 1.34965C8.57959 1.34965 8.99192 1.34471 9.3457 1.4395C10.2514 1.68221 10.9594 2.3892 11.2021 3.29497C11.2589 3.50666 11.2775 3.73971 11.2852 4.01665H12.5332C12.8962 4.01665 13.2063 4.01545 13.46 4.03618C13.7207 4.0575 13.9765 4.1047 14.2217 4.22954C14.5901 4.41727 14.8904 4.71742 15.0781 5.08598C15.1506 5.22855 15.1754 5.40238 15.1875 5.48833C15.2043 5.60812 15.2179 5.75156 15.2285 5.90434C15.25 6.21171 15.2643 6.59503 15.2734 6.98442C15.2918 7.76501 15.291 8.60181 15.291 8.97465V11.8409Z" fill="currentColor"></path></svg>
+                    <span style="font-size:13px;line-height:20px;font-weight:500">Projects</span>
+                  </div>
+
+                  <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:6px;background:oklch(1 0 0 / 10%);color:oklch(0.9235 0.0017 230.68)">
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-block;flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Helpdesk</span>
+                    </div>
+                    <span style="display:inline-block;flex:none;width:12px;height:12px;transform:rotate(90deg);background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-right.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-right.svg) center/contain no-repeat"></span>
+                  </div>
+
+                  <div style="display:flex;flex-direction:column;gap:2px;padding-left:28px;margin-top:2px">
+                    <div style="position:relative;display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;background:oklch(1 0 0 / 10%);color:oklch(0.9235 0.0017 230.68)">
+                      <span style="position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:16px;border-radius:9999px;background:oklch(0.6311 0.1263 238.01)"></span>
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/ticket.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/ticket.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Tickets</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chart-column.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chart-column.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Analytics</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/settings.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/settings.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Settings</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/users.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/users.svg) center/contain no-repeat"></span>
+                      <span style="font-size:13px;line-height:20px;font-weight:500">Users</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Inbox</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <sc-for list="{{ inboxViews }}" as="v" hint-placeholder-count="3">
+                    <div style="{{ v.rowStyle }}" onClick="{{ v.onClick }}">
+                      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                        <span style="{{ v.iconStyle }}"></span>
+                        <span style="font-size:13px;line-height:20px;font-weight:500">{{ v.label }}</span>
+                      </div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ v.count }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Quick filters</span>
+                  <span style="display:inline-block;flex:none;width:12px;height:12px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/plus.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/plus.svg) center/contain no-repeat"></span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <sc-for list="{{ quickFilters }}" as="f" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                        <span style="{{ f.dotStyle }}"></span>
+                        <span style="font-size:13px;line-height:20px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.label }}</span>
+                      </div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ f.count }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:4px;color:oklch(0.6835 0.0074 230.81)">
+                  <span style="font-size:13px;font-weight:600">Channels</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <sc-for list="{{ channels }}" as="c" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:6px;color:oklch(0.8455 0.0035 230.72)" style-hover="background:oklch(1 0 0 / 5%)">
+                      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                        <span style="{{ c.iconStyle }}"></span>
+                        <span style="font-size:13px;line-height:20px;font-weight:500">{{ c.label }}</span>
+                      </div>
+                      <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ c.count }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;height:48px;align-items:center;justify-content:space-between;gap:8px;padding:12px;border-top:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81)">
+              <span style="display:inline-flex;align-items:center;height:28px;padding:0 8px;border-radius:6px;background:oklch(0.2593 0.0033 230.84);color:oklch(0.8455 0.0035 230.72);font-size:13px;font-weight:500">Community</span>
+            </div>
+          </div>
+
+          <!-- ---------- Main ---------- -->
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:oklch(0.1932 0.002 230.81)">
+
+            <!-- AppHeader h-11 -->
+            <div style="display:flex;height:44px;min-height:44px;align-items:center;gap:8px;padding:0 21.6px;border-bottom:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81)">
+              <div style="display:flex;flex:1;min-width:0;align-items:center;gap:12px">
+                <div style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;border-radius:6px;background:oklch(0.2029 0.03 232.24);color:oklch(0.6311 0.1263 238.01)">
+                  <span style="display:inline-block;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/headset.svg) center/contain no-repeat"></span>
+                </div>
+                <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">Helpdesk</span>
+                <span style="font-size:13px;color:oklch(0.7655 0.0054 230.76)">·</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.2158 0.0025 230.82);color:oklch(0.8455 0.0035 230.72);font-size:12px">45 total</span>
+                  <span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.3042 0.0853 45.16);color:oklch(0.9244 0.1203 95.85);font-size:12px">18 active</span>
+                  <span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.2721 0.0673 152.52);color:oklch(0.9258 0.0845 155.86);font-size:12px">27 resolved</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82)">
+                  <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/search.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/search.svg) center/contain no-repeat"></span>
+                  <span style="width:128px;font-size:13px;color:oklch(0.6835 0.0074 230.81)">Search…</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:2px;padding:2px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82)">
+                  <div style="display:flex;align-items:center;gap:6px;height:22px;padding:0 10px;border-radius:4px;color:oklch(0.8455 0.0035 230.72);font-size:13px;font-weight:500" style-hover="background:oklch(0.2378 0.0029 230.83)">
+                    <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/list.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/list.svg) center/contain no-repeat"></span>
+                    <span>List</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;height:22px;padding:0 10px;border-radius:4px;color:oklch(0.8455 0.0035 230.72);font-size:13px;font-weight:500" style-hover="background:oklch(0.2378 0.0029 230.83)">
+                    <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/square-kanban.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/square-kanban.svg) center/contain no-repeat"></span>
+                    <span>Kanban</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;height:22px;padding:0 10px;border-radius:4px;background:oklch(0.6311 0.1263 238.01);color:oklch(0.9235 0.0017 230.68);font-size:13px;font-weight:500;box-shadow:0px 1px 2px -1px #0000002e">
+                    <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/columns-3.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/columns-3.svg) center/contain no-repeat"></span>
+                    <span>Split</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;display:flex;overflow:hidden">
+
+              <!-- Ticket queue -->
+              <div style="width:312px;min-width:312px;display:flex;flex-direction:column;border-right:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81)">
+                <div style="display:flex;height:36px;min-height:36px;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                  <div style="display:flex;align-items:center;gap:4px;color:oklch(0.8455 0.0035 230.72)">
+                    <span style="font-size:12px;font-weight:500">Sort: Recent</span>
+                    <span style="display:inline-block;flex:none;width:12px;height:12px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                  </div>
+                  <span style="display:inline-block;flex:none;width:14px;height:14px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/filter.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/filter.svg) center/contain no-repeat"></span>
+                </div>
+                <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column">
+                  <sc-for list="{{ tickets }}" as="t" hint-placeholder-count="7">
+                    <div style="{{ t.rowStyle }}" onClick="{{ t.onSelect }}">
+                      <span style="{{ t.activeBarStyle }}"></span>
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ t.id }}</span>
+                        <span style="{{ t.prioStyle }}">
+                          <span style="{{ t.prioIconStyle }}"></span>
+                          {{ t.prio }}
+                        </span>
+                        <span style="{{ t.unreadStyle }}"></span>
+                      </div>
+                      <p style="{{ t.titleStyle }}">{{ t.title }}</p>
+                      <sc-if value="{{ showPreview }}" hint-placeholder-val="{{ true }}">
+                        <p style="margin:0;font-size:12px;line-height:1.4;color:oklch(0.6835 0.0074 230.81);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.preview }}</p>
+                      </sc-if>
+                      <div style="display:flex;align-items:center;gap:6px;color:oklch(0.7655 0.0054 230.76)">
+                        <span style="font-size:12px">{{ t.who }}</span>
+                        <span style="font-size:12px">·</span>
+                        <span style="font-size:12px">{{ t.when }}</span>
+                        <span style="margin-left:auto;{{ t.statusPillStyle }}">{{ t.status }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <!-- Conversation -->
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:oklch(0.1932 0.002 230.81)">
+                <div style="display:flex;flex-direction:column;gap:8px;padding:10px 20px 0;border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ active.id }}</span>
+                    <h2 style="margin:0;min-width:0;font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ active.title }}</h2>
+                    <span style="{{ active.prioStyle }}"><span style="{{ active.prioIconStyle }}"></span>{{ active.prio }}</span>
+                    <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+                      <span style="display:inline-block;flex:none;width:24px;height:24px;padding:5px;border-radius:6px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/star.svg) center/16px no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/star.svg) center/16px no-repeat"></span>
+                      <span style="display:inline-block;flex:none;width:24px;height:24px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/clock.svg) center/16px no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/clock.svg) center/16px no-repeat"></span>
+                      <span style="display:inline-block;flex:none;width:24px;height:24px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/ellipsis.svg) center/16px no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/ellipsis.svg) center/16px no-repeat"></span>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <button type="button" onClick="{{ cycleStatus }}" style="{{ active.statusBtnStyle }}">
+                      <span style="{{ active.statusDotStyle }}"></span>
+                      {{ active.status }}
+                      <span style="display:inline-block;flex:none;width:12px;height:12px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                    </button>
+                    <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Assigned to</span>
+                    <div style="display:flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 3px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82)">
+                      <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:9999px;background:oklch(0.4965 0.1172 149.18);color:#fff;font-size:10px;font-weight:600">L</span>
+                      <span style="font-size:12px;color:oklch(0.8455 0.0035 230.72)">Laura</span>
+                      <span style="display:inline-block;flex:none;width:12px;height:12px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                    </div>
+                    <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Team</span>
+                    <div style="display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82)">
+                      <span style="font-size:12px;color:oklch(0.8455 0.0035 230.72)">Suporte N1</span>
+                      <span style="display:inline-block;flex:none;width:12px;height:12px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;align-items:center;gap:18px">
+                    <sc-for list="{{ tabsA }}" as="tab" hint-placeholder-count="4">
+                      <button type="button" onClick="{{ tab.onClick }}" style="{{ tab.style }}">
+                        {{ tab.label }}
+                        <sc-if value="{{ tab.hasCount }}" hint-placeholder-val="{{ false }}">
+                          <span style="display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:4px;background:oklch(0.2593 0.0033 230.84);color:oklch(0.7655 0.0054 230.76);font-size:11px">{{ tab.count }}</span>
+                        </sc-if>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="flex:1;min-height:0;overflow-y:auto;padding:16px 20px 20px">
+                  <sc-if value="{{ isConvA }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;gap:14px;max-width:760px;margin:0 auto">
+                      <div style="display:flex;align-items:center;justify-content:center">
+                        <span style="display:inline-flex;align-items:center;height:20px;padding:0 10px;border-radius:9999px;background:oklch(0.2158 0.0025 230.82);color:oklch(0.7655 0.0054 230.76);font-size:11px;font-weight:500">Hoje</span>
+                      </div>
+                      <sc-for list="{{ thread }}" as="m" hint-placeholder-count="4">
+                        <sc-if value="{{ m.isEvent }}" hint-placeholder-val="{{ false }}">
+                          <div style="display:flex;align-items:center;gap:8px;padding:0 4px">
+                            <span style="display:inline-block;width:6px;height:6px;flex:none;border-radius:9999px;background:oklch(0.5296 0.1495 148.99)"></span>
+                            <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ m.body }}</span>
+                            <span style="margin-left:auto;font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ m.time }}</span>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ m.isMsg }}" hint-placeholder-val="{{ true }}">
+                          <div style="{{ m.rowStyle }}">
+                            <span style="{{ m.avatarStyle }}">{{ m.initial }}</span>
+                            <div style="{{ m.colStyle }}">
+                              <div style="{{ m.metaStyle }}">
+                                <span style="font-size:13px;font-weight:500;color:oklch(0.9235 0.0017 230.68)">{{ m.name }}</span>
+                                <sc-if value="{{ m.hasTag }}" hint-placeholder-val="{{ false }}">
+                                  <span style="{{ m.tagStyle }}">{{ m.tag }}</span>
+                                </sc-if>
+                                <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">{{ m.time }}</span>
+                              </div>
+                              <div style="{{ m.bubbleStyle }}">
+                                <p style="margin:0;font-size:13px;line-height:1.55;white-space:pre-wrap;text-wrap:pretty">{{ m.body }}</p>
+                                <sc-if value="{{ m.hasAttach }}" hint-placeholder-val="{{ false }}">
+                                  <div style="display:flex;align-items:center;gap:6px;margin-top:8px;height:24px;width:fit-content;padding:0 8px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81);color:oklch(0.8455 0.0035 230.72)">
+                                    <span style="display:inline-block;flex:none;width:12px;height:12px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/paperclip.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/paperclip.svg) center/contain no-repeat"></span>
+                                    <span style="font-size:11px">{{ m.attach }}</span>
+                                  </div>
+                                </sc-if>
+                              </div>
+                            </div>
+                          </div>
+                        </sc-if>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ isOtherA }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:100%;color:oklch(0.6835 0.0074 230.81)">
+                      <span style="font-size:13px;font-weight:500;color:oklch(0.8455 0.0035 230.72)">{{ tabEmptyTitleA }}</span>
+                      <span style="font-size:12px">{{ tabEmptyBodyA }}</span>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="padding:12px 20px 16px;border-top:1px solid oklch(0.2593 0.0033 230.84)">
+                  <div style="max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;align-items:center;gap:16px">
+                      <button type="button" onClick="{{ setReplyA }}" style="{{ replyTabStyleA }}">Reply to customer</button>
+                      <button type="button" onClick="{{ setNoteA }}" style="{{ noteTabStyleA }}">Internal note</button>
+                    </div>
+                    <div style="{{ composerStyleA }}">
+                      <textarea placeholder="{{ composerPlaceholderA }}" value="{{ draftA }}" onChange="{{ onDraftA }}" onKeyDown="{{ onKeyA }}" style="width:100%;min-height:72px;resize:none;border:none;outline:none;background:transparent;padding:12px;font-size:13px;line-height:1.55;color:oklch(0.9235 0.0017 230.68)"></textarea>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 10px 10px">
+                        <div style="display:flex;align-items:center;gap:6px">
+                          <span style="display:inline-block;flex:none;width:24px;height:24px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/paperclip.svg) center/15px no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/paperclip.svg) center/15px no-repeat"></span>
+                          <span style="display:inline-block;flex:none;width:24px;height:24px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/smile.svg) center/15px no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/smile.svg) center/15px no-repeat"></span>
+                          <span style="display:inline-block;flex:none;width:24px;height:24px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/at-sign.svg) center/15px no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/at-sign.svg) center/15px no-repeat"></span>
+                          <span style="width:1px;height:16px;background:oklch(0.2593 0.0033 230.84);margin:0 2px"></span>
+                          <div style="display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82);color:oklch(0.8455 0.0035 230.72)">
+                            <span style="font-size:12px;font-weight:500">Macros</span>
+                            <span style="display:inline-block;flex:none;width:12px;height:12px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                          </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81)">Ctrl / ⌘ + Enter</span>
+                          <button type="button" onClick="{{ sendA }}" style="{{ sendBtnStyleA }}">
+                            <span style="display:inline-block;flex:none;width:14px;height:14px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/send.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/send.svg) center/contain no-repeat"></span>
+                            {{ sendLabelA }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right panel -->
+              <div style="width:300px;min-width:300px;display:flex;flex-direction:column;overflow-y:auto;border-left:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.2158 0.0025 230.82)">
+
+                <div style="border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                  <button type="button" onClick="{{ toggleTicketSec }}" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:transparent;border:none;color:oklch(0.7655 0.0054 230.76);cursor:pointer">
+                    <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase">Ticket</span>
+                    <span style="{{ chevTicket }}"></span>
+                  </button>
+                  <sc-if value="{{ secTicket }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px 14px">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Status</span>
+                        <span style="{{ active.statusPillStyle }}">{{ active.status }}</span>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Priority</span>
+                        <span style="{{ active.prioStyle }}"><span style="{{ active.prioIconStyle }}"></span>{{ active.prio }}</span>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Assignee</span>
+                        <div style="display:flex;align-items:center;gap:6px">
+                          <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:9999px;background:oklch(0.4965 0.1172 149.18);color:#fff;font-size:10px;font-weight:600">L</span>
+                          <span style="font-size:13px;color:oklch(0.9235 0.0017 230.68)">Laura</span>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Team</span>
+                        <span style="font-size:13px;color:oklch(0.9235 0.0017 230.68)">Suporte N1</span>
+                      </div>
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                          <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">SLA</span>
+                          <span style="font-size:13px;color:oklch(0.9235 0.0017 230.68)">02h 14m restantes</span>
+                        </div>
+                        <div style="height:3px;width:100%;border-radius:9999px;background:oklch(0.2593 0.0033 230.84);overflow:hidden">
+                          <div style="height:100%;width:38%;border-radius:9999px;background:oklch(0.6802 0.1633 50.67)"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                  <button type="button" onClick="{{ toggleCustSec }}" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:transparent;border:none;color:oklch(0.7655 0.0054 230.76);cursor:pointer">
+                    <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase">Customer</span>
+                    <span style="{{ chevCust }}"></span>
+                  </button>
+                  <sc-if value="{{ secCust }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;gap:12px;padding:0 16px 14px">
+                      <div style="display:flex;align-items:flex-start;gap:10px">
+                        <span style="display:inline-flex;align-items:center;justify-content:center;flex:none;width:32px;height:32px;border-radius:9999px;background:oklch(0.3862 0.1436 262.12);color:#fff;font-size:13px;font-weight:600">{{ active.initial }}</span>
+                        <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                          <span style="font-size:13px;font-weight:500;color:oklch(0.9235 0.0017 230.68)">{{ active.who }}</span>
+                          <span style="font-size:12px;color:oklch(0.7655 0.0054 230.76);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ active.email }}</span>
+                          <a href="#2a" style="display:inline-flex;align-items:center;gap:4px;font-size:12px">View full profile
+                            <span style="display:inline-block;flex:none;width:11px;height:11px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/external-link.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/external-link.svg) center/contain no-repeat"></span>
+                          </a>
+                        </div>
+                      </div>
+                      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:6px;background:oklch(0.1932 0.002 230.81)">
+                          <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">5</span>
+                          <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81);text-align:center">Past tickets</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:6px;background:oklch(0.1932 0.002 230.81)">
+                          <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">3</span>
+                          <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81);text-align:center">Open</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:6px;background:oklch(0.1932 0.002 230.81)">
+                          <span style="font-size:14px;font-weight:600;color:oklch(0.9235 0.0017 230.68)">2</span>
+                          <span style="font-size:11px;color:oklch(0.6835 0.0074 230.81);text-align:center">Resolved</span>
+                        </div>
+                      </div>
+                      <div style="display:flex;flex-direction:column;gap:8px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                          <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">First contact</span>
+                          <span style="font-size:12px;color:oklch(0.8455 0.0035 230.72)">15/03/2026</span>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                          <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Channel</span>
+                          <span style="font-size:12px;color:oklch(0.8455 0.0035 230.72)">{{ active.channel }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                  <button type="button" onClick="{{ toggleClassSec }}" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:transparent;border:none;color:oklch(0.7655 0.0054 230.76);cursor:pointer">
+                    <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase">Classification</span>
+                    <span style="{{ chevClass }}"></span>
+                  </button>
+                  <sc-if value="{{ secClass }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;gap:8px;padding:0 16px 14px">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Category</span>
+                        <div style="display:flex;align-items:center;gap:4px;height:24px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81)">
+                          <span style="font-size:12px;color:oklch(0.9235 0.0017 230.68)">Sistema</span>
+                          <span style="display:inline-block;flex:none;width:12px;height:12px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81)">Subcategory</span>
+                        <div style="display:flex;align-items:center;gap:4px;height:24px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.2593 0.0033 230.84);background:oklch(0.1932 0.002 230.81)">
+                          <span style="font-size:12px;color:oklch(0.9235 0.0017 230.68)">API</span>
+                          <span style="display:inline-block;flex:none;width:12px;height:12px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/chevron-down.svg) center/contain no-repeat"></span>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                        <span style="font-size:12px;color:oklch(0.6835 0.0074 230.81);padding-top:3px">Tags</span>
+                        <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px">
+                          <span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.2308 0.0713 261.96);color:oklch(0.6322 0.1556 262.59);font-size:11px">api</span>
+                          <span style="display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.2457 0.0742 27.56);color:oklch(0.6556 0.1604 26.47);font-size:11px">erro</span>
+                          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;border:1px dashed oklch(0.3415 0.0049 230.86);color:oklch(0.6835 0.0074 230.81);font-size:11px">+</span>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="border-bottom:1px solid oklch(0.2593 0.0033 230.84)">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px 8px">
+                    <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.7655 0.0054 230.76)">Dev pipeline</span>
+                    <button type="button" style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.3415 0.0049 230.86);background:oklch(0.2378 0.0029 230.83);color:oklch(0.8455 0.0035 230.72);font-size:13px;font-weight:500;cursor:pointer">
+                      Forward
+                      <span style="display:inline-block;flex:none;width:13px;height:13px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/arrow-up-right.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/arrow-up-right.svg) center/contain no-repeat"></span>
+                    </button>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;padding:0 16px 14px">
+                    <div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:oklch(0.1932 0.002 230.81)">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:oklch(0.7655 0.0054 230.76);padding:2px 4px;border-radius:4px;background:oklch(0.2378 0.0029 230.83)">GRO</span>
+                      <span style="font-size:13px;color:oklch(0.9235 0.0017 230.68);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Growatt Core</span>
+                      <span style="margin-left:auto;display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:oklch(0.3042 0.0853 45.16);color:oklch(0.9244 0.1203 95.85);font-size:11px">Pending</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px 8px">
+                    <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:oklch(0.7655 0.0054 230.76)">Linked issues</span>
+                    <button type="button" style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border-radius:6px;border:1px solid oklch(0.3415 0.0049 230.86);background:oklch(0.2378 0.0029 230.83);color:oklch(0.8455 0.0035 230.72);font-size:13px;font-weight:500;cursor:pointer">
+                      <span style="display:inline-block;flex:none;width:13px;height:13px;background:currentColor;-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/plus.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/plus.svg) center/contain no-repeat"></span>
+                      Add
+                    </button>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;padding:0 16px 16px">
+                    <div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:oklch(0.1932 0.002 230.81)">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:oklch(0.7655 0.0054 230.76)">GRO-123</span>
+                      <span style="font-size:13px;color:oklch(0.9235 0.0017 230.68);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Timeout no endpoint /devices</span>
+                      <span style="margin-left:auto;display:inline-block;flex:none;width:13px;height:13px;background:oklch(0.7655 0.0054 230.76);-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/external-link.svg) center/contain no-repeat;mask:url(https://unpkg.com/lucide-static@0.544.0/icons/external-link.svg) center/contain no-repeat"></span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;noteAccent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;amber&quot;,&quot;purple&quot;,&quot;slate&quot;],&quot;default&quot;:&quot;amber&quot;,&quot;tsType&quot;:&quot;\&quot;amber\&quot; | \&quot;purple\&quot; | \&quot;slate\&quot;&quot;,&quot;section&quot;:&quot;Conversa&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;\&quot;comfortable\&quot; | \&quot;compact\&quot;&quot;,&quot;section&quot;:&quot;Fila&quot;},&quot;showTicketPreview&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Fila&quot;}}">
+const T = {
+  s1: "oklch(0.1932 0.002 230.81)",
+  s2: "oklch(0.2158 0.0025 230.82)",
+  l2: "oklch(0.2378 0.0029 230.83)",
+  bd: "oklch(0.2593 0.0033 230.84)",
+  bdStrong: "oklch(0.3415 0.0049 230.86)",
+  t1: "oklch(0.9235 0.0017 230.68)",
+  t2: "oklch(0.8455 0.0035 230.72)",
+  t3: "oklch(0.7655 0.0054 230.76)",
+  t4: "oklch(0.6835 0.0074 230.81)",
+  acc: "oklch(0.6311 0.1263 238.01)",
+  accSub: "oklch(0.2029 0.03 232.24)",
+  accText: "oklch(0.7408 0.1003 233.89)",
+};
+
+const PRIO = {
+  Alta: { color: "oklch(0.6802 0.1633 50.67)", bg: "oklch(0.2896 0.0746 51.86)", icon: "signal-high" },
+  "Média": { color: "oklch(0.79 0.1466 82.04)", bg: "oklch(0.3142 0.0586 82.21)", icon: "signal-medium" },
+  Baixa: { color: "oklch(0.6322 0.1556 262.59)", bg: "oklch(0.2308 0.0713 261.96)", icon: "signal-low" },
+};
+
+const STATUS = {
+  Aberto: { color: "oklch(0.6802 0.1633 50.67)", bg: "oklch(0.3042 0.0853 45.16)", text: "oklch(0.9244 0.1203 95.85)" },
+  "Em andamento": { color: "oklch(0.6311 0.1263 238.01)", bg: "oklch(0.2029 0.03 232.24)", text: "oklch(0.7408 0.1003 233.89)" },
+  "Aguardando cliente": { color: "oklch(0.7655 0.0054 230.76)", bg: "oklch(0.2593 0.0033 230.84)", text: "oklch(0.8455 0.0035 230.72)" },
+  Resolvido: { color: "oklch(0.5296 0.1495 148.99)", bg: "oklch(0.2721 0.0673 152.52)", text: "oklch(0.9258 0.0845 155.86)" },
+};
+
+const NOTE_ACCENTS = {
+  amber: { bg: "oklch(0.3042 0.0853 45.16 / 45%)", border: "oklch(0.557 0.1583 45.36)", text: "oklch(0.9617 0.0592 95.89)", tagBg: "oklch(0.3042 0.0853 45.16)", tagText: "oklch(0.9244 0.1203 95.85)", avatar: "oklch(0.4747 0.1358 44.98)" },
+  purple: { bg: "oklch(0.2861 0.0795 287.41 / 55%)", border: "oklch(0.42 0.1303 287.25)", text: "oklch(0.8808 0.0343 293.03)", tagBg: "oklch(0.2861 0.0795 287.41)", tagText: "oklch(0.8808 0.0343 293.03)", avatar: "oklch(0.42 0.1303 287.25)" },
+  slate: { bg: "oklch(0.2378 0.0029 230.83)", border: "oklch(0.3415 0.0049 230.86)", text: "oklch(0.8455 0.0035 230.72)", tagBg: "oklch(0.2593 0.0033 230.84)", tagText: "oklch(0.7655 0.0054 230.76)", avatar: "oklch(0.3415 0.0049 230.86)" },
+};
+
+const DATE_FILTERS = [
+  { key: "yesterday", label: "Yesterday" },
+  { key: "last_7_days", label: "Last 7 days" },
+  { key: "last_30_days", label: "Last 30 days" },
+  { key: "last_3_months", label: "Last 3 months" },
+];
+const PORTALS = ["All portals", "Suporte N1", "Vendas"];
+
+const icon = (name, size, color) =>
+  "display:inline-block;flex:none;width:" + size + "px;height:" + size + "px;background:" + color +
+  ";-webkit-mask:url(https://unpkg.com/lucide-static@0.544.0/icons/" + name + ".svg) center/contain no-repeat" +
+  ";mask:url(https://unpkg.com/lucide-static@0.544.0/icons/" + name + ".svg) center/contain no-repeat";
+
+const TICKETS = [
+  { id: "#ITR-2026-0063", title: "E-mail de confirmação não chega ao cliente", prio: "Alta", status: "Em andamento", who: "Pedro Cezar", email: "pedro.cezar@growatt.com", when: "Agora", unread: true, channel: "E-mail", preview: "Enviamos o cadastro mas o cliente não recebe nada." },
+  { id: "#ITR-2026-0062", title: "Erro 500 na API ao enviar dados", prio: "Média", status: "Aberto", who: "Ana Silva", email: "ana.silva@growatt.com", when: "1h", unread: true, channel: "API", preview: "POST /v1/devices retorna 500 desde ontem à noite." },
+  { id: "#ITR-2026-0061", title: "Dúvida sobre integração com o ERP", prio: "Baixa", status: "Aguardando cliente", who: "João Souza", email: "joao.souza@growatt.com", when: "2h", unread: false, channel: "Formulário", preview: "Precisa saber qual campo mapeia o código do cliente." },
+  { id: "#ITR-2026-0060", title: "Não consigo fazer login no portal", prio: "Alta", status: "Aberto", who: "Mariana Lima", email: "mariana.lima@growatt.com", when: "3h", unread: false, channel: "Formulário", preview: "Senha redefinida três vezes e continua barrando." },
+  { id: "#ITR-2026-0059", title: "Falha ao gerar relatório mensal", prio: "Média", status: "Em andamento", who: "Carlos Eduardo", email: "carlos.e@growatt.com", when: "5h", unread: false, channel: "E-mail", preview: "Exportação em PDF trava em 80%." },
+  { id: "#ITR-2026-0058", title: "Solicitação de acesso ao sistema", prio: "Baixa", status: "Resolvido", who: "Fernanda Costa", email: "fernanda.costa@growatt.com", when: "1d", unread: false, channel: "Formulário", preview: "Novo integrante do time comercial." },
+  { id: "#ITR-2026-0057", title: "Webhook não está recebendo eventos", prio: "Média", status: "Aguardando cliente", who: "Rafael Martins", email: "rafael.martins@growatt.com", when: "1d", unread: false, channel: "API", preview: "Últimos eventos registrados foram no dia 26." },
+];
+
+const BASE_THREADS = {
+  "#ITR-2026-0063": [
+    { kind: "customer", name: "Pedro Cezar", initial: "P", time: "27/07/2026, 14:41", body: "Bom dia! Cadastramos três clientes ontem e nenhum recebeu o e-mail de confirmação.\nJá conferimos a caixa de spam.", attach: "cadastro-clientes.csv" },
+    { kind: "note", name: "Laura", initial: "L", time: "27/07/2026, 14:52", body: "Cliente relatou problema relacionado à API de envio.\nVou verificar com o time técnico antes de responder." },
+    { kind: "agent", name: "Laura (você)", initial: "L", time: "27/07/2026, 15:03", body: "Olá Pedro, tudo bem?\n\nRecebemos sua mensagem e já estamos verificando o problema com nossa API de envio.\nEm breve retornamos com mais informações.\n\nAtenciosamente,\nLaura — Suporte Growatt" },
+    { kind: "event", time: "27/07/2026, 15:03", body: "Status alterado de Aberto para Em andamento por Laura" },
+  ],
+};
+
+const genericThread = (t) => [
+  { kind: "customer", name: t.who, initial: t.who.charAt(0), time: t.when + " atrás", body: t.preview },
+  { kind: "agent", name: "Laura (você)", initial: "L", time: t.when + " atrás", body: "Olá! Recebemos seu chamado e já estamos analisando. Retornamos assim que tivermos uma posição." },
+];
+
+class Component extends DCLogic {
+  state = {
+    idxA: 0, tabA: "conv", modeA: "reply", draftA: "",
+    idxB: 0, tabB: "conv", modeB: "reply", draftB: "",
+    secTicket: true, secCust: true, secClass: true,
+    extra: {}, statusOverride: {},
+    dateFilterIdx: 1, portalIdx: 0,
+  };
+
+  threadFor(t) {
+    const base = BASE_THREADS[t.id] || genericThread(t);
+    return base.concat(this.state.extra[t.id] || []);
+  }
+
+  statusOf(t) {
+    return this.state.statusOverride[t.id] || t.status;
+  }
+
+  prioChip(prio, size) {
+    const p = PRIO[prio] || PRIO["Média"];
+    return {
+      style: "display:inline-flex;align-items:center;gap:3px;flex:none;height:" + (size === "sm" ? 18 : 20) +
+        "px;padding:0 6px;border-radius:4px;background:" + p.bg + ";color:" + p.color + ";font-size:11px;font-weight:500",
+      iconStyle: icon(p.icon, 12, "currentColor"),
+    };
+  }
+
+  statusPill(name) {
+    const s = STATUS[name] || STATUS.Aberto;
+    return "display:inline-flex;align-items:center;flex:none;height:20px;padding:0 8px;border-radius:6px;background:" +
+      s.bg + ";color:" + s.text + ";font-size:11px;font-weight:500";
+  }
+
+  decorate(t) {
+    const status = this.statusOf(t);
+    const chip = this.prioChip(t.prio);
+    const s = STATUS[status] || STATUS.Aberto;
+    return {
+      ...t,
+      status,
+      initial: t.who.charAt(0),
+      prioStyle: chip.style,
+      prioIconStyle: chip.iconStyle,
+      statusPillStyle: this.statusPill(status),
+      statusBtnStyle: "display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;border:1px solid " +
+        T.bd + ";background:" + T.s2 + ";color:" + s.text + ";font-size:12px;font-weight:500;cursor:pointer",
+      statusDotStyle: "display:inline-block;width:6px;height:6px;flex:none;border-radius:9999px;background:" + s.color,
+    };
+  }
+
+  buildThread(t, noteAccent) {
+    const na = NOTE_ACCENTS[noteAccent] || NOTE_ACCENTS.amber;
+    return this.threadFor(t).map((m, i) => {
+      if (m.kind === "event") return { key: "e" + i, isEvent: true, isMsg: false, body: m.body, time: m.time };
+      const isAgent = m.kind === "agent";
+      const isNote = m.kind === "note";
+      let bubble, avatar, tag = "", tagStyle = "", hasTag = false;
+      if (isNote) {
+        bubble = "max-width:100%;padding:10px 14px;border-radius:10px;background:" + na.bg + ";border:1px solid " + na.border + ";color:" + na.text;
+        avatar = na.avatar;
+        tag = "Internal note";
+        hasTag = true;
+        tagStyle = "display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:4px;background:" + na.tagBg + ";color:" + na.tagText + ";font-size:11px;font-weight:500";
+      } else if (isAgent) {
+        bubble = "max-width:100%;padding:10px 14px;border-radius:10px;background:" + T.accSub + ";border:1px solid oklch(0.3208 0.0581 236.44);color:" + T.t1;
+        avatar = "oklch(0.4965 0.1172 149.18)";
+        tag = "Sent via Portal + Email";
+        hasTag = true;
+        tagStyle = "display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;background:" + T.bd + ";color:" + T.t3 + ";font-size:11px";
+      } else {
+        bubble = "max-width:100%;padding:10px 14px;border-radius:10px;background:" + T.s2 + ";border:1px solid " + T.bd + ";color:" + T.t1;
+        avatar = "oklch(0.3862 0.1436 262.12)";
+      }
+      const alignEnd = isAgent;
+      return {
+        key: "m" + i,
+        isEvent: false,
+        isMsg: true,
+        name: m.name,
+        initial: m.initial,
+        time: m.time,
+        body: m.body,
+        hasAttach: !!m.attach,
+        attach: m.attach || "",
+        hasTag,
+        tag,
+        tagStyle,
+        rowStyle: "display:flex;gap:10px;align-items:flex-start;flex-direction:" + (alignEnd ? "row-reverse" : "row"),
+        avatarStyle: "display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;margin-top:20px;border-radius:9999px;background:" + avatar + ";color:#fff;font-size:11px;font-weight:600",
+        colStyle: "display:flex;flex-direction:column;gap:5px;min-width:0;max-width:78%;align-items:" + (alignEnd ? "flex-end" : "flex-start"),
+        metaStyle: "display:flex;align-items:center;gap:8px;flex-direction:" + (alignEnd ? "row-reverse" : "row"),
+        bubbleStyle: bubble,
+      };
+    });
+  }
+
+  tabList(active, onPick) {
+    const defs = [
+      { key: "conv", label: "Conversation" },
+      { key: "att", label: "Attachments", count: 1 },
+      { key: "act", label: "Activity" },
+      { key: "hist", label: "History" },
+    ];
+    return defs.map((d) => ({
+      key: d.key,
+      label: d.label,
+      hasCount: d.count != null,
+      count: d.count,
+      onClick: () => onPick(d.key),
+      style: "display:inline-flex;align-items:center;gap:6px;height:34px;padding:0;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:" +
+        (active === d.key ? T.t1 : T.t4) + ";box-shadow:" + (active === d.key ? "inset 0 -2px 0 0 " + T.acc : "none"),
+    }));
+  }
+
+  composer(mode, draft, accentKey) {
+    const na = NOTE_ACCENTS[accentKey] || NOTE_ACCENTS.amber;
+    const isNote = mode === "note";
+    return {
+      boxStyle: "border-radius:8px;border:1px solid " + (isNote ? na.border : T.bd) + ";background:" + (isNote ? na.bg : T.s2),
+      placeholder: isNote ? "Contexto interno para o time…" : "Escreva sua resposta…",
+      sendLabel: isNote ? "Save note" : "Send",
+      sendStyle: "display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;background:" +
+        (draft.trim() ? (isNote ? na.border : T.acc) : T.l2) + ";color:" + (draft.trim() ? T.t1 : T.t4),
+      replyTab: "height:26px;padding:0;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:" +
+        (isNote ? T.t4 : T.t1) + ";box-shadow:" + (isNote ? "none" : "inset 0 -2px 0 0 " + T.acc),
+      noteTab: "height:26px;padding:0;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:" +
+        (isNote ? na.tagText : T.t4) + ";box-shadow:" + (isNote ? "inset 0 -2px 0 0 " + na.border : "none"),
+    };
+  }
+
+  send(which) {
+    const key = which === "a" ? "draftA" : "draftB";
+    const idx = which === "a" ? this.state.idxA : this.state.idxB;
+    const mode = which === "a" ? this.state.modeA : this.state.modeB;
+    const text = (this.state[key] || "").trim();
+    if (!text) return;
+    const t = TICKETS[idx];
+    const entry = {
+      kind: mode === "note" ? "note" : "agent",
+      name: mode === "note" ? "Laura" : "Laura (você)",
+      initial: "L",
+      time: "Agora",
+      body: text,
+    };
+    this.setState((s) => ({
+      [key]: "",
+      extra: { ...s.extra, [t.id]: (s.extra[t.id] || []).concat([entry]) },
+    }));
+  }
+
+  emptyCopy(tab) {
+    if (tab === "att") return ["Attachments", "1 arquivo enviado pelo cliente neste ticket."];
+    if (tab === "act") return ["Activity", "Alterações de status, responsável e SLA aparecem aqui."];
+    return ["History", "Tickets anteriores do mesmo cliente aparecem aqui."];
+  }
+
+  renderVals() {
+    const noteAccent = this.props.noteAccent ?? "amber";
+    const density = this.props.density ?? "comfortable";
+    const showPreview = this.props.showTicketPreview ?? true;
+    const rowPad = density === "compact" ? "8px 14px" : "11px 14px";
+
+    const activeRaw = TICKETS[this.state.idxA];
+
+    const tickets = TICKETS.map((t, i) => {
+      const selected = i === this.state.idxA;
+      const chip = this.prioChip(t.prio, "sm");
+      return {
+        ...t,
+        key: t.id,
+        status: this.statusOf(t),
+        prioStyle: chip.style,
+        prioIconStyle: chip.iconStyle,
+        statusPillStyle: this.statusPill(this.statusOf(t)),
+        rowStyle: "position:relative;display:flex;flex-direction:column;gap:4px;padding:" + rowPad +
+          ";border-bottom:1px solid " + T.bd + ";cursor:pointer;background:" + (selected ? "oklch(1 0 0 / 6%)" : "transparent"),
+        activeBarStyle: selected
+          ? "position:absolute;left:0;top:0;bottom:0;width:2px;background:" + T.acc
+          : "display:none",
+        titleStyle: "margin:0;font-size:13px;line-height:1.35;color:" + (selected || t.unread ? T.t1 : T.t2) +
+          ";font-weight:" + (t.unread ? 600 : 500) + ";white-space:nowrap;overflow:hidden;text-overflow:ellipsis",
+        unreadStyle: t.unread
+          ? "display:inline-block;width:6px;height:6px;border-radius:9999px;background:" + T.acc + ";margin-left:auto"
+          : "display:none",
+        onSelect: () => this.setState({ idxA: i, tabA: "conv" }),
+      };
+    });
+
+    const compA = this.composer(this.state.modeA, this.state.draftA, noteAccent);
+    const emptyA = this.emptyCopy(this.state.tabA);
+
+    const chev = (open) =>
+      icon("chevron-down", 14, T.t3) + ";transform:rotate(" + (open ? 0 : -90) + "deg);transition:transform .15s";
+
+    return {
+      showPreview,
+      tickets,
+      inboxViews: [
+        { key: "mine", label: "My conversations", count: 12, icon: "user-round" },
+        { key: "unassigned", label: "Unassigned", count: 8, icon: "circle-dashed" },
+        { key: "all", label: "All", count: 45, icon: "inbox" },
+      ].map((v, i) => ({
+        ...v,
+        rowStyle: "display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-radius:6px;cursor:pointer;background:" +
+          (i === 2 ? "oklch(1 0 0 / 10%)" : "transparent") + ";color:" + (i === 2 ? T.t1 : T.t2),
+        iconStyle: icon(v.icon, 14, "currentColor"),
+        onClick: () => undefined,
+      })),
+      quickFilters: [
+        { key: "sla", label: "SLA at risk", count: 7, color: "oklch(0.6802 0.1633 50.67)" },
+        { key: "wait", label: "Waiting on customer", count: 10, color: "oklch(0.79 0.1466 82.04)" },
+        { key: "hold", label: "On hold", count: 6, color: "oklch(0.7655 0.0054 230.76)" },
+        { key: "res", label: "Resolved", count: 120, color: "oklch(0.5296 0.1495 148.99)" },
+      ].map((f) => ({
+        ...f,
+        dotStyle: "display:inline-block;flex:none;width:6px;height:6px;border-radius:9999px;background:" + f.color,
+      })),
+      channels: [
+        { key: "email", label: "Email", count: 32, icon: "mail" },
+        { key: "form", label: "Form", count: 8, icon: "file-text" },
+        { key: "api", label: "API", count: 3, icon: "code" },
+        { key: "other", label: "Other", count: 2, icon: "circle-help" },
+      ].map((c) => ({ ...c, iconStyle: icon(c.icon, 14, "currentColor") })),
+
+      active: this.decorate(activeRaw),
+      thread: this.buildThread(activeRaw, noteAccent),
+      tabsA: this.tabList(this.state.tabA, (k) => this.setState({ tabA: k })),
+      isConvA: this.state.tabA === "conv",
+      isOtherA: this.state.tabA !== "conv",
+      tabEmptyTitleA: emptyA[0],
+      tabEmptyBodyA: emptyA[1],
+      draftA: this.state.draftA,
+      onDraftA: (e) => this.setState({ draftA: e.target.value }),
+      onKeyA: (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); this.send("a"); } },
+      sendA: () => this.send("a"),
+      setReplyA: () => this.setState({ modeA: "reply" }),
+      setNoteA: () => this.setState({ modeA: "note" }),
+      composerStyleA: compA.boxStyle,
+      composerPlaceholderA: compA.placeholder,
+      sendLabelA: compA.sendLabel,
+      sendBtnStyleA: compA.sendStyle,
+      replyTabStyleA: compA.replyTab,
+      noteTabStyleA: compA.noteTab,
+      cycleStatus: () => {
+        const names = Object.keys(STATUS);
+        const t = TICKETS[this.state.idxA];
+        const next = names[(names.indexOf(this.statusOf(t)) + 1) % names.length];
+        this.setState((s) => ({ statusOverride: { ...s.statusOverride, [t.id]: next } }));
+      },
+      secTicket: this.state.secTicket,
+      secCust: this.state.secCust,
+      secClass: this.state.secClass,
+      chevTicket: chev(this.state.secTicket),
+      chevCust: chev(this.state.secCust),
+      chevClass: chev(this.state.secClass),
+      toggleTicketSec: () => this.setState((s) => ({ secTicket: !s.secTicket })),
+      toggleCustSec: () => this.setState((s) => ({ secCust: !s.secCust })),
+      toggleClassSec: () => this.setState((s) => ({ secClass: !s.secClass })),
+      dateFilterLabel: DATE_FILTERS[this.state.dateFilterIdx].label,
+      cycleDateFilter: () => this.setState((s) => ({ dateFilterIdx: (s.dateFilterIdx + 1) % DATE_FILTERS.length })),
+      portalLabel: PORTALS[this.state.portalIdx],
+      cyclePortal: () => this.setState((s) => ({ portalIdx: (s.portalIdx + 1) % PORTALS.length })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

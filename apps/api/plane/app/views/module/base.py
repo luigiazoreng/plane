@@ -59,6 +59,8 @@ from plane.db.models import (
     ModuleUserProperties,
     Project,
     UserRecentVisit,
+    NUMERIC_ESTIMATE_TYPES,
+    project_has_active_numeric_estimate,
 )
 from plane.utils.analytics_plot import burndown_plot
 from plane.utils.timezone_converter import user_timezone_converter
@@ -144,7 +146,7 @@ class ModuleViewSet(BaseViewSet):
         )
         completed_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="completed",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -156,7 +158,7 @@ class ModuleViewSet(BaseViewSet):
 
         total_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
             )
@@ -166,7 +168,7 @@ class ModuleViewSet(BaseViewSet):
         )
         backlog_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="backlog",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -177,7 +179,7 @@ class ModuleViewSet(BaseViewSet):
         )
         unstarted_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="unstarted",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -188,7 +190,7 @@ class ModuleViewSet(BaseViewSet):
         )
         started_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="started",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -199,7 +201,7 @@ class ModuleViewSet(BaseViewSet):
         )
         cancelled_estimate_point = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 state__group="cancelled",
                 issue_module__module_id=OuterRef("pk"),
                 issue_module__deleted_at__isnull=True,
@@ -414,12 +416,7 @@ class ModuleViewSet(BaseViewSet):
         if not queryset.exists():
             return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        estimate_type = Project.objects.filter(
-            workspace__slug=slug,
-            pk=project_id,
-            estimate__isnull=False,
-            estimate__type="points",
-        ).exists()
+        estimate_type = project_has_active_numeric_estimate(slug, project_id)
 
         data = ModuleDetailSerializer(queryset.first()).data
         modules = queryset.first()
@@ -427,6 +424,11 @@ class ModuleViewSet(BaseViewSet):
         data["estimate_distribution"] = {}
 
         if estimate_type:
+            # Only Points/Time estimate values are numeric; a Categories estimate can
+            # still be active on the same project, so scope every Sum(Cast(...)) via
+            # `filter=` rather than the base queryset, so assignees/labels whose
+            # issues aren't numerically estimated still appear with a 0/None total.
+            numeric_point = Q(estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES)
             assignee_distribution = (
                 Issue.issue_objects.filter(
                     issue_module__module_id=pk,
@@ -465,11 +467,12 @@ class ModuleViewSet(BaseViewSet):
                     "avatar_url",
                     "display_name",
                 )
-                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
                 .annotate(
                     completed_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=False,
                             archived_at__isnull=True,
                             is_draft=False,
@@ -479,7 +482,8 @@ class ModuleViewSet(BaseViewSet):
                 .annotate(
                     pending_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=True,
                             archived_at__isnull=True,
                             is_draft=False,
@@ -500,11 +504,12 @@ class ModuleViewSet(BaseViewSet):
                 .annotate(color=F("labels__color"))
                 .annotate(label_id=F("labels__id"))
                 .values("label_name", "color", "label_id")
-                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
                 .annotate(
                     completed_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=False,
                             archived_at__isnull=True,
                             is_draft=False,
@@ -514,7 +519,8 @@ class ModuleViewSet(BaseViewSet):
                 .annotate(
                     pending_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=True,
                             archived_at__isnull=True,
                             is_draft=False,

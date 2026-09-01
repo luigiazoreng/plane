@@ -111,4 +111,4 @@ build/
 temp/
 scripts/
 migration-data-trello
-.claude
+.playwright-mcp

@@ -2,8 +2,9 @@
 from rest_framework import serializers
 
 # Module imports
-from plane.db.models import KpiConfig, KpiIssueAttribute
+from plane.db.models import KpiConfig, KpiIssueAttribute, WorkspaceKpiAccess
 from plane.app.serializers.base import BaseSerializer
+from plane.app.serializers.user import UserLiteSerializer
 
 READ_ONLY_BASE = ["workspace", "created_at", "updated_at", "created_by", "updated_by", "deleted_at"]
 
@@ -33,27 +34,12 @@ class KpiConfigSerializer(BaseSerializer):
                     )
         return value
 
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        if self.context.get("project_estimates_allowed") is False:
-            errors = {
-                field: "Workspace default configs cannot reference project estimates."
-                for field in ("difficulty_estimate", "repetitive_estimate")
-                if attrs.get(field, getattr(self.instance, field, None)) is not None
-            }
-            if errors:
-                raise serializers.ValidationError(errors)
-            return attrs
-
-        project_id = self.context.get("project_id")
-        if not project_id:
-            return attrs
-
-        for field in ("difficulty_estimate", "repetitive_estimate"):
-            estimate = attrs.get(field, getattr(self.instance, field, None))
-            if estimate is not None and str(estimate.project_id) != str(project_id):
-                raise serializers.ValidationError({field: "Estimate must belong to this project."})
-        return attrs
+    # Which estimate backs Difficulty/Repetitive is no longer a KpiConfig field
+    # (no more difficulty_estimate/repetitive_estimate) -- it's the project's
+    # EstimateProperty rows tagged kpi_role (plane.db.models.estimate), managed
+    # via EstimatePropertyKpiRoleEndpoint instead. tables.difficulty/
+    # tables.repetitive here are still keyed by EstimatePoint id (see migration
+    # 0145_kpi_difficulty_rekey_by_point_id).
 
 
 class KpiIssueAttributeSerializer(BaseSerializer):
@@ -63,10 +49,23 @@ class KpiIssueAttributeSerializer(BaseSerializer):
             "id",
             "issue",
             "repetitive",
-            "difficulty_estimate_point",
-            "repetitive_estimate_point",
             "type_override",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "issue", "created_at", "updated_at"]
+
+
+class WorkspaceKpiAccessSerializer(BaseSerializer):
+    """A single grant to the workspace KPI panels.
+
+    ``member_detail`` is expanded so the settings screen can render the person
+    without a second round trip, matching HelpdeskMemberSerializer.
+    """
+
+    member_detail = UserLiteSerializer(source="member", read_only=True)
+
+    class Meta:
+        model = WorkspaceKpiAccess
+        fields = "__all__"
+        read_only_fields = READ_ONLY_BASE + ["workspace"]

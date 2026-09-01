@@ -10,6 +10,9 @@ from plane.app.views.helpdesk import (
     PublicHelpdeskCustomerResetPasswordEndpoint,
     HelpdeskPortalViewSet,
     PublicHelpdeskPortalEndpoint,
+    HelpdeskPortalEmailLogsEndpoint,
+    HelpdeskPortalIMAPLogsEndpoint,
+    HelpdeskPortalIMAPSyncEndpoint,
     HelpdeskFormViewSet,
     HelpdeskFormFieldViewSet,
     PublicHelpdeskFormListEndpoint,
@@ -26,7 +29,15 @@ from plane.app.views.helpdesk import (
     HelpdeskAnalyticsEndpoint,
     HelpdeskMemberViewSet,
     HelpdeskCustomerViewSet,
+    HelpdeskAssetEndpoint,
+    PublicHelpdeskAssetEndpoint,
+    HelpdeskRequestActivityViewSet,
+    HelpdeskCustomerHistoryEndpoint,
+    HelpdeskCustomerStatsEndpoint,
+    HelpdeskTeamViewSet,
+    HelpdeskMacroViewSet,
 )
+from plane.app.views.helpdesk.inbound import PublicHelpdeskInboundEmailEndpoint
 
 urlpatterns = [
     # --- Customer auth (workspace-level) ---
@@ -39,6 +50,38 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/register/",
         HelpdeskCustomerRegisterEndpoint.as_view(),
         name="helpdesk-customer-register",
+    ),
+
+    # --- Team management (workspace-level) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/teams/",
+        HelpdeskTeamViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-teams",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/teams/<uuid:pk>/",
+        HelpdeskTeamViewSet.as_view({
+            "get": "retrieve",
+            "patch": "partial_update",
+            "delete": "destroy",
+        }),
+        name="helpdesk-team-detail",
+    ),
+
+    # --- Macro management (workspace-level) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/macros/",
+        HelpdeskMacroViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-macros",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/macros/<uuid:pk>/",
+        HelpdeskMacroViewSet.as_view({
+            "get": "retrieve",
+            "patch": "partial_update",
+            "delete": "destroy",
+        }),
+        name="helpdesk-macro-detail",
     ),
 
     # --- Status management (workspace-level) ---
@@ -82,6 +125,32 @@ urlpatterns = [
             "delete": "destroy",
         }),
         name="helpdesk-portal-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/email-logs/",
+        HelpdeskPortalEmailLogsEndpoint.as_view(),
+        name="helpdesk-portal-email-logs",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/imap-logs/",
+        HelpdeskPortalIMAPLogsEndpoint.as_view(),
+        name="helpdesk-portal-imap-logs",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/portals/<uuid:pk>/imap-sync/",
+        HelpdeskPortalIMAPSyncEndpoint.as_view(),
+        name="helpdesk-portal-imap-sync",
+    ),
+    # --- Attachments (agent) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/assets/",
+        HelpdeskAssetEndpoint.as_view(),
+        name="helpdesk-asset",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/assets/<uuid:asset_id>/",
+        HelpdeskAssetEndpoint.as_view(),
+        name="helpdesk-asset-detail",
     ),
     path(
         "workspaces/<str:slug>/helpdesk/forms/",
@@ -192,6 +261,36 @@ urlpatterns = [
         HelpdeskRequestViewSet.as_view({"post": "archive", "delete": "unarchive"}),
         name="helpdesk-request-archive-unarchive",
     ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/mark-read/",
+        HelpdeskRequestViewSet.as_view({"post": "mark_read"}),
+        name="helpdesk-request-mark-read",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/bookmark/",
+        HelpdeskRequestViewSet.as_view({"post": "toggle_bookmark"}),
+        name="helpdesk-request-bookmark",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/snooze/",
+        HelpdeskRequestViewSet.as_view({"post": "snooze"}),
+        name="helpdesk-request-snooze",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:request_pk>/activities/",
+        HelpdeskRequestActivityViewSet.as_view({"get": "list"}),
+        name="helpdesk-request-activities",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/customer-history/",
+        HelpdeskCustomerHistoryEndpoint.as_view(),
+        name="helpdesk-request-customer-history",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:pk>/customer-stats/",
+        HelpdeskCustomerStatsEndpoint.as_view(),
+        name="helpdesk-request-customer-stats",
+    ),
 
     # --- Request → Issue links ---
     path(
@@ -249,7 +348,7 @@ urlpatterns = [
     # --- Customer management (admin) ---
     path(
         "workspaces/<str:slug>/helpdesk/customers/",
-        HelpdeskCustomerViewSet.as_view({"get": "list"}),
+        HelpdeskCustomerViewSet.as_view({"get": "list", "post": "create"}),
         name="helpdesk-customer-list",
     ),
     path(
@@ -282,5 +381,24 @@ urlpatterns = [
         "helpdesk/public/portals/<str:public_slug>/requests/<uuid:request_pk>/comments/",
         PublicHelpdeskCommentEndpoint.as_view(),
         name="public-helpdesk-comment",
+    ),
+
+    # --- Attachments (public portal) ---
+    path(
+        "helpdesk/public/portals/<str:public_slug>/assets/",
+        PublicHelpdeskAssetEndpoint.as_view(),
+        name="public-helpdesk-asset",
+    ),
+    path(
+        "helpdesk/public/portals/<str:public_slug>/assets/<uuid:asset_id>/",
+        PublicHelpdeskAssetEndpoint.as_view(),
+        name="public-helpdesk-asset-detail",
+    ),
+
+    # --- Inbound Email Webhook ---
+    path(
+        "helpdesk/public/inbound/",
+        PublicHelpdeskInboundEmailEndpoint.as_view(),
+        name="public-helpdesk-inbound",
     ),
 ]

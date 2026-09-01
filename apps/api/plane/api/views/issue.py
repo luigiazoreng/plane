@@ -14,6 +14,7 @@ from django.db import IntegrityError
 from django.db.models import (
     Case,
     CharField,
+    Count,
     Exists,
     F,
     Func,
@@ -30,6 +31,7 @@ from django.conf import settings
 
 # Third party imports
 from rest_framework import status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 
 # drf-spectacular imports
@@ -63,6 +65,7 @@ from plane.app.permissions import (
     ProjectEntityPermission,
     ProjectLitePermission,
     ProjectMemberPermission,
+    WorkspaceUserPermission,
 )
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.db.models import (
@@ -79,6 +82,7 @@ from plane.db.models import (
     Workspace,
 )
 from plane.settings.storage import S3Storage
+from plane.utils.filters import ComplexFilterBackend, IssueFilterSet
 from plane.utils.path_validator import sanitize_filename
 from plane.bgtasks.storage_metadata_task import get_asset_object_metadata
 from .base import BaseAPIView
@@ -258,6 +262,8 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
     permission_classes = [ProjectEntityPermission]
     serializer_class = IssueSerializer
     use_read_replica = True
+    filter_backends = (ComplexFilterBackend,)
+    filterset_class = IssueFilterSet
 
     def get_queryset(self):
         return (
@@ -354,7 +360,13 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
             )
         )
 
-        total_issue_queryset = Issue.issue_objects.filter(project_id=project_id, workspace__slug=slug)
+        issue_queryset = ComplexFilterBackend().filter_queryset(request, issue_queryset, self)
+
+        total_issue_queryset = ComplexFilterBackend().filter_queryset(
+            request,
+            Issue.issue_objects.filter(project_id=project_id, workspace__slug=slug),
+            self,
+        )
 
         # Priority Ordering
         if order_by_param == "priority" or order_by_param == "-priority":
@@ -492,6 +504,206 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
             )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WorkspaceIssueListAPIEndpoint(BaseAPIView):
+    """List work items across every project in the workspace the caller belongs to.
+
+    Scoped the same way IssueSearchEndpoint already scopes workspace-wide issue
+    search -- active membership in a non-archived project -- so this can't leak
+    issues from projects the caller can't otherwise see. Supports the same
+    `filters` JSON parameter as the project-scoped IssueListCreateAPIEndpoint
+    (via the shared ComplexFilterBackend/IssueFilterSet), but not that
+    endpoint's custom priority/state ordering -- only plain field ordering.
+    """
+
+    model = Issue
+    permission_classes = [WorkspaceUserPermission]
+    serializer_class = IssueSerializer
+    use_read_replica = True
+    filter_backends = (ComplexFilterBackend,)
+    filterset_class = IssueFilterSet
+
+    def get_queryset(self, slug):
+        return (
+            Issue.issue_objects.filter(
+                workspace__slug=slug,
+                project__project_projectmember__member=self.request.user,
+                project__project_projectmember__is_active=True,
+                project__archived_at__isnull=True,
+            )
+            .select_related("project", "workspace", "state", "parent")
+            .prefetch_related("assignees", "labels")
+            .distinct()
+        )
+
+    @work_item_docs(
+        operation_id="list_workspace_work_items",
+        summary="List work items across the workspace",
+        description=(
+            "Retrieve a paginated list of work items across every project in the workspace "
+            "the caller is an active member of. Supports the `filters` query parameter "
+            "(see the project-scoped work items list endpoint)."
+        ),
+        parameters=[
+            CURSOR_PARAMETER,
+            PER_PAGE_PARAMETER,
+            ORDER_BY_PARAMETER,
+            FIELDS_PARAMETER,
+            EXPAND_PARAMETER,
+        ],
+        responses={
+            200: create_paginated_response(
+                IssueSerializer,
+                "PaginatedWorkspaceWorkItemResponse",
+                "Paginated list of work items across the workspace",
+                "Paginated Workspace Work Items",
+            ),
+            404: WORKSPACE_NOT_FOUND_RESPONSE,
+        },
+    )
+    def get(self, request, slug):
+        """List work items across the workspace, scoped to the caller's projects."""
+        order_by_param = request.GET.get("order_by", "-created_at")
+
+        issue_queryset = ComplexFilterBackend().filter_queryset(request, self.get_queryset(slug), self)
+        issue_queryset = issue_queryset.order_by(order_by_param)
+
+        return self.paginate(
+            request=request,
+            queryset=issue_queryset,
+            total_count_queryset=issue_queryset,
+            on_results=lambda issues: IssueSerializer(issues, many=True, fields=self.fields, expand=self.expand).data,
+        )
+
+
+class WorkItemCountAPIEndpoint(BaseAPIView):
+    """Count work items across the workspace, optionally grouped.
+
+    Scoped identically to WorkspaceIssueListAPIEndpoint. Supports the same
+    `filters` parameter to scope the count. `group_by`/`sub_group_by` are
+    restricted to a safe, explicitly-mapped subset of fields -- an
+    unrecognized value is a 400, not a silently-empty/wrong grouping.
+    """
+
+    permission_classes = [WorkspaceUserPermission]
+    use_read_replica = True
+    filter_backends = (ComplexFilterBackend,)
+    filterset_class = IssueFilterSet
+
+    # Maps the documented group_by/sub_group_by name to the actual Django
+    # lookup path on Issue. Keep in sync with plane_mcp's count_work_items
+    # tool docstring (plane-mcp-server/plane_mcp/tools/work_items.py).
+    GROUP_BY_FIELDS = {
+        "state_id": "state_id",
+        "state__group": "state__group",
+        "priority": "priority",
+        "project_id": "project_id",
+        "type_id": "type_id",
+        "labels__id": "labels__id",
+        "assignees__id": "assignees__id",
+        "issue_module__module_id": "issue_module__module_id",
+        "cycle_id": "issue_cycle__cycle_id",
+        "created_by": "created_by_id",
+        "target_date": "target_date",
+        "start_date": "start_date",
+    }
+
+    def get_queryset(self, slug):
+        return Issue.issue_objects.filter(
+            workspace__slug=slug,
+            project__project_projectmember__member=self.request.user,
+            project__project_projectmember__is_active=True,
+            project__archived_at__isnull=True,
+        ).distinct()
+
+    def _resolve_group_field(self, name):
+        field = self.GROUP_BY_FIELDS.get(name)
+        if field is None:
+            raise DRFValidationError(
+                {
+                    "message": (
+                        f"Unsupported group_by/sub_group_by value '{name}'. "
+                        f"Supported values: {sorted(self.GROUP_BY_FIELDS)}."
+                    ),
+                    "code": "invalid_group_by",
+                }
+            )
+        return field
+
+    @extend_schema(
+        operation_id="count_workspace_work_items",
+        tags=["Work Items"],
+        description="Count work items across the workspace, optionally grouped by one or two dimensions.",
+        parameters=[WORKSPACE_SLUG_PARAMETER],
+        responses={200: OpenApiResponse(description="Grouped or total work item counts")},
+    )
+    def get(self, request, slug):
+        group_by = request.GET.get("group_by")
+        sub_group_by = request.GET.get("sub_group_by")
+        if sub_group_by and not group_by:
+            raise DRFValidationError(
+                {
+                    "message": "sub_group_by can only be used when group_by is also provided",
+                    "code": "sub_group_by_without_group_by",
+                }
+            )
+
+        queryset = ComplexFilterBackend().filter_queryset(request, self.get_queryset(slug), self)
+
+        if not group_by:
+            return Response(
+                {
+                    "grouped_by": None,
+                    "sub_grouped_by": None,
+                    "total_count": queryset.count(),
+                    "grouped_counts": {},
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        group_field = self._resolve_group_field(group_by)
+        total_count = queryset.count()
+
+        # Issue's default Meta.ordering otherwise leaks into GROUP BY via
+        # values().annotate(), fragmenting each group by that ordering field too.
+        queryset = queryset.order_by()
+
+        if not sub_group_by:
+            rows = queryset.values(group_field).annotate(count=Count("id", distinct=True))
+            grouped_counts = {
+                str(row[group_field] if row[group_field] is not None else "None"): {"count": row["count"]}
+                for row in rows
+            }
+            return Response(
+                {
+                    "grouped_by": group_by,
+                    "sub_grouped_by": None,
+                    "total_count": total_count,
+                    "grouped_counts": grouped_counts,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        sub_group_field = self._resolve_group_field(sub_group_by)
+        rows = queryset.values(group_field, sub_group_field).annotate(count=Count("id", distinct=True))
+        grouped_counts: dict = {}
+        for row in rows:
+            key = str(row[group_field] if row[group_field] is not None else "None")
+            sub_key = str(row[sub_group_field] if row[sub_group_field] is not None else "None")
+            bucket = grouped_counts.setdefault(key, {"count": 0, "sub_grouped_counts": {}})
+            bucket["count"] += row["count"]
+            bucket["sub_grouped_counts"][sub_key] = {"count": row["count"]}
+
+        return Response(
+            {
+                "grouped_by": group_by,
+                "sub_grouped_by": sub_group_by,
+                "total_count": total_count,
+                "grouped_counts": grouped_counts,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class IssueDetailAPIEndpoint(BaseAPIView):

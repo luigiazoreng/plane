@@ -4,79 +4,36 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { AlertCircle, Award, CheckCircle2, Clock, Layers, Settings, TrendingUp } from "lucide-react";
-import type { IKpiAggregates } from "@plane/types";
+import { useTheme } from "next-themes";
+import { HelpCircle, Settings } from "lucide-react";
+import { EUserPermissionsLevel } from "@plane/constants";
+import { useTranslation } from "@plane/i18n";
+import type { TKpiPeriod } from "@plane/types";
+import { EUserProjectRoles } from "@plane/types";
 import { Spinner } from "@plane/ui";
 import { cn } from "@plane/utils";
+// assets
+import darkEmptyState from "@/app/assets/empty-state/disabled-feature/views-dark.webp?url";
+import lightEmptyState from "@/app/assets/empty-state/disabled-feature/views-light.webp?url";
 // components
+import { DetailedEmptyState } from "@/components/empty-state/detailed-empty-state-root";
 import { KpiCurveChart } from "@/components/kpi/curve-chart";
+import { KpiMathHelpModal } from "@/components/kpi/math-help-modal";
 import { KpiMemberBarChart } from "@/components/kpi/member-bar-chart";
 import { KpiMemberList } from "@/components/kpi/member-list";
+import { KpiPeriodSelector } from "@/components/kpi/period-selector";
+import { KpiStatBar } from "@/components/kpi/stat-bar";
 import { PageHead } from "@/components/core/page-title";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useKpi } from "@/hooks/store/use-kpi";
-
-const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "—" : n.toLocaleString());
-
-// ── Stat bar ─────────────────────────────────────────────────────────────────
-// Flat, bordered strip that mirrors the spreadsheet header chrome: no rounded
-// cards, no shadows — just dividers and semantic tokens.
-
-type StatTone = "neutral" | "accent" | "success" | "warning" | "danger";
-
-const TONE_TEXT: Record<StatTone, string> = {
-  neutral: "text-primary",
-  accent: "text-accent-primary",
-  success: "text-success-primary",
-  warning: "text-warning-primary",
-  danger: "text-danger-primary",
-};
-
-function Stat({
-  icon: Icon,
-  value,
-  label,
-  tone = "neutral",
-}: {
-  icon: typeof Layers;
-  value: string;
-  label: string;
-  tone?: StatTone;
-}) {
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-3 px-page-x py-4">
-      <Icon className={cn("size-4 shrink-0", tone === "neutral" ? "text-tertiary" : TONE_TEXT[tone])} />
-      <div className="min-w-0">
-        <p className={cn("text-20 leading-none font-semibold tabular-nums", TONE_TEXT[tone])}>{value}</p>
-        <p className="mt-1.5 truncate text-12 text-tertiary">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-function StatBar({ agg }: { agg: IKpiAggregates | undefined }) {
-  const onTime = agg ? agg.counts.on_time + agg.counts.early : null;
-  const effNum = agg?.efficiency != null ? agg.efficiency * 100 : null;
-  const effStr = effNum != null ? `${effNum.toFixed(1)}%` : "—";
-  const isLate = agg != null && agg.counts.late > 0;
-  const effHigh = effNum != null && effNum >= 100;
-
-  return (
-    <div className="flex flex-wrap divide-x divide-subtle border-b border-subtle bg-surface-1">
-      <Stat icon={Layers} value={fmt(agg?.sum_vp)} label="Raw points" />
-      <Stat icon={Award} value={fmt(agg?.sum_vf)} label="Final score" tone="accent" />
-      <Stat icon={TrendingUp} value={effStr} label="Efficiency" tone={effHigh ? "success" : "warning"} />
-      <Stat icon={CheckCircle2} value={onTime !== null ? String(onTime) : "—"} label="On time / Early" tone="success" />
-      <Stat icon={AlertCircle} value={fmt(agg?.counts.late)} label="Late" tone={isLate ? "danger" : "neutral"} />
-      <Stat icon={Clock} value={fmt(agg?.counts.pending)} label="Pending" />
-    </div>
-  );
-}
+import { useProject } from "@/hooks/store/use-project";
+import { useUserPermissions } from "@/hooks/store/user";
+import { useAppRouter } from "@/hooks/use-app-router";
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -91,9 +48,19 @@ function ProjectKpiPage() {
     fetchProjectMemberAggregates,
   } = useKpi();
   const { getProjectEstimates } = useProjectEstimates();
+  const { currentProjectDetails } = useProject();
+  const { allowPermissions } = useUserPermissions();
+  const router = useAppRouter();
+  const { resolvedTheme } = useTheme();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [selectedPriorityLevel, setSelectedPriorityLevel] = useState<string | null>(null);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  // The project endpoints default to the whole history; this page opts into a window.
+  const [period, setPeriod] = useState<TKpiPeriod>("all");
+  const [customStartDate, setCustomStartDate] = useState<string | undefined>();
+  const [customEndDate, setCustomEndDate] = useState<string | undefined>();
 
   const config = projectConfig[projectId];
   const agg = aggregates[projectId];
@@ -105,12 +72,17 @@ function ProjectKpiPage() {
     // Difficulty is the issue's native estimate -> preload so the dropdown can
     // resolve and display the currently selected estimate value.
     getProjectEstimates(workspaceSlug, projectId).catch(() => {});
+    const periodParams = {
+      period,
+      start: period === "custom" ? customStartDate : undefined,
+      end: period === "custom" ? customEndDate : undefined,
+    };
     Promise.all([
       fetchProjectConfig(workspaceSlug, projectId),
       // Still fetched for the project-wide StatBar aggregates; the per-issue
       // rows themselves are no longer rendered on this (now read-only) page.
-      fetchProjectIssues(workspaceSlug, projectId),
-      fetchProjectMemberAggregates(workspaceSlug, projectId),
+      fetchProjectIssues(workspaceSlug, projectId, { aggregates_only: true, ...periodParams }),
+      fetchProjectMemberAggregates(workspaceSlug, projectId, periodParams),
     ]).finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
@@ -118,11 +90,20 @@ function ProjectKpiPage() {
   }, [
     workspaceSlug,
     projectId,
+    period,
+    customStartDate,
+    customEndDate,
     fetchProjectConfig,
     fetchProjectIssues,
     fetchProjectMemberAggregates,
     getProjectEstimates,
   ]);
+
+  const handlePeriodChange = useCallback((next: TKpiPeriod, start?: string, end?: string) => {
+    setPeriod(next);
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+  }, []);
 
   const priorityLevels = useMemo(() => Object.keys(config?.tables.priority ?? {}), [config]);
 
@@ -132,6 +113,28 @@ function ProjectKpiPage() {
     if (!config || !activePriorityLevel) return 0;
     return config.tables.priority?.[activePriorityLevel]?.b ?? 0;
   }, [config, activePriorityLevel]);
+
+  // No access to KPI
+  if (currentProjectDetails?.kpi_view === false) {
+    const resolvedEmptyState = resolvedTheme === "light" ? lightEmptyState : darkEmptyState;
+    const hasAdminLevelPermission = allowPermissions([EUserProjectRoles.ADMIN], EUserPermissionsLevel.PROJECT);
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <DetailedEmptyState
+          title={t("disabled_project.empty_state.kpi.title")}
+          description={t("disabled_project.empty_state.kpi.description")}
+          assetPath={resolvedEmptyState}
+          primaryButton={{
+            text: t("disabled_project.empty_state.kpi.primary_button.text"),
+            onClick: () => {
+              router.push(`/${workspaceSlug}/settings/projects/${projectId}/features/kpi`);
+            },
+            disabled: !hasAdminLevelPermission,
+          }}
+        />
+      </div>
+    );
+  }
 
   if (loading || !config) {
     return (
@@ -145,7 +148,7 @@ function ProjectKpiPage() {
     <>
       <PageHead title="KPI" />
       <div className="flex h-full w-full flex-col overflow-hidden bg-surface-1">
-        <StatBar agg={agg} />
+        <KpiStatBar agg={agg} />
 
         {/* Section header */}
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-subtle px-page-x">
@@ -157,13 +160,30 @@ function ProjectKpiPage() {
               {config.inherited && " · inherited config"}
             </span>
           </div>
-          <Link
-            href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
-            className="flex items-center gap-1.5 rounded text-12 font-medium text-secondary transition-colors hover:text-primary"
-          >
-            <Settings className="size-3.5" />
-            Settings
-          </Link>
+          <div className="flex items-center gap-4">
+            <KpiPeriodSelector
+              value={period}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onChange={handlePeriodChange}
+              disabled={loading}
+            />
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(true)}
+              className="flex items-center gap-1.5 text-12 font-medium text-tertiary transition-colors hover:text-secondary"
+            >
+              <HelpCircle className="size-3.5" />
+              How it works
+            </button>
+            <Link
+              href={`/${workspaceSlug}/projects/${projectId}/kpi/settings`}
+              className="flex items-center gap-1.5 rounded text-12 font-medium text-secondary transition-colors hover:text-primary"
+            >
+              <Settings className="size-3.5" />
+              Settings
+            </Link>
+          </div>
         </div>
 
         {/* Member scoring + charts */}
@@ -210,6 +230,7 @@ function ProjectKpiPage() {
           </div>
         </div>
       </div>
+      <KpiMathHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
     </>
   );
 }

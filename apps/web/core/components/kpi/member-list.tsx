@@ -5,10 +5,11 @@
  */
 
 import { Users } from "lucide-react";
-import type { IKpiMemberAggregate, TKpiIssueStatus } from "@plane/types";
+import { Tooltip } from "@plane/propel/tooltip";
+import type { IKpiMemberAggregate } from "@plane/types";
 import { Avatar } from "@plane/ui";
 import { cn, getFileURL } from "@plane/utils";
-import { STATUS_BADGE } from "./status-badge";
+import { CountChips } from "./status-badge";
 
 type Props = {
   results: IKpiMemberAggregate[];
@@ -19,28 +20,6 @@ const fmt = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
 
 const HEAD = "h-11 bg-layer-1 px-page-x text-11 font-medium text-tertiary";
-
-const STATUS_ORDER: TKpiIssueStatus[] = ["late", "pending", "early", "on_time"];
-
-const CountChips = ({ counts }: { counts: Record<TKpiIssueStatus, number> }) => {
-  const visible = STATUS_ORDER.filter((key) => counts[key] > 0);
-  if (visible.length === 0) return <span className="text-tertiary">—</span>;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {visible.map((key) => {
-        const s = STATUS_BADGE[key];
-        return (
-          <span
-            key={key}
-            className={cn("inline-flex items-center rounded px-2 py-0.5 text-11 font-medium", s.className)}
-          >
-            {counts[key]} {s.label}
-          </span>
-        );
-      })}
-    </div>
-  );
-};
 
 export const KpiMemberList = (props: Props) => {
   const { results, unassignedCount } = props;
@@ -63,9 +42,21 @@ export const KpiMemberList = (props: Props) => {
         <thead>
           <tr className="border-b border-subtle">
             <th className={cn(HEAD, "sticky left-0 z-10 text-left")}>Member</th>
-            <th className={cn(HEAD, "text-right")}>Σ Vp</th>
-            <th className={cn(HEAD, "text-right")}>Σ Vf</th>
-            <th className={cn(HEAD, "text-right")}>Efficiency</th>
+            <th className={cn(HEAD, "text-right")}>
+              <Tooltip tooltipContent="Raw total planned value of this member's delivered work items. Scales with how many items they delivered — not comparable between members.">
+                <span>Σ Vp</span>
+              </Tooltip>
+            </th>
+            <th className={cn(HEAD, "text-right")}>
+              <Tooltip tooltipContent="Raw total final score after delay penalties. Also scales with delivered volume — compare Efficiency instead, not this number, between members.">
+                <span>Σ Vf</span>
+              </Tooltip>
+            </th>
+            <th className={cn(HEAD, "text-right")}>
+              <Tooltip tooltipContent="Σ Vf ÷ Σ Vp. Independent of volume — this is the number that's comparable between members.">
+                <span>Efficiency</span>
+              </Tooltip>
+            </th>
             <th className={cn(HEAD, "text-left")}>Status</th>
           </tr>
         </thead>

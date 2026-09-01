@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from plane.app.permissions import WorkspaceEntityPermission
 from plane.app.serializers import WorkspaceEstimateSerializer
 from plane.app.views.base import BaseAPIView
-from plane.db.models import Estimate, Project
+from plane.db.models import Estimate
 from plane.utils.cache import cache_response
 
 
@@ -20,11 +20,11 @@ class WorkspaceEstimatesEndpoint(BaseAPIView):
 
     @cache_response(60 * 60 * 2)
     def get(self, request, slug):
-        estimate_ids = Project.objects.filter(workspace__slug=slug, estimate__isnull=False).values_list(
-            "estimate_id", flat=True
-        )
+        # Include every active (last_used=True) estimate per project, not just
+        # each project's default -- an issue can hold a point from a non-default
+        # active estimate under the multi-active-estimate model.
         estimates = (
-            Estimate.objects.filter(pk__in=estimate_ids, workspace__slug=slug)
+            Estimate.objects.filter(workspace__slug=slug, last_used=True)
             .prefetch_related("points")
             .select_related("workspace", "project")
         )

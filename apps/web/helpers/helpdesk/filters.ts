@@ -12,6 +12,7 @@ import type {
   IHelpdeskRequestFilters,
   IHelpdeskStatus,
   THelpdeskGroupBy,
+  TIssuePriorities,
 } from "@plane/types";
 
 export const DEFAULT_HELPDESK_FILTERS: IHelpdeskRequestFilters = {
@@ -20,6 +21,7 @@ export const DEFAULT_HELPDESK_FILTERS: IHelpdeskRequestFilters = {
   portal: [],
   form: [],
   source: [],
+  priority: [],
   created_at: [],
 };
 
@@ -65,6 +67,7 @@ export const buildHelpdeskRequestParams = (
   if (filters.portal.length) params.portal = filters.portal.join(",");
   if (filters.form.length) params.form = filters.form.join(",");
   if (filters.source.length) params.source = filters.source.join(",");
+  if (filters.priority.length) params.priority = filters.priority.join(",");
 
   const { after, before } = parseDateRange(filters.created_at);
   if (after) params.created_at__gte = after;
@@ -98,6 +101,15 @@ const SOURCE_LABELS: Record<string, string> = {
   public_form: "Public form",
   internal_form: "Internal form",
 };
+
+/** Severity order, matching PRIORITY_ORDER on the API. */
+export const HELPDESK_PRIORITIES: { id: TIssuePriorities; name: string }[] = [
+  { id: "urgent", name: "Urgent" },
+  { id: "high", name: "High" },
+  { id: "medium", name: "Medium" },
+  { id: "low", name: "Low" },
+  { id: "none", name: "None" },
+];
 
 /**
  * Generic grouping for the helpdesk list/kanban. Returns the ordered group
@@ -139,6 +151,11 @@ export const groupHelpdeskRequests = (
     case "source": {
       groups = Object.entries(SOURCE_LABELS).map(([id, name]) => ({ id, name }));
       keyOf = (r) => r.source || NONE_GROUP.id;
+      break;
+    }
+    case "priority": {
+      groups = HELPDESK_PRIORITIES.map((p) => ({ id: p.id, name: p.name }));
+      keyOf = (r) => r.priority || "none";
       break;
     }
     case "assignee": {

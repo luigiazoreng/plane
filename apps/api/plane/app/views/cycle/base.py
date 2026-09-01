@@ -51,6 +51,8 @@ from plane.db.models import (
     User,
     Project,
     UserRecentVisit,
+    NUMERIC_ESTIMATE_TYPES,
+    project_has_active_numeric_estimate,
 )
 from plane.utils.analytics_plot import burndown_plot
 from plane.bgtasks.recent_visited_task import recent_visited_task
@@ -663,7 +665,7 @@ class CycleProgressEndpoint(BaseAPIView):
             return Response({"error": "Cycle not found"}, status=status.HTTP_404_NOT_FOUND)
         aggregate_estimates = (
             Issue.issue_objects.filter(
-                estimate_point__estimate__type="points",
+                estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES,
                 issue_cycle__cycle_id=cycle_id,
                 issue_cycle__deleted_at__isnull=True,
                 workspace__slug=slug,
@@ -829,18 +831,20 @@ class CycleAnalyticsEndpoint(BaseAPIView):
                 status=status.HTTP_200_OK,
             )
 
-        estimate_type = Project.objects.filter(
-            workspace__slug=slug,
-            pk=project_id,
-            estimate__isnull=False,
-            estimate__type="points",
-        ).exists()
+        estimate_type = project_has_active_numeric_estimate(slug, project_id)
 
         assignee_distribution = []
         label_distribution = []
         completion_chart = {}
 
         if analytic_type == "points" and estimate_type:
+            # Only Points/Time estimate_point values are numeric; a Categories
+            # estimate can still be active on the same project (see
+            # NUMERIC_ESTIMATE_TYPES), so every Sum(Cast(...)) below must scope
+            # to numeric estimate points via `filter=` rather than the base
+            # queryset, so issues without a numeric estimate still appear
+            # (with 0/None totals) instead of being dropped from the distribution.
+            numeric_point = Q(estimate_point__estimate__type__in=NUMERIC_ESTIMATE_TYPES)
             assignee_distribution = (
                 Issue.issue_objects.filter(
                     issue_cycle__cycle_id=cycle_id,
@@ -871,11 +875,12 @@ class CycleAnalyticsEndpoint(BaseAPIView):
                     )
                 )
                 .values("display_name", "assignee_id", "avatar_url")
-                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
                 .annotate(
                     completed_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=False,
                             archived_at__isnull=True,
                             is_draft=False,
@@ -885,7 +890,8 @@ class CycleAnalyticsEndpoint(BaseAPIView):
                 .annotate(
                     pending_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=True,
                             archived_at__isnull=True,
                             is_draft=False,
@@ -906,11 +912,12 @@ class CycleAnalyticsEndpoint(BaseAPIView):
                 .annotate(color=F("labels__color"))
                 .annotate(label_id=F("labels__id"))
                 .values("label_name", "color", "label_id")
-                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField())))
+                .annotate(total_estimates=Sum(Cast("estimate_point__value", FloatField()), filter=numeric_point))
                 .annotate(
                     completed_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=False,
                             archived_at__isnull=True,
                             is_draft=False,
@@ -920,7 +927,8 @@ class CycleAnalyticsEndpoint(BaseAPIView):
                 .annotate(
                     pending_estimates=Sum(
                         Cast("estimate_point__value", FloatField()),
-                        filter=Q(
+                        filter=numeric_point
+                        & Q(
                             completed_at__isnull=True,
                             archived_at__isnull=True,
                             is_draft=False,

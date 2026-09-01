@@ -52,13 +52,13 @@ const HelpdeskLoginPage = observer(() => {
   return (
     <div className="shadow-sm mx-auto mt-12 max-w-md rounded-lg border border-subtle bg-surface-2 p-8">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Sign in to Support</h1>
-        <p className="text-sm text-text-400 mt-2">Enter your email and password to access your tickets.</p>
+        <h1 className="text-2xl text-primary font-bold">Sign in to Support</h1>
+        <p className="text-sm text-placeholder mt-2">Enter your email and password to access your tickets.</p>
       </div>
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label htmlFor="email" className="text-sm text-text-200 mb-1.5 block font-medium">
+          <label htmlFor="email" className="text-sm text-secondary mb-1.5 block font-medium">
             Email Address
           </label>
           <Input
@@ -74,11 +74,11 @@ const HelpdeskLoginPage = observer(() => {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <label htmlFor="password" className="text-sm text-text-200 font-medium">
+            <label htmlFor="password" className="text-sm text-secondary font-medium">
               Password
             </label>
             <Link
-              to={`/helpdesk/p/${pSlug}/forgot-password`}
+              to={`/helpdesk/p/${pSlug}/forgot-password${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
               className="text-sm font-medium text-primary hover:underline"
             >
               Forgot password?
@@ -100,7 +100,7 @@ const HelpdeskLoginPage = observer(() => {
         </Button>
       </form>
 
-      <p className="text-sm text-text-400 mt-6 text-center">
+      <p className="text-sm text-placeholder mt-6 text-center">
         Don't have an account?{" "}
         <Link
           to={`/helpdesk/p/${pSlug}/register${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""}`}

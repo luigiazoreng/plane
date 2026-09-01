@@ -8,12 +8,13 @@ import { API_BASE_URL } from "@plane/constants";
 import type {
   IKpiConfig,
   IKpiIssueAttribute,
-  IKpiIssueEstimate,
   IKpiIssuePriority,
   IKpiIssueListResponse,
   IKpiMemberAggregateResponse,
+  IKpiOverviewResponse,
   IKpiPreviewResponse,
   IKpiTaskInput,
+  TKpiPeriod,
 } from "@plane/types";
 import { APIService } from "../api.service";
 
@@ -46,16 +47,36 @@ export class KpiService extends APIService {
 
   // --- Issues scoring ---
 
-  async getProjectIssues(workspaceSlug: string, projectId: string): Promise<IKpiIssueListResponse> {
-    return this.get(`${workspaceSlug}/projects/${projectId}/kpi/issues/`).then((res) => res?.data);
+  /** Omitting `period` keeps the endpoint's default, which is the whole project history. */
+  async getProjectIssues(
+    workspaceSlug: string,
+    projectId: string,
+    params?: { aggregates_only?: boolean; period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiIssueListResponse> {
+    return this.get(`${workspaceSlug}/projects/${projectId}/kpi/issues/`, { params }).then((res) => res?.data);
   }
 
-  async getProjectMemberAggregates(workspaceSlug: string, projectId: string): Promise<IKpiMemberAggregateResponse> {
-    return this.get(`${workspaceSlug}/projects/${projectId}/kpi/members/`).then((res) => res?.data);
+  async getProjectMemberAggregates(
+    workspaceSlug: string,
+    projectId: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiMemberAggregateResponse> {
+    return this.get(`${workspaceSlug}/projects/${projectId}/kpi/members/`, { params }).then((res) => res?.data);
   }
 
   async getWorkspaceMemberAggregates(workspaceSlug: string): Promise<IKpiMemberAggregateResponse> {
     return this.get(`${workspaceSlug}/kpi/members/`).then((res) => res?.data);
+  }
+
+  /**
+   * Consolidated workspace panel: unified KPI + per-project + per-member.
+   * Pass either `period` or an explicit `start`/`end` range (YYYY-MM-DD).
+   */
+  async getWorkspaceOverview(
+    workspaceSlug: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiOverviewResponse> {
+    return this.get(`${workspaceSlug}/kpi/overview/`, { params }).then((res) => res?.data);
   }
 
   async getIssueAttributes(workspaceSlug: string, projectId: string, issueId: string): Promise<IKpiIssueAttribute> {
@@ -73,39 +94,6 @@ export class KpiService extends APIService {
     return this.put(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/attributes/`, data).then(
       (res) => res?.data
     );
-  }
-
-  // --- Difficulty / Repetitive (KPI estimate points) ---
-
-  async updateIssueDifficultyEstimate(
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ): Promise<IKpiIssueEstimate> {
-    return this.put(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/estimate/`, {
-      estimate_point: estimatePointId,
-    }).then((res) => res?.data);
-  }
-
-  async updateIssueEstimate(
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ): Promise<IKpiIssueEstimate> {
-    return this.updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
-  }
-
-  async updateIssueRepetitiveEstimate(
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ): Promise<IKpiIssueEstimate> {
-    return this.put(`${workspaceSlug}/projects/${projectId}/kpi/issues/${issueId}/repetitive-estimate/`, {
-      estimate_point: estimatePointId,
-    }).then((res) => res?.data);
   }
 
   // --- Importance (native priority) ---

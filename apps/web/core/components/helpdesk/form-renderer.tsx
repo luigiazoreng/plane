@@ -7,6 +7,10 @@
 import React from "react";
 import { Input } from "@plane/propel/input";
 import type { IHelpdeskFormField } from "@plane/types";
+import { AttachmentPicker } from "./attachments/attachment-picker";
+import { PendingAttachmentChips } from "./attachments/attachment-chips";
+import { useAttachmentUpload, type TAttachmentTransport } from "./attachments/use-attachment-upload";
+import { HelpdeskDescriptionEditor } from "./description-editor";
 
 function resolveCascadeOptions(
   field: IHelpdeskFormField,
@@ -34,9 +38,22 @@ type FieldRendererProps = {
   /** Full values map — needed for cascade parent resolution */
   values: Record<string, unknown>;
   disabled?: boolean;
+  attachmentTransport?: TAttachmentTransport;
+  /** Reports asset ids collected from paste/drop inside the description
+   * editor, so the parent form can merge them into asset_ids at submit. */
+  onAdditionalAttachmentIds?: (assetIds: string[]) => void;
 };
 
-function FieldInput({ field, value, onChange, fieldMap, values, disabled }: FieldRendererProps) {
+function FieldInput({
+  field,
+  value,
+  onChange,
+  fieldMap,
+  values,
+  disabled,
+  attachmentTransport,
+  onAdditionalAttachmentIds,
+}: FieldRendererProps) {
   switch (field.field_type) {
     case "system_title":
     case "short_text":
@@ -52,12 +69,21 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled }: Fiel
       );
     case "system_description":
     case "long_text":
-      return (
+      return attachmentTransport ? (
+        <HelpdeskDescriptionEditor
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          attachmentTransport={attachmentTransport}
+          onAdditionalAttachmentIds={onAdditionalAttachmentIds}
+          disabled={disabled}
+          placeholder={field.placeholder}
+        />
+      ) : (
         <textarea
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          className="text-sm text-text-100 placeholder:text-text-400 focus:border-primary min-h-[140px] w-full rounded-md border border-subtle bg-surface-1 p-3 outline-none disabled:opacity-60"
+          className="text-sm text-primary placeholder:text-placeholder focus:border-accent-subtle min-h-[140px] w-full rounded-md border border-subtle bg-surface-1 p-3 outline-none disabled:opacity-60"
           disabled={disabled}
         />
       );
@@ -66,7 +92,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled }: Fiel
         <select
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
+          className="text-sm text-primary focus:border-accent-subtle w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
           disabled={disabled}
         >
           <option value="">Select an option</option>
@@ -92,7 +118,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled }: Fiel
         <select
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-text-100 focus:border-primary w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
+          className="text-sm text-primary focus:border-accent-subtle w-full rounded-md border border-subtle bg-surface-1 px-3 py-2 outline-none disabled:opacity-60"
           disabled={disabled || isBlocked || options.length === 0}
         >
           <option value="">{placeholder}</option>
@@ -106,7 +132,7 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled }: Fiel
     }
     case "checkbox":
       return (
-        <label className="text-sm text-text-200 flex items-center gap-3">
+        <label className="text-sm text-secondary flex items-center gap-3">
           <input
             type="checkbox"
             checked={Boolean(value)}
@@ -127,9 +153,72 @@ function FieldInput({ field, value, onChange, fieldMap, values, disabled }: Fiel
           disabled={disabled}
         />
       );
+    case "attachment":
+      return (
+        <AttachmentFieldInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          transport={disabled ? undefined : attachmentTransport}
+        />
+      );
     default:
       return null;
   }
+}
+
+function AttachmentFieldInput({
+  field,
+  value,
+  onChange,
+  disabled,
+  transport,
+}: {
+  field: IHelpdeskFormField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+  transport?: TAttachmentTransport;
+}) {
+  const { pending, upload, remove } = useAttachmentUpload(
+    transport || {
+      getCredentials: async () => {
+        throw new Error("No transport available");
+      },
+      markUploaded: async () => {},
+    }
+  );
+
+  // Sync uploaded asset ids to the form state
+  React.useEffect(() => {
+    const assetIds = pending.filter((p) => p.status === "done" && p.assetId).map((p) => p.assetId as string);
+    // Only update if it changed
+    const current = Array.isArray(value) ? value : value ? [value] : [];
+    if (JSON.stringify(current) !== JSON.stringify(assetIds)) {
+      onChange(assetIds);
+    }
+  }, [pending, value, onChange]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <AttachmentPicker
+          onSelect={upload}
+          disabled={disabled || !transport || pending.length >= 5} // Limit to 5 per field
+          title="Anexar arquivo (Max 5)"
+        />
+        <span className="text-sm text-placeholder">
+          {!transport
+            ? "Attachments not available in preview"
+            : pending.length >= 5
+              ? "Maximum attachments reached"
+              : "Anexar arquivo"}
+        </span>
+      </div>
+      <PendingAttachmentChips attachments={pending} onRemove={remove} />
+    </div>
+  );
 }
 
 type HelpdeskFormRendererProps = {
@@ -137,6 +226,10 @@ type HelpdeskFormRendererProps = {
   values?: Record<string, unknown>;
   onValueChange?: (key: string, value: unknown) => void;
   isPreview?: boolean;
+  attachmentTransport?: TAttachmentTransport;
+  /** Reports asset ids collected from paste/drop inside the description
+   * editor, so the parent form can merge them into asset_ids at submit. */
+  onAdditionalAttachmentIds?: (assetIds: string[]) => void;
 };
 
 export function HelpdeskFormRenderer({
@@ -144,8 +237,10 @@ export function HelpdeskFormRenderer({
   values = {},
   onValueChange,
   isPreview = false,
+  attachmentTransport,
+  onAdditionalAttachmentIds,
 }: HelpdeskFormRendererProps) {
-  const ordered = fields.slice().toSorted((a, b) => a.sequence - b.sequence);
+  const ordered = fields.slice().sort((a, b) => a.sequence - b.sequence);
   const fieldMap: Record<string, IHelpdeskFormField> = {};
   for (const f of ordered) fieldMap[f.key] = f;
 
@@ -153,8 +248,8 @@ export function HelpdeskFormRenderer({
     <div className="space-y-6">
       {ordered.map((field) => (
         <div key={field.id}>
-          <label className="text-sm text-text-200 mb-1.5 block font-medium">
-            {field.label} {field.required ? <span className="text-red-500">*</span> : null}
+          <label className="text-sm text-secondary mb-1.5 block font-medium">
+            {field.label} {field.required ? <span className="text-danger-primary">*</span> : null}
           </label>
           <FieldInput
             field={field}
@@ -163,9 +258,11 @@ export function HelpdeskFormRenderer({
             fieldMap={fieldMap}
             values={values}
             disabled={isPreview}
+            attachmentTransport={attachmentTransport}
+            onAdditionalAttachmentIds={onAdditionalAttachmentIds}
           />
           {field.field_type !== "checkbox" && field.help_text ? (
-            <p className="text-xs text-text-400 mt-1">{field.help_text}</p>
+            <p className="text-xs text-placeholder mt-1">{field.help_text}</p>
           ) : null}
         </div>
       ))}

@@ -18,10 +18,14 @@ import type {
   IHelpdeskPaginatedResponse,
   IHelpdeskPortal,
   IHelpdeskRequest,
+  IHelpdeskRequestActivity,
+  IHelpdeskCustomerStats,
   IHelpdeskRequestComment,
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
   IHelpdeskStatus,
+  IHelpdeskTeam,
+  IHelpdeskMacro,
 } from "@plane/types";
 // services
 import { HelpdeskService } from "@plane/services";
@@ -29,6 +33,9 @@ import { HelpdeskService } from "@plane/services";
 import type { CoreRootStore } from "./root.store";
 
 export interface IHelpdeskStore {
+  // The service instance, exposed for calls that are pure passthrough and do
+  // not belong in observable state -- attachment uploads and email logs.
+  helpdeskService: HelpdeskService;
   // observables
   statuses: Record<string, IHelpdeskStatus[]>; // workspaceSlug -> statuses (ordered by sequence)
   portals: Record<string, IHelpdeskPortal[]>; // workspaceSlug -> portals
@@ -36,11 +43,16 @@ export interface IHelpdeskStore {
   formFields: Record<string, IHelpdeskFormField[]>; // formId -> fields
   requests: Record<string, IHelpdeskRequest[]>; // workspaceSlug -> requests
   comments: Record<string, IHelpdeskRequestComment[]>; // requestId -> comments
+  activities: Record<string, IHelpdeskRequestActivity[]>; // requestId -> activities
+  customerHistory: Record<string, IHelpdeskRequest[]>; // requestId -> past requests
+  customerStats: Record<string, IHelpdeskCustomerStats>; // requestId -> customer stats
   requestIssues: Record<string, IHelpdeskRequestIssue[]>; // requestId -> issues
   requestIntakeIssues: Record<string, IHelpdeskRequestIntakeIssue[]>; // requestId -> intake issue links
   linkedIssueProjectMap: Record<string, string>; // issueId -> projectId
   unresolvedLinkedIssues: Record<string, string[]>; // requestId -> unresolved issue ids
   members: Record<string, IHelpdeskMember[]>; // workspaceSlug -> helpdesk members
+  teams: Record<string, IHelpdeskTeam[]>; // workspaceSlug -> helpdesk teams
+  macros: Record<string, IHelpdeskMacro[]>; // workspaceSlug -> helpdesk macros
   customers: Record<string, IHelpdeskCustomer[]>; // workspaceSlug -> helpdesk customers
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
@@ -105,6 +117,9 @@ export interface IHelpdeskStore {
   ) => Promise<IHelpdeskRequest>;
   archiveRequest: (workspaceSlug: string, requestId: string) => Promise<void>;
   unarchiveRequest: (workspaceSlug: string, requestId: string) => Promise<void>;
+  markRequestRead: (workspaceSlug: string, requestId: string) => Promise<void>;
+  toggleBookmark: (workspaceSlug: string, requestId: string) => Promise<boolean>;
+  snoozeRequest: (workspaceSlug: string, requestId: string, snoozedUntil: string | null) => Promise<string | null>;
 
   // comment actions
   fetchRequestComments: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequestComment[]>;
@@ -113,6 +128,11 @@ export interface IHelpdeskStore {
     requestId: string,
     data: Partial<IHelpdeskRequestComment>
   ) => Promise<IHelpdeskRequestComment>;
+
+  // activity actions
+  fetchRequestActivities: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequestActivity[]>;
+  fetchCustomerHistory: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequest[]>;
+  fetchCustomerStats: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskCustomerStats>;
 
   // issue link actions
   fetchRequestIssues: (workspaceSlug: string, requestId: string) => Promise<IHelpdeskRequestIssue[]>;
@@ -147,6 +167,18 @@ export interface IHelpdeskStore {
   ) => Promise<IHelpdeskMember>;
   removeMember: (workspaceSlug: string, memberId: string) => Promise<void>;
 
+  // team actions
+  fetchTeams: (workspaceSlug: string) => Promise<IHelpdeskTeam[]>;
+  createTeam: (workspaceSlug: string, data: Partial<IHelpdeskTeam>) => Promise<IHelpdeskTeam>;
+  updateTeam: (workspaceSlug: string, teamId: string, data: Partial<IHelpdeskTeam>) => Promise<IHelpdeskTeam>;
+  deleteTeam: (workspaceSlug: string, teamId: string) => Promise<void>;
+
+  // macro actions
+  fetchMacros: (workspaceSlug: string) => Promise<IHelpdeskMacro[]>;
+  createMacro: (workspaceSlug: string, data: Partial<IHelpdeskMacro>) => Promise<IHelpdeskMacro>;
+  updateMacro: (workspaceSlug: string, macroId: string, data: Partial<IHelpdeskMacro>) => Promise<IHelpdeskMacro>;
+  deleteMacro: (workspaceSlug: string, macroId: string) => Promise<void>;
+
   // computed getters
   getWorkspaceStatuses: (workspaceSlug: string) => IHelpdeskStatus[];
   getDefaultStatus: (workspaceSlug: string) => IHelpdeskStatus | undefined;
@@ -155,6 +187,9 @@ export interface IHelpdeskStore {
   getFormFields: (formId: string) => IHelpdeskFormField[];
   getWorkspaceRequests: (workspaceSlug: string) => IHelpdeskRequest[];
   getRequestComments: (requestId: string) => IHelpdeskRequestComment[];
+  getRequestActivities: (requestId: string) => IHelpdeskRequestActivity[];
+  getCustomerHistory: (requestId: string) => IHelpdeskRequest[];
+  getCustomerStats: (requestId: string) => IHelpdeskCustomerStats | undefined;
   getRequestIssues: (requestId: string) => IHelpdeskRequestIssue[];
   getRequestIntakeIssues: (requestId: string) => IHelpdeskRequestIntakeIssue[];
   getUnresolvedLinkedIssues: (requestId: string) => string[];
@@ -165,8 +200,11 @@ export interface IHelpdeskStore {
     statusId: string
   ) => { nextCursor: string | null; nextPageResults: boolean; totalCount: number } | undefined;
   getWorkspaceMembers: (workspaceSlug: string) => IHelpdeskMember[];
+  getWorkspaceTeams: (workspaceSlug: string) => IHelpdeskTeam[];
+  getWorkspaceMacros: (workspaceSlug: string) => IHelpdeskMacro[];
   // customer actions
   fetchCustomers: (workspaceSlug: string) => Promise<IHelpdeskCustomer[]>;
+  createCustomer: (workspaceSlug: string, data: Partial<IHelpdeskCustomer>) => Promise<IHelpdeskCustomer>;
   updateCustomer: (
     workspaceSlug: string,
     customerId: string,
@@ -188,16 +226,21 @@ export class HelpdeskStore implements IHelpdeskStore {
     Record<string, { nextCursor: string | null; nextPageResults: boolean; totalCount: number }>
   > = {};
   comments: Record<string, IHelpdeskRequestComment[]> = {};
+  activities: Record<string, IHelpdeskRequestActivity[]> = {};
+  customerHistory: Record<string, IHelpdeskRequest[]> = {};
+  customerStats: Record<string, IHelpdeskCustomerStats> = {};
   requestIssues: Record<string, IHelpdeskRequestIssue[]> = {};
   requestIntakeIssues: Record<string, IHelpdeskRequestIntakeIssue[]> = {};
   linkedIssueProjectMap: Record<string, string> = {};
   unresolvedLinkedIssues: Record<string, string[]> = {};
   members: Record<string, IHelpdeskMember[]> = {};
+  teams: Record<string, IHelpdeskTeam[]> = {};
+  macros: Record<string, IHelpdeskMacro[]> = {};
   customers: Record<string, IHelpdeskCustomer[]> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
 
-  helpdeskService;
+  helpdeskService: HelpdeskService;
   rootStore: CoreRootStore;
 
   constructor(_rootStore: CoreRootStore) {
@@ -210,6 +253,9 @@ export class HelpdeskStore implements IHelpdeskStore {
       requestPagination: observable,
       requestPaginationByStatus: observable,
       comments: observable,
+      activities: observable,
+      customerHistory: observable,
+      customerStats: observable,
       requestIssues: observable,
       requestIntakeIssues: observable,
       linkedIssueProjectMap: observable,
@@ -243,8 +289,14 @@ export class HelpdeskStore implements IHelpdeskStore {
       fetchRequestById: action,
       createRequest: action,
       updateRequest: action,
+      markRequestRead: action,
+      toggleBookmark: action,
+      snoozeRequest: action,
       fetchRequestComments: action,
       createRequestComment: action,
+      fetchRequestActivities: action,
+      fetchCustomerHistory: action,
+      fetchCustomerStats: action,
       fetchRequestIssues: action,
       createRequestIssue: action,
       deleteRequest: action,
@@ -258,8 +310,19 @@ export class HelpdeskStore implements IHelpdeskStore {
       addMembers: action,
       updateMember: action,
       removeMember: action,
+      teams: observable,
+      fetchTeams: action,
+      createTeam: action,
+      updateTeam: action,
+      deleteTeam: action,
+      macros: observable,
+      fetchMacros: action,
+      createMacro: action,
+      updateMacro: action,
+      deleteMacro: action,
       customers: observable,
       fetchCustomers: action,
+      createCustomer: action,
       updateCustomer: action,
       deleteCustomer: action,
     });
@@ -863,6 +926,39 @@ export class HelpdeskStore implements IHelpdeskStore {
     });
   };
 
+  markRequestRead = async (workspaceSlug: string, requestId: string): Promise<void> => {
+    void this.helpdeskService.markRequestRead(workspaceSlug, requestId);
+    runInAction(() => {
+      const list = this.requests[workspaceSlug] || [];
+      const item = list.find((r) => r.id === requestId);
+      if (item) item.is_unread = false;
+    });
+  };
+
+  toggleBookmark = async (workspaceSlug: string, requestId: string): Promise<boolean> => {
+    const response = await this.helpdeskService.toggleBookmark(workspaceSlug, requestId);
+    runInAction(() => {
+      const list = this.requests[workspaceSlug] || [];
+      const item = list.find((r) => r.id === requestId);
+      if (item) item.is_bookmarked = response.is_bookmarked;
+    });
+    return response.is_bookmarked;
+  };
+
+  snoozeRequest = async (
+    workspaceSlug: string,
+    requestId: string,
+    snoozedUntil: string | null
+  ): Promise<string | null> => {
+    const response = await this.helpdeskService.snoozeRequest(workspaceSlug, requestId, snoozedUntil);
+    runInAction(() => {
+      const list = this.requests[workspaceSlug] || [];
+      const item = list.find((r) => r.id === requestId);
+      if (item) item.snoozed_until = response.snoozed_until;
+    });
+    return response.snoozed_until;
+  };
+
   // --- Comments ---
 
   fetchRequestComments = async (workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestComment[]> => {
@@ -892,6 +988,56 @@ export class HelpdeskStore implements IHelpdeskStore {
       set(this.comments, [requestId], [...current, response]);
     });
     return response;
+  };
+
+  // --- Activities & Customer Stats ---
+
+  fetchRequestActivities = async (workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestActivity[]> => {
+    const key = `activities:${requestId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getRequestActivities(workspaceSlug, requestId);
+      runInAction(() => {
+        if (Array.isArray(response)) set(this.activities, [requestId], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  fetchCustomerHistory = async (workspaceSlug: string, requestId: string): Promise<IHelpdeskRequest[]> => {
+    const key = `customerHistory:${requestId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getCustomerHistory(workspaceSlug, requestId);
+      runInAction(() => {
+        if (Array.isArray(response)) set(this.customerHistory, [requestId], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  fetchCustomerStats = async (workspaceSlug: string, requestId: string): Promise<IHelpdeskCustomerStats> => {
+    const key = `customerStats:${requestId}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getCustomerStats(workspaceSlug, requestId);
+      runInAction(() => {
+        if (response) set(this.customerStats, [requestId], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
   };
 
   // --- Issue Links ---
@@ -1069,6 +1215,18 @@ export class HelpdeskStore implements IHelpdeskStore {
     return this.comments[requestId] || [];
   });
 
+  getRequestActivities = computedFn((requestId: string): IHelpdeskRequestActivity[] => {
+    return this.activities[requestId] || [];
+  });
+
+  getCustomerHistory = computedFn((requestId: string): IHelpdeskRequest[] => {
+    return this.customerHistory[requestId] || [];
+  });
+
+  getCustomerStats = computedFn((requestId: string): IHelpdeskCustomerStats | undefined => {
+    return this.customerStats[requestId];
+  });
+
   getRequestIssues = computedFn((requestId: string) => {
     return this.requestIssues[requestId] || [];
   });
@@ -1114,6 +1272,14 @@ export class HelpdeskStore implements IHelpdeskStore {
 
   getWorkspaceMembers = computedFn((workspaceSlug: string) => {
     return this.members[workspaceSlug] || [];
+  });
+
+  getWorkspaceTeams = computedFn((workspaceSlug: string) => {
+    return this.teams[workspaceSlug] || [];
+  });
+
+  getWorkspaceMacros = computedFn((workspaceSlug: string) => {
+    return this.macros[workspaceSlug] || [];
   });
 
   // --- Members ---
@@ -1179,6 +1345,114 @@ export class HelpdeskStore implements IHelpdeskStore {
     });
   };
 
+  // --- Team management ---
+
+  fetchTeams = async (workspaceSlug: string): Promise<IHelpdeskTeam[]> => {
+    const key = `teams:${workspaceSlug}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getTeams(workspaceSlug);
+      runInAction(() => {
+        if (Array.isArray(response)) set(this.teams, [workspaceSlug], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  createTeam = async (workspaceSlug: string, data: Partial<IHelpdeskTeam>): Promise<IHelpdeskTeam> => {
+    const response = await this.helpdeskService.createTeam(workspaceSlug, data);
+    runInAction(() => {
+      const current = this.teams[workspaceSlug] || [];
+      set(this.teams, [workspaceSlug], [...current, response]);
+    });
+    return response;
+  };
+
+  updateTeam = async (workspaceSlug: string, teamId: string, data: Partial<IHelpdeskTeam>): Promise<IHelpdeskTeam> => {
+    const response = await this.helpdeskService.updateTeam(workspaceSlug, teamId, data);
+    runInAction(() => {
+      const current = this.teams[workspaceSlug] || [];
+      set(
+        this.teams,
+        [workspaceSlug],
+        current.map((t) => (t.id === teamId ? response : t))
+      );
+    });
+    return response;
+  };
+
+  deleteTeam = async (workspaceSlug: string, teamId: string): Promise<void> => {
+    await this.helpdeskService.deleteTeam(workspaceSlug, teamId);
+    runInAction(() => {
+      const current = this.teams[workspaceSlug] || [];
+      set(
+        this.teams,
+        [workspaceSlug],
+        current.filter((t) => t.id !== teamId)
+      );
+    });
+  };
+
+  // --- Macro management ---
+
+  fetchMacros = async (workspaceSlug: string): Promise<IHelpdeskMacro[]> => {
+    const key = `macros:${workspaceSlug}`;
+    this.startLoading(key);
+    try {
+      const response = await this.helpdeskService.getMacros(workspaceSlug);
+      runInAction(() => {
+        if (Array.isArray(response)) set(this.macros, [workspaceSlug], response);
+      });
+      this.stopLoading(key);
+      return response;
+    } catch (error) {
+      this.stopLoading(key, error);
+      throw error;
+    }
+  };
+
+  createMacro = async (workspaceSlug: string, data: Partial<IHelpdeskMacro>): Promise<IHelpdeskMacro> => {
+    const response = await this.helpdeskService.createMacro(workspaceSlug, data);
+    runInAction(() => {
+      const current = this.macros[workspaceSlug] || [];
+      set(this.macros, [workspaceSlug], [...current, response]);
+    });
+    return response;
+  };
+
+  updateMacro = async (
+    workspaceSlug: string,
+    macroId: string,
+    data: Partial<IHelpdeskMacro>
+  ): Promise<IHelpdeskMacro> => {
+    const response = await this.helpdeskService.updateMacro(workspaceSlug, macroId, data);
+    runInAction(() => {
+      const current = this.macros[workspaceSlug] || [];
+      set(
+        this.macros,
+        [workspaceSlug],
+        current.map((m) => (m.id === macroId ? response : m))
+      );
+    });
+    return response;
+  };
+
+  deleteMacro = async (workspaceSlug: string, macroId: string): Promise<void> => {
+    await this.helpdeskService.deleteMacro(workspaceSlug, macroId);
+    runInAction(() => {
+      const current = this.macros[workspaceSlug] || [];
+      set(
+        this.macros,
+        [workspaceSlug],
+        current.filter((m) => m.id !== macroId)
+      );
+    });
+  };
+
   // --- Customer management ---
 
   getWorkspaceCustomers = computedFn((workspaceSlug: string): IHelpdeskCustomer[] => {
@@ -1199,6 +1473,15 @@ export class HelpdeskStore implements IHelpdeskStore {
       this.stopLoading(key, error);
       throw error;
     }
+  };
+
+  createCustomer = async (workspaceSlug: string, data: Partial<IHelpdeskCustomer>): Promise<IHelpdeskCustomer> => {
+    const response = await this.helpdeskService.createCustomer(workspaceSlug, data);
+    runInAction(() => {
+      const current = this.customers[workspaceSlug] || [];
+      set(this.customers, [workspaceSlug], [response, ...current]);
+    });
+    return response;
   };
 
   updateCustomer = async (

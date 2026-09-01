@@ -15,7 +15,15 @@ from .draft import (
     DraftIssueModule,
     DraftIssueCycle,
 )
-from .estimate import Estimate, EstimatePoint
+from .estimate import (
+    Estimate,
+    EstimatePoint,
+    EstimateProperty,
+    EstimatePropertyRole,
+    IssueEstimatePropertyValue,
+    NUMERIC_ESTIMATE_TYPES,
+    project_has_active_numeric_estimate,
+)
 from .exporter import ExporterHistory
 from .importer import Importer
 from .intake import Intake, IntakeIssue
@@ -95,18 +103,25 @@ from .helpdesk import (
     HelpdeskCustomer,
     HelpdeskForm,
     HelpdeskFormField,
+    HelpdeskIMAPSyncLog,
+    HelpdeskMacro,
     HelpdeskMember,
     HelpdeskPortal,
     HelpdeskRequest,
+    HelpdeskRequestActivity,
     HelpdeskRequestAssignee,
+    HelpdeskRequestBookmark,
     HelpdeskRequestComment,
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
+    HelpdeskRequestReadReceipt,
     HelpdeskStatus,
+    HelpdeskTeam,
 )
 from .kpi import (
     KpiConfig,
     KpiIssueAttribute,
+    WorkspaceKpiAccess,
 )
 
 from .ai import (

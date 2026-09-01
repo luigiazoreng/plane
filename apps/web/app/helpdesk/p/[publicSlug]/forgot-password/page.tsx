@@ -22,11 +22,13 @@ const HelpdeskForgotPasswordPage = observer(() => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
 
     setLoading(true);
     try {
-      await publicStore.forgotPasswordCustomer(pSlug, email);
+      await publicStore.forgotPasswordCustomer(pSlug, cleanEmail);
+      setEmail(cleanEmail);
       setSubmitted(true);
     } catch (_err) {
       setToast({
@@ -42,19 +44,32 @@ const HelpdeskForgotPasswordPage = observer(() => {
   return (
     <div className="shadow-sm mx-auto mt-12 max-w-md rounded-lg border border-subtle bg-surface-2 p-8">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">Reset your password</h1>
-        <p className="text-sm text-text-400 mt-2">Enter your email and we'll send you a link to reset your password.</p>
+        <h1 className="text-2xl text-primary font-bold">Reset your password</h1>
+        <p className="text-sm text-placeholder mt-2">Enter your email and we'll send you a link to reset your password.</p>
       </div>
 
       {submitted ? (
-        <p className="text-sm text-text-200 text-center">
-          If an account exists for <span className="font-medium">{email}</span>, we've sent a password reset link to
-          that address.
-        </p>
+        <div className="space-y-6 text-center">
+          <p className="text-sm text-secondary">
+            If an account exists for <span className="text-primary font-medium">{email}</span>, we've sent a password
+            reset link to that address.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-center"
+            onClick={() => {
+              setSubmitted(false);
+              setEmail("");
+            }}
+          >
+            Try a different email
+          </Button>
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="text-sm text-text-200 mb-1.5 block font-medium">
+            <label htmlFor="email" className="text-sm text-secondary mb-1.5 block font-medium">
               Email Address
             </label>
             <Input
@@ -74,7 +89,7 @@ const HelpdeskForgotPasswordPage = observer(() => {
         </form>
       )}
 
-      <p className="text-sm text-text-400 mt-6 text-center">
+      <p className="text-sm text-placeholder mt-6 text-center">
         Remembered your password?{" "}
         <Link to={`/helpdesk/p/${pSlug}/login`} className="font-medium text-primary hover:underline">
           Sign in

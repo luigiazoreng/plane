@@ -22,6 +22,7 @@ const GROUP_BY_OPTIONS: { value: THelpdeskGroupBy; label: string }[] = [
   { value: "portal", label: "Portal" },
   { value: "form", label: "Form" },
   { value: "source", label: "Source" },
+  { value: "priority", label: "Priority" },
   { value: "none", label: "None" },
 ];
 
@@ -31,6 +32,8 @@ const ORDER_BY_OPTIONS: { value: THelpdeskOrderBy; label: string }[] = [
   { value: "-updated_at", label: "Last updated" },
   { value: "updated_at", label: "First updated" },
   { value: "title", label: "Title (A-Z)" },
+  { value: "priority", label: "Priority (urgent first)" },
+  { value: "-priority", label: "Priority (low first)" },
 ];
 
 export function HelpdeskDisplayDropdown(props: Props) {

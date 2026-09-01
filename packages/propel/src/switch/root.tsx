@@ -33,7 +33,10 @@ function Switch({ value, onChange, label, size = "sm", disabled, className }: IT
           ? "cursor-not-allowed bg-layer-1"
           : value
             ? "cursor-pointer bg-accent-primary"
-            : "cursor-pointer bg-surface-2",
+            : // The off track was bg-surface-2 -- the same token as the container
+              // it sits on -- so the control read as a faint outline. layer-3 is
+              // dark enough in both themes for the white thumb to register.
+              "cursor-pointer bg-layer-3",
         className
       )}
     >
@@ -51,9 +54,13 @@ function Switch({ value, onChange, label, size = "sm", disabled, className }: IT
               : size === "md"
                 ? "translate-x-4 bg-white"
                 : "translate-x-5 bg-white"
-            : "translate-x-0.5 bg-surface-2",
+            : // White in both states, as on every conventional toggle: the track
+              // carries the state, the thumb stays constant. It used to be
+              // bg-surface-2 here -- identical to the track -- so the off state
+              // had no visible thumb at all.
+              "translate-x-0.5 bg-white",
           // disabled
-          disabled && "cursor-not-allowed bg-surface-2"
+          disabled && "cursor-not-allowed bg-layer-2"
         )}
       />
     </BaseSwitch.Root>

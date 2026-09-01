@@ -1,6 +1,7 @@
 "use client";
 
 import { observer } from "mobx-react";
+import { Calendar, ChevronDown, Globe } from "lucide-react";
 import type { IHelpdeskAnalyticsFilters, IHelpdeskPortal, THelpdeskDateFilter } from "@plane/types";
 
 type Props = {
@@ -19,31 +20,49 @@ const DATE_FILTER_OPTIONS: { label: string; value: THelpdeskDateFilter }[] = [
 export const AnalyticsFilters = observer(function AnalyticsFilters({ filters, portals, onChange }: Props) {
   return (
     <div className="flex items-center gap-2">
-      <select
-        value={filters.date_filter}
-        onChange={(e) => onChange({ ...filters, date_filter: e.target.value as THelpdeskDateFilter })}
-        className="border-custom-border-200 bg-custom-background-100 text-xs text-custom-text-200 focus:ring-custom-border-300 h-7 rounded-md border px-2.5 font-medium focus:ring-1 focus:outline-none"
-      >
-        {DATE_FILTER_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-
-      {portals.length > 1 && (
+      {/* Date Filter */}
+      <div className="relative flex items-center">
+        <div className="text-tertiary pointer-events-none absolute left-2.5 flex items-center">
+          <Calendar className="size-3.5" />
+        </div>
         <select
-          value={filters.portal_id ?? ""}
-          onChange={(e) => onChange({ ...filters, portal_id: e.target.value || undefined })}
-          className="border-custom-border-200 bg-custom-background-100 text-xs text-custom-text-200 focus:ring-custom-border-300 h-7 rounded-md border px-2.5 font-medium focus:ring-1 focus:outline-none"
+          value={filters.date_filter}
+          onChange={(e) => onChange({ ...filters, date_filter: e.target.value as THelpdeskDateFilter })}
+          className="border-subtle bg-layer-1 text-primary hover:bg-layer-1-hover focus:ring-accent-primary text-xs h-7 cursor-pointer appearance-none rounded-md border pr-7 pl-8 font-medium transition-colors focus:ring-1 focus:outline-none"
         >
-          <option value="">All portals</option>
-          {portals.map((portal) => (
-            <option key={portal.id} value={portal.id}>
-              {portal.public_slug}
+          {DATE_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
+        <div className="text-tertiary pointer-events-none absolute right-2 flex items-center">
+          <ChevronDown className="size-3" />
+        </div>
+      </div>
+
+      {/* Portal Filter */}
+      {portals.length > 1 && (
+        <div className="relative flex items-center">
+          <div className="text-tertiary pointer-events-none absolute left-2.5 flex items-center">
+            <Globe className="size-3.5" />
+          </div>
+          <select
+            value={filters.portal_id ?? ""}
+            onChange={(e) => onChange({ ...filters, portal_id: e.target.value || undefined })}
+            className="border-subtle bg-layer-1 text-primary hover:bg-layer-1-hover focus:ring-accent-primary text-xs h-7 cursor-pointer appearance-none rounded-md border pr-7 pl-8 font-medium transition-colors focus:ring-1 focus:outline-none"
+          >
+            <option value="">All portals</option>
+            {portals.map((portal) => (
+              <option key={portal.id} value={portal.id}>
+                {portal.public_slug}
+              </option>
+            ))}
+          </select>
+          <div className="text-tertiary pointer-events-none absolute right-2 flex items-center">
+            <ChevronDown className="size-3" />
+          </div>
+        </div>
       )}
     </div>
   );

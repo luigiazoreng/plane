@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // icons
@@ -45,7 +45,16 @@ export const DraftIssueProperties = observer(function DraftIssueProperties(props
   const { getProjectById } = useProject();
   const { labelMap } = useLabel();
   const { addCycleToIssue, addModulesToIssue } = useWorkspaceDraftIssues();
-  const { areEstimateEnabledByProjectId } = useProjectEstimates();
+  const {
+    activeEstimatePropertyIdsByProjectId,
+    estimateSystemPropertyIdsByProjectId,
+    estimatePropertyById,
+    estimateById,
+    issueEstimatePropertyValueFor,
+    ensureProjectEstimateProperties,
+    getIssueEstimatePropertyValues,
+    updateIssueEstimatePropertyValue,
+  } = useProjectEstimates();
   const { getStateById } = useProjectState();
   const { isMobile } = usePlatformOS();
   const projectDetails = getProjectById(issue.project_id);
@@ -54,6 +63,14 @@ export const DraftIssueProperties = observer(function DraftIssueProperties(props
   const { workspaceSlug } = useParams();
   // derived values
   const stateDetails = getStateById(issue.state_id);
+  const estimateSystemPropertyIds = (issue.project_id && estimateSystemPropertyIdsByProjectId(issue.project_id)) || [];
+  const estimatePropertyIds = (issue.project_id && activeEstimatePropertyIdsByProjectId(issue.project_id)) || [];
+
+  useEffect(() => {
+    if (!workspaceSlug || !issue.project_id || !issue.id) return;
+    ensureProjectEstimateProperties(workspaceSlug.toString(), issue.project_id).catch(() => {});
+    getIssueEstimatePropertyValues(workspaceSlug.toString(), issue.project_id, issue.id).catch(() => {});
+  }, [workspaceSlug, issue.project_id, issue.id, ensureProjectEstimateProperties, getIssueEstimatePropertyValues]);
 
   const issueOperations = useMemo(
     () => ({
@@ -116,9 +133,6 @@ export const DraftIssueProperties = observer(function DraftIssueProperties(props
     updateIssue(issue.project_id, issue.id, {
       target_date: date ? (renderFormattedPayloadDate(date) ?? undefined) : undefined,
     });
-
-  const handleEstimate = (value: string | undefined) =>
-    issue?.project_id && updateIssue && updateIssue(issue.project_id, issue.id, { estimate_point: value });
 
   if (!issue.project_id) return null;
 
@@ -258,18 +272,63 @@ export const DraftIssueProperties = observer(function DraftIssueProperties(props
       )}
 
       {/* estimates */}
-      {issue.project_id && areEstimateEnabledByProjectId(issue.project_id?.toString()) && (
-        <div className="h-5" onClick={handleEventPropagation}>
-          <EstimateDropdown
-            value={issue.estimate_point ?? undefined}
-            onChange={handleEstimate}
-            projectId={issue.project_id}
-            buttonVariant="border-with-text"
-            renderByDefault={isMobile}
-            showTooltip
-          />
-        </div>
-      )}
+      {estimateSystemPropertyIds.map((propertyId) => {
+        const property = estimatePropertyById(propertyId);
+        if (!property || !issue.project_id) return null;
+        const systemName = estimateById(property.estimate)?.name;
+        const value = issueEstimatePropertyValueFor(issue.id, propertyId);
+        return (
+          <div key={propertyId} className="h-5" onClick={handleEventPropagation}>
+            <EstimateDropdown
+              value={value?.estimate_point ?? undefined}
+              estimateId={property.estimate}
+              onChange={(val) =>
+                updateIssueEstimatePropertyValue(
+                  workspaceSlug?.toString() ?? "",
+                  issue.project_id as string,
+                  issue.id,
+                  propertyId,
+                  val ?? null
+                )
+              }
+              projectId={issue.project_id}
+              buttonVariant="border-with-text"
+              renderByDefault={isMobile}
+              showTooltip
+              placeholder={systemName}
+            />
+          </div>
+        );
+      })}
+      {/* custom estimate properties */}
+      {estimatePropertyIds.map((propertyId) => {
+        const property = estimatePropertyById(propertyId);
+        if (!property || !issue.project_id) return null;
+        if (property.kpi_role && !projectDetails?.kpi_view) return null;
+        const value = issueEstimatePropertyValueFor(issue.id, propertyId);
+        return (
+          <div key={propertyId} className="h-5" onClick={handleEventPropagation}>
+            <EstimateDropdown
+              value={value?.estimate_point ?? undefined}
+              estimateId={property.estimate}
+              onChange={(val) =>
+                updateIssueEstimatePropertyValue(
+                  workspaceSlug?.toString() ?? "",
+                  issue.project_id as string,
+                  issue.id,
+                  propertyId,
+                  val ?? null
+                )
+              }
+              projectId={issue.project_id}
+              buttonVariant="border-with-text"
+              renderByDefault={isMobile}
+              showTooltip
+              placeholder={property.name}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 });

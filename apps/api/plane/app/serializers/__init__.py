@@ -108,6 +108,8 @@ from .estimate import (
     EstimatePointSerializer,
     EstimateReadSerializer,
     WorkspaceEstimateSerializer,
+    EstimatePropertySerializer,
+    IssueEstimatePropertyValueSerializer,
 )
 
 from .intake import (
@@ -136,6 +138,7 @@ from .helpdesk import (
 from .kpi import (
     KpiConfigSerializer,
     KpiIssueAttributeSerializer,
+    WorkspaceKpiAccessSerializer,
 )
 from .favorite import UserFavoriteSerializer
 

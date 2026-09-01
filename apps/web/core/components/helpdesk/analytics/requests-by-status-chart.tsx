@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { observer } from "mobx-react";
+import { BarChart3 } from "lucide-react";
 import { BarChart } from "@plane/propel/charts/bar-chart";
 import type { IHelpdeskStatusChartPoint } from "@plane/types";
 
@@ -38,14 +39,16 @@ export const RequestsByStatusChart = observer(function RequestsByStatusChart({ d
   );
 
   if (isLoading) {
-    return <div className="bg-custom-background-80 h-[260px] w-full animate-pulse rounded-lg" />;
+    return <div className="bg-layer-2 h-[260px] w-full animate-pulse rounded-lg" />;
   }
 
   if (!chartData.length) {
     return (
-      <div className="border-custom-border-100 bg-custom-background-90 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
-        <span className="text-2xl">📊</span>
-        <p className="text-sm text-custom-text-400">No status data for this period</p>
+      <div className="border-subtle bg-layer-2 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
+        <div className="bg-layer-3 text-tertiary flex size-10 items-center justify-center rounded-full">
+          <BarChart3 className="size-5" />
+        </div>
+        <p className="text-xs text-secondary font-medium">No status data for this period</p>
       </div>
     );
   }

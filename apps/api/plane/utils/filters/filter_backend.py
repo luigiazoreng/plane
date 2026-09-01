@@ -262,8 +262,11 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         for key, value in processed_conditions.items():
             # Default serialization to string; QueryDict expects strings
             if isinstance(value, list):
-                # Repeat key for list values (e.g., __in)
-                qd.setlist(key, [str(v) for v in value])
+                # __in/__range filters are django-filter BaseCSVFilter fields, whose
+                # widget reads a single comma-separated value via QueryDict.get()
+                # (not getlist()) -- setlist() here would silently keep only the
+                # LAST item and drop the rest, so join instead of repeating the key.
+                qd[key] = ",".join(str(v) for v in value)
             else:
                 qd[key] = "" if value is None else str(value)
 

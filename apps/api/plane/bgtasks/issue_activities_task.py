@@ -31,6 +31,7 @@ from plane.db.models import (
     State,
     User,
     EstimatePoint,
+    EstimateProperty,
 )
 from plane.settings.redis import redis_instance
 from plane.utils.exception_logger import log_exception
@@ -474,6 +475,58 @@ def track_estimate_points(
                 epoch=epoch,
             )
         )
+
+
+def track_estimate_property_value_activity(
+    requested_data,
+    current_instance,
+    issue_id,
+    project_id,
+    workspace_id,
+    actor_id,
+    issue_activities,
+    epoch,
+):
+    """Precise per-system activity logging for IssueEstimatePropertyValue
+    changes (Step B5/B6) -- field is scoped by property id
+    (`estimate_property_<property_id>`) so multiple estimate systems on the
+    same project never collide in the activity log, unlike the legacy
+    `estimate_<type>` field used by track_estimate_points. Called directly
+    (registered in the top-level ACTIVITY_MAPPER, not the narrower
+    ISSUE_ACTIVITY_MAPPER used inside update_issue_activity) for EVERY
+    property value change -- system-default rows AND custom/KPI rows alike.
+    """
+    requested_data = json.loads(requested_data) if requested_data is not None else {}
+    current_instance = json.loads(current_instance) if current_instance is not None else {}
+
+    old_point_id = current_instance.get("estimate_point")
+    new_point_id = requested_data.get("estimate_point")
+    if old_point_id == new_point_id:
+        return
+
+    property_id = requested_data.get("property_id")
+    estimate_property = (
+        EstimateProperty.objects.filter(pk=property_id).first() if property_id is not None else None
+    )
+    old_point = EstimatePoint.objects.filter(pk=old_point_id).first() if old_point_id is not None else None
+    new_point = EstimatePoint.objects.filter(pk=new_point_id).first() if new_point_id is not None else None
+
+    issue_activities.append(
+        IssueActivity(
+            issue_id=issue_id,
+            actor_id=actor_id,
+            verb="removed" if new_point is None else "updated",
+            old_identifier=old_point_id,
+            new_identifier=new_point_id,
+            old_value=old_point.value if old_point else None,
+            new_value=new_point.value if new_point else None,
+            field=f"estimate_property_{property_id}",
+            project_id=project_id,
+            workspace_id=workspace_id,
+            comment=f"updated the {estimate_property.name if estimate_property else 'estimate'} estimate to ",
+            epoch=epoch,
+        )
+    )
 
 
 def track_archive_at(
@@ -1566,6 +1619,7 @@ def issue_activity(
             "issue_draft.activity.updated": update_draft_issue_activity,
             "issue_draft.activity.deleted": delete_draft_issue_activity,
             "intake.activity.created": create_intake_activity,
+            "estimate_property_value.activity.updated": track_estimate_property_value_activity,
         }
 
         func = ACTIVITY_MAPPER.get(type)

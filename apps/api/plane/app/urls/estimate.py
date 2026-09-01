@@ -9,6 +9,12 @@ from plane.app.views import (
     ProjectEstimatePointEndpoint,
     BulkEstimatePointEndpoint,
     EstimatePointEndpoint,
+    EstimatePropertyListCreateEndpoint,
+    EstimatePropertyDetailEndpoint,
+    EstimatePropertyKpiRoleEndpoint,
+    IssueEstimatePropertyValueListEndpoint,
+    IssueEstimatePropertyValueBulkListEndpoint,
+    IssueEstimatePropertyValueEndpoint,
 )
 
 
@@ -37,5 +43,40 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/estimates/<uuid:estimate_id>/estimate-points/<estimate_point_id>/",
         EstimatePointEndpoint.as_view({"patch": "partial_update", "delete": "destroy"}),
         name="estimate-points",
+    ),
+    # Estimate Properties -- dynamic, named work-item estimate rows (Difficulty
+    # and Repetitive are the two KPI-reserved ones; admins can add more).
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/estimate-properties/",
+        EstimatePropertyListCreateEndpoint.as_view({"get": "list", "post": "create"}),
+        name="estimate-properties",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/estimate-properties/<uuid:property_id>/",
+        EstimatePropertyDetailEndpoint.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="estimate-property-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/estimate-properties/kpi-role/<str:role>/",
+        EstimatePropertyKpiRoleEndpoint.as_view(),
+        name="estimate-property-kpi-role",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/estimate-properties/",
+        IssueEstimatePropertyValueListEndpoint.as_view(),
+        name="issue-estimate-property-values",
+    ),
+    # F1: bulk-list values for many issues of one project in a single request
+    # (issue_ids= csv query param) -- pairs with estimate-properties/ above,
+    # which already returns bulk *properties* for a project.
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-estimate-properties/",
+        IssueEstimatePropertyValueBulkListEndpoint.as_view(),
+        name="issue-estimate-property-values-bulk",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/estimate-properties/<uuid:property_id>/",
+        IssueEstimatePropertyValueEndpoint.as_view(),
+        name="issue-estimate-property-value",
     ),
 ]

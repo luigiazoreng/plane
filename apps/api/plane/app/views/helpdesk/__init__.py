@@ -6,7 +6,13 @@ from .auth import (
     PublicHelpdeskCustomerForgotPasswordEndpoint,
     PublicHelpdeskCustomerResetPasswordEndpoint,
 )
-from .portal import HelpdeskPortalViewSet, PublicHelpdeskPortalEndpoint
+from .portal import (
+    HelpdeskPortalViewSet,
+    PublicHelpdeskPortalEndpoint,
+    HelpdeskPortalEmailLogsEndpoint,
+    HelpdeskPortalIMAPLogsEndpoint,
+    HelpdeskPortalIMAPSyncEndpoint,
+)
 from .form import (
     HelpdeskFormFieldViewSet,
     HelpdeskFormViewSet,
@@ -23,3 +29,12 @@ from .analytics import HelpdeskAnalyticsEndpoint
 from .sse import HelpdeskSSEView, HelpdeskSSETokenView
 from .member import HelpdeskMemberViewSet
 from .customer import HelpdeskCustomerViewSet
+from .asset import HelpdeskAssetEndpoint, PublicHelpdeskAssetEndpoint
+from .activity import (
+    HelpdeskRequestActivityViewSet,
+    HelpdeskCustomerHistoryEndpoint,
+    HelpdeskCustomerStatsEndpoint,
+)
+from .team import HelpdeskTeamViewSet
+from .macro import HelpdeskMacroViewSet
+

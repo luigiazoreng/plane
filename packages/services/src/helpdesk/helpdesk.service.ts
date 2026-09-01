@@ -18,10 +18,16 @@ import type {
   IHelpdeskPaginatedResponse,
   IHelpdeskPortal,
   IHelpdeskRequest,
+  IHelpdeskAssetUploadResponse,
   IHelpdeskRequestComment,
+  IHelpdeskRequestActivity,
+  IHelpdeskCustomerStats,
   IHelpdeskRequestIntakeIssue,
   IHelpdeskRequestIssue,
   IHelpdeskStatus,
+  IHelpdeskTeam,
+  IHelpdeskMacro,
+  IHelpdeskIMAPSyncLog,
 } from "@plane/types";
 
 export class HelpdeskService extends APIService {
@@ -79,6 +85,18 @@ export class HelpdeskService extends APIService {
 
   async deletePortal(workspaceSlug: string, portalId: string): Promise<void> {
     return this.delete(`${workspaceSlug}/helpdesk/portals/${portalId}/`).then((res) => res?.data);
+  }
+
+  async getPortalEmailLogs(workspaceSlug: string, portalId: string): Promise<IHelpdeskRequestComment[]> {
+    return this.get(`${workspaceSlug}/helpdesk/portals/${portalId}/email-logs/`).then((res) => res?.data);
+  }
+
+  async getPortalIMAPLogs(workspaceSlug: string, portalId: string): Promise<IHelpdeskIMAPSyncLog[]> {
+    return this.get(`${workspaceSlug}/helpdesk/portals/${portalId}/imap-logs/`).then((res) => res?.data);
+  }
+
+  async syncPortalIMAP(workspaceSlug: string, portalId: string): Promise<any> {
+    return this.post(`${workspaceSlug}/helpdesk/portals/${portalId}/imap-sync/`).then((res) => res?.data);
   }
 
   // --- Form Management ---
@@ -175,6 +193,27 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/requests/${requestId}/archive/`).then((res) => res?.data);
   }
 
+  async markRequestRead(
+    workspaceSlug: string,
+    requestId: string
+  ): Promise<{ is_unread: boolean; last_read_at: string }> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/mark-read/`, {}).then((res) => res?.data);
+  }
+
+  async toggleBookmark(workspaceSlug: string, requestId: string): Promise<{ is_bookmarked: boolean }> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/bookmark/`, {}).then((res) => res?.data);
+  }
+
+  async snoozeRequest(
+    workspaceSlug: string,
+    requestId: string,
+    snoozedUntil: string | null
+  ): Promise<{ snoozed_until: string | null }> {
+    return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/snooze/`, {
+      snoozed_until: snoozedUntil,
+    }).then((res) => res?.data);
+  }
+
   // --- Comments Management ---
 
   async getRequestComments(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestComment[]> {
@@ -187,6 +226,38 @@ export class HelpdeskService extends APIService {
     data: Partial<IHelpdeskRequestComment>
   ): Promise<IHelpdeskRequestComment> {
     return this.post(`${workspaceSlug}/helpdesk/requests/${requestId}/comments/`, data).then((res) => res?.data);
+  }
+
+  async getRequestActivities(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequestActivity[]> {
+    return this.get(`${workspaceSlug}/helpdesk/requests/${requestId}/activities/`).then((res) => res?.data);
+  }
+
+  async getCustomerHistory(workspaceSlug: string, requestId: string): Promise<IHelpdeskRequest[]> {
+    return this.get(`${workspaceSlug}/helpdesk/requests/${requestId}/customer-history/`).then((res) => res?.data);
+  }
+
+  async getCustomerStats(workspaceSlug: string, requestId: string): Promise<IHelpdeskCustomerStats> {
+    return this.get(`${workspaceSlug}/helpdesk/requests/${requestId}/customer-stats/`).then((res) => res?.data);
+  }
+
+  // --- Attachments ---
+  // Three steps, matching the issue-attachment flow: ask for credentials, PUT
+  // the bytes straight to storage, then confirm. The asset starts unbound and
+  // is claimed by the comment it is sent with.
+
+  async getAssetUploadCredentials(
+    workspaceSlug: string,
+    data: { name: string; type: string; size: number; entity_type?: string }
+  ): Promise<IHelpdeskAssetUploadResponse> {
+    return this.post(`${workspaceSlug}/helpdesk/assets/`, data).then((res) => res?.data);
+  }
+
+  async markAssetUploaded(workspaceSlug: string, assetId: string): Promise<void> {
+    return this.patch(`${workspaceSlug}/helpdesk/assets/${assetId}/`).then((res) => res?.data);
+  }
+
+  async deleteAsset(workspaceSlug: string, assetId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/assets/${assetId}/`).then((res) => res?.data);
   }
 
   // --- Issue Links ---
@@ -269,10 +340,50 @@ export class HelpdeskService extends APIService {
     return this.delete(`${workspaceSlug}/helpdesk/members/${memberId}/`).then((res) => res?.data);
   }
 
+  // --- Team Management ---
+
+  async getTeams(workspaceSlug: string): Promise<IHelpdeskTeam[]> {
+    return this.get(`${workspaceSlug}/helpdesk/teams/`).then((res) => res?.data);
+  }
+
+  async createTeam(workspaceSlug: string, data: Partial<IHelpdeskTeam>): Promise<IHelpdeskTeam> {
+    return this.post(`${workspaceSlug}/helpdesk/teams/`, data).then((res) => res?.data);
+  }
+
+  async updateTeam(workspaceSlug: string, teamId: string, data: Partial<IHelpdeskTeam>): Promise<IHelpdeskTeam> {
+    return this.patch(`${workspaceSlug}/helpdesk/teams/${teamId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteTeam(workspaceSlug: string, teamId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/teams/${teamId}/`).then((res) => res?.data);
+  }
+
+  // --- Macro Management ---
+
+  async getMacros(workspaceSlug: string): Promise<IHelpdeskMacro[]> {
+    return this.get(`${workspaceSlug}/helpdesk/macros/`).then((res) => res?.data);
+  }
+
+  async createMacro(workspaceSlug: string, data: Partial<IHelpdeskMacro>): Promise<IHelpdeskMacro> {
+    return this.post(`${workspaceSlug}/helpdesk/macros/`, data).then((res) => res?.data);
+  }
+
+  async updateMacro(workspaceSlug: string, macroId: string, data: Partial<IHelpdeskMacro>): Promise<IHelpdeskMacro> {
+    return this.patch(`${workspaceSlug}/helpdesk/macros/${macroId}/`, data).then((res) => res?.data);
+  }
+
+  async deleteMacro(workspaceSlug: string, macroId: string): Promise<void> {
+    return this.delete(`${workspaceSlug}/helpdesk/macros/${macroId}/`).then((res) => res?.data);
+  }
+
   // --- Customer Management (admin) ---
 
   async getCustomers(workspaceSlug: string): Promise<IHelpdeskCustomer[]> {
     return this.get(`${workspaceSlug}/helpdesk/customers/`).then((res) => res?.data);
+  }
+
+  async createCustomer(workspaceSlug: string, data: Partial<IHelpdeskCustomer>): Promise<IHelpdeskCustomer> {
+    return this.post(`${workspaceSlug}/helpdesk/customers/`, data).then((res) => res?.data);
   }
 
   async updateCustomer(
@@ -373,5 +484,21 @@ export class PublicHelpdeskService extends APIService {
   ): Promise<IHelpdeskRequestComment> {
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     return this.post(`portals/${publicSlug}/requests/${requestId}/comments/`, data, config).then((res) => res?.data);
+  }
+
+  // --- Attachments ---
+
+  async getAssetUploadCredentials(
+    publicSlug: string,
+    data: { name: string; type: string; size: number; entity_type?: string },
+    token?: string
+  ): Promise<IHelpdeskAssetUploadResponse> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.post(`portals/${publicSlug}/assets/`, data, config).then((res) => res?.data);
+  }
+
+  async markAssetUploaded(publicSlug: string, assetId: string, token?: string): Promise<void> {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return this.patch(`portals/${publicSlug}/assets/${assetId}/`, {}, config).then((res) => res?.data);
   }
 }

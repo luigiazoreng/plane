@@ -1,19 +1,31 @@
 from django.urls import path
 
 from plane.app.views.kpi import (
+    WorkspaceKpiAccessEndpoint,
+    WorkspaceKpiAccessDetailEndpoint,
     KpiWorkspaceConfigEndpoint,
     KpiProjectConfigEndpoint,
     KpiIssueListEndpoint,
     KpiMemberAggregateEndpoint,
     WorkspaceKpiMemberAggregateEndpoint,
+    WorkspaceKpiOverviewEndpoint,
     KpiIssueAttributeEndpoint,
-    KpiIssueEstimateEndpoint,
-    KpiIssueRepetitiveEstimateEndpoint,
     KpiIssuePriorityEndpoint,
     KpiPreviewEndpoint,
 )
 
 urlpatterns = [
+    # Who, besides workspace admins, may open the workspace KPI panels
+    path(
+        "workspaces/<str:slug>/kpi/access/",
+        WorkspaceKpiAccessEndpoint.as_view(),
+        name="workspace-kpi-access",
+    ),
+    path(
+        "workspaces/<str:slug>/kpi/access/<uuid:pk>/",
+        WorkspaceKpiAccessDetailEndpoint.as_view(),
+        name="workspace-kpi-access-detail",
+    ),
     # Workspace-default config
     path(
         "workspaces/<str:slug>/kpi/config/",
@@ -26,11 +38,17 @@ urlpatterns = [
         KpiProjectConfigEndpoint.as_view(),
         name="kpi-project-config",
     ),
-    # Workspace members aggregates (across all projects)
+    # Workspace members aggregates (across the active KPI projects)
     path(
         "workspaces/<str:slug>/kpi/members/",
         WorkspaceKpiMemberAggregateEndpoint.as_view(),
         name="workspace-kpi-member-aggregates",
+    ),
+    # Consolidated workspace panel: unified KPI + per-project + per-member
+    path(
+        "workspaces/<str:slug>/kpi/overview/",
+        WorkspaceKpiOverviewEndpoint.as_view(),
+        name="workspace-kpi-overview",
     ),
     # Project issues with computed KPI values + aggregates
     path(
@@ -50,17 +68,9 @@ urlpatterns = [
         KpiIssueAttributeEndpoint.as_view(),
         name="kpi-issue-attributes",
     ),
-    # Per-issue estimate (Difficulty source)
-    path(
-        "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/issues/<uuid:issue_id>/estimate/",
-        KpiIssueEstimateEndpoint.as_view(),
-        name="kpi-issue-estimate",
-    ),
-    path(
-        "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/issues/<uuid:issue_id>/repetitive-estimate/",
-        KpiIssueRepetitiveEstimateEndpoint.as_view(),
-        name="kpi-issue-repetitive-estimate",
-    ),
+    # Per-issue Difficulty/Repetitive estimate values now live under
+    # estimate-properties/ (see plane.app.urls.estimate) -- they're no longer
+    # KPI-specific routes, since EstimateProperty generalizes them to N slots.
     # Per-issue priority (Importance source)
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/kpi/issues/<uuid:issue_id>/priority/",

@@ -1,10 +1,11 @@
 from datetime import timedelta
 
-from django.db.models import Avg, Count, ExpressionWrapper, F, Min, fields
+from django.db.models import Avg, Count, ExpressionWrapper, F, Min, Q, fields
 from django.db.models.functions import Coalesce, TruncDate, TruncMonth
 from rest_framework import status as http_status
 from rest_framework.response import Response
 
+from plane.app.permissions import ROLE, allow_permission
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import HelpdeskPortal, HelpdeskRequest, HelpdeskRequestAssignee, HelpdeskStatus
@@ -25,9 +26,19 @@ def _duration_to_hours(td):
     return round(td.total_seconds() / 3600, 2)
 
 
-def _get_trunc_fn(date_filter):
+from datetime import datetime, timedelta
+
+def _get_trunc_fn(date_filter, start_date=None, end_date=None):
     if date_filter in ("yesterday", "last_7_days", "last_30_days"):
         return TruncDate
+    if date_filter == "custom" and start_date and end_date:
+        try:
+            s = datetime.strptime(start_date, "%Y-%m-%d").date()
+            e = datetime.strptime(end_date, "%Y-%m-%d").date()
+            if (e - s).days <= 31:
+                return TruncDate
+        except (ValueError, TypeError):
+            pass
     return TruncMonth
 
 
@@ -43,15 +54,27 @@ def _ref_date_expr():
 
 
 class HelpdeskAnalyticsEndpoint(BaseAPIView):
+    """Workspace-wide helpdesk analytics.
 
+    The gate is conjunctive on purpose. Helpdesk membership alone used to be
+    enough, which let a workspace GUEST who happened to hold any helpdesk role
+    read ``top_agents`` -- per-agent names, volumes and SLA percentages for the
+    whole workspace. That is performance data about people, so it now also
+    requires a workspace role of MEMBER or above, the same floor the KPI
+    endpoints apply (see plane.app.views.kpi.issue).
+    """
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug):
         if get_helpdesk_role(request.user, slug) is None:
             return Response({"error": "Access denied."}, status=http_status.HTTP_403_FORBIDDEN)
         date_filter = request.query_params.get("date_filter", "last_30_days")
         portal_id = request.query_params.get("portal_id")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
 
-        date_ranges = get_analytics_date_range(date_filter)
-        chart_range = get_chart_period_range(date_filter)
+        date_ranges = get_analytics_date_range(date_filter, start_date=start_date, end_date=end_date)
+        chart_range = get_chart_period_range(date_filter, start_date=start_date, end_date=end_date)
 
         if not date_ranges:
             return Response({"error": "Invalid date_filter"}, status=400)
@@ -100,7 +123,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             current_qs.filter(first_responded_at__isnull=False)
             .annotate(
                 response_duration=ExpressionWrapper(
-                    F("first_responded_at") - F("created_at"),
+                    F("first_responded_at") - F("created_at") - F("total_paused_duration"),
                     output_field=fields.DurationField(),
                 )
             )
@@ -111,7 +134,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             current_qs.filter(resolved_at__isnull=False)
             .annotate(
                 resolution_duration=ExpressionWrapper(
-                    F("resolved_at") - F("created_at"),
+                    F("resolved_at") - F("created_at") - F("total_paused_duration"),
                     output_field=fields.DurationField(),
                 )
             )
@@ -163,7 +186,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                 sla_threshold = timedelta(hours=portal.sla_first_response_hours)
                 responded_qs = current_qs.filter(first_responded_at__isnull=False).annotate(
                     response_duration=ExpressionWrapper(
-                        F("first_responded_at") - F("created_at"),
+                        F("first_responded_at") - F("created_at") - F("total_paused_duration"),
                         output_field=fields.DurationField(),
                     )
                 )
@@ -176,7 +199,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                 sla_threshold = timedelta(hours=portal.sla_resolution_hours)
                 resolved_qs = current_qs.filter(resolved_at__isnull=False).annotate(
                     resolution_duration=ExpressionWrapper(
-                        F("resolved_at") - F("created_at"),
+                        F("resolved_at") - F("created_at") - F("total_paused_duration"),
                         output_field=fields.DurationField(),
                     )
                 )
@@ -186,7 +209,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                     sla_data["resolution_pct"] = round(within_sla / total_resolved * 100, 1)
 
         # --- Charts ---
-        trunc_fn = _get_trunc_fn(date_filter)
+        trunc_fn = _get_trunc_fn(date_filter, start_date=start_date, end_date=end_date)
 
         # Group by ref_date (start_date when available) so imported tickets distribute
         # across their original historical dates rather than clustering at import time.
@@ -223,7 +246,7 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
             .annotate(
                 date=trunc_fn("ref_date"),
                 resolution_duration=ExpressionWrapper(
-                    F("resolved_at") - F("created_at"),
+                    F("resolved_at") - F("created_at") - F("total_paused_duration"),
                     output_field=fields.DurationField(),
                 ),
             )
@@ -240,8 +263,12 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
         ]
 
         # Top agents: count resolved tickets in the current period using the same
-        # ref_date logic (COALESCE(request__start_date, DATE(request__created_at))).
-        top_agents = list(
+        # ref_date logic (COALESCE(request__start_date, DATE(request__created_at))),
+        # plus each agent's own SLA compliance -- ticket VOLUME alone isn't a quality
+        # signal (an agent who closed 1 ticket isn't "worse" than one who closed 24;
+        # see the Executive Dashboard's Team Performance table, which uses this
+        # per-agent SLA % rather than raw count as its Helpdesk quality score).
+        top_agents_qs = (
             HelpdeskRequestAssignee.objects.filter(
                 request__workspace__slug=slug,
                 request__archived_at__isnull=True,
@@ -257,18 +284,69 @@ class HelpdeskAnalyticsEndpoint(BaseAPIView):
                 req_ref_date__gte=current_range["gte"],
                 req_ref_date__lte=current_range["lte"],
             )
-            .values("assignee_id", "assignee__display_name")
-            .annotate(count=Count("request_id", distinct=True))
-            .order_by("-count")[:10]
         )
-        top_agents_formatted = [
-            {
-                "agent_id": str(row["assignee_id"]),
-                "display_name": row["assignee__display_name"] or "",
-                "count": row["count"],
-            }
-            for row in top_agents
-        ]
+
+        response_sla_threshold = (
+            timedelta(hours=portal.sla_first_response_hours) if portal and portal.sla_first_response_hours else None
+        )
+        resolution_sla_threshold = (
+            timedelta(hours=portal.sla_resolution_hours) if portal and portal.sla_resolution_hours else None
+        )
+
+        agent_annotations = {"count": Count("request_id", distinct=True)}
+        if response_sla_threshold is not None:
+            top_agents_qs = top_agents_qs.annotate(
+                response_duration=ExpressionWrapper(
+                    F("request__first_responded_at") - F("request__created_at") - F("request__total_paused_duration"),
+                    output_field=fields.DurationField(),
+                )
+            )
+            agent_annotations["responded_count"] = Count(
+                "request_id", filter=Q(request__first_responded_at__isnull=False), distinct=True
+            )
+            agent_annotations["responded_within_sla_count"] = Count(
+                "request_id",
+                filter=Q(request__first_responded_at__isnull=False, response_duration__lte=response_sla_threshold),
+                distinct=True,
+            )
+        if resolution_sla_threshold is not None:
+            top_agents_qs = top_agents_qs.annotate(
+                resolution_duration=ExpressionWrapper(
+                    F("request__resolved_at") - F("request__created_at") - F("request__total_paused_duration"),
+                    output_field=fields.DurationField(),
+                )
+            )
+            agent_annotations["resolved_count"] = Count(
+                "request_id", filter=Q(request__resolved_at__isnull=False), distinct=True
+            )
+            agent_annotations["resolved_within_sla_count"] = Count(
+                "request_id",
+                filter=Q(request__resolved_at__isnull=False, resolution_duration__lte=resolution_sla_threshold),
+                distinct=True,
+            )
+
+        top_agents = list(
+            top_agents_qs.values("assignee_id", "assignee__display_name").annotate(**agent_annotations).order_by(
+                "-count"
+            )[:10]
+        )
+        top_agents_formatted = []
+        for row in top_agents:
+            sla_first_response_pct = None
+            if response_sla_threshold is not None and row.get("responded_count"):
+                sla_first_response_pct = round(row["responded_within_sla_count"] / row["responded_count"] * 100, 1)
+            sla_resolution_pct = None
+            if resolution_sla_threshold is not None and row.get("resolved_count"):
+                sla_resolution_pct = round(row["resolved_within_sla_count"] / row["resolved_count"] * 100, 1)
+            top_agents_formatted.append(
+                {
+                    "agent_id": str(row["assignee_id"]),
+                    "display_name": row["assignee__display_name"] or "",
+                    "count": row["count"],
+                    "sla_first_response_pct": sla_first_response_pct,
+                    "sla_resolution_pct": sla_resolution_pct,
+                }
+            )
 
         def format_date(val):
             if val is None:

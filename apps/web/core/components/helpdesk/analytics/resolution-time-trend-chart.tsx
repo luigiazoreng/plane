@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { observer } from "mobx-react";
+import { Clock } from "lucide-react";
 import { AreaChart } from "@plane/propel/charts/area-chart";
 import type { IHelpdeskResolutionTrendPoint } from "@plane/types";
 
@@ -13,8 +14,8 @@ type Props = {
 const AREAS = [
   {
     key: "avg_hours",
-    label: "Avg resolution (h)",
-    fill: "#8B5CF633",
+    label: "Avg resolution (hours)",
+    fill: "#8B5CF626",
     fillOpacity: 1,
     stackId: "bar-one",
     showDot: false,
@@ -37,14 +38,16 @@ export const ResolutionTimeTrendChart = observer(function ResolutionTimeTrendCha
   );
 
   if (isLoading) {
-    return <div className="bg-custom-background-80 h-[260px] w-full animate-pulse rounded-lg" />;
+    return <div className="bg-layer-2 h-[260px] w-full animate-pulse rounded-lg" />;
   }
 
   if (!chartData.length) {
     return (
-      <div className="border-custom-border-100 bg-custom-background-90 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
-        <span className="text-2xl">⏱️</span>
-        <p className="text-sm text-custom-text-400">No resolution time data for this period</p>
+      <div className="border-subtle bg-layer-2 flex h-[260px] flex-col items-center justify-center gap-2 rounded-lg border">
+        <div className="bg-layer-3 text-tertiary flex size-10 items-center justify-center rounded-full">
+          <Clock className="size-5" />
+        </div>
+        <p className="text-xs text-secondary font-medium">No resolution time data for this period</p>
       </div>
     );
   }

@@ -175,5 +175,12 @@ def assign_helpdesk_request_automatically(helpdesk_request, request_payload=None
     if not assignee_id:
         return None
 
-    helpdesk_request.assignees.set([assignee_id])
+    # assignees.set() doesn't know about the through model's workspace field
+    # (it's not part of through_fields), so it inserts workspace_id=NULL and
+    # trips the NOT NULL constraint. Create the through row directly instead.
+    HelpdeskRequestAssignee.objects.create(
+        request=helpdesk_request,
+        assignee_id=assignee_id,
+        workspace_id=helpdesk_request.workspace_id,
+    )
     return assignee_id

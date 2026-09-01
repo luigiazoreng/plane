@@ -42,7 +42,7 @@ const HelpdeskPublicNewRequestPage = observer(() => {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2" />
+        <div className="border-accent-subtle h-8 w-8 animate-spin rounded-full border-b-2" />
       </div>
     );
   }
@@ -50,8 +50,8 @@ const HelpdeskPublicNewRequestPage = observer(() => {
   if (publicStore.portalForms.length === 0) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <h1 className="text-2xl text-text-100 font-bold">No forms available</h1>
-        <p className="text-text-400 mt-2">This portal does not have any active request forms right now.</p>
+        <h1 className="text-2xl text-primary font-bold">No forms available</h1>
+        <p className="text-placeholder mt-2">This portal does not have any active request forms right now.</p>
         <Button className="mt-6" variant="secondary" onClick={() => navigate(`/helpdesk/p/${pSlug}`)}>
           Return to Portal
         </Button>
@@ -62,8 +62,8 @@ const HelpdeskPublicNewRequestPage = observer(() => {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-3xl text-text-100 font-bold">Choose a request form</h1>
-        <p className="text-text-400 mt-2">Select the form that best matches the kind of support you need.</p>
+        <h1 className="text-3xl text-primary font-bold">Choose a request form</h1>
+        <p className="text-placeholder mt-2">Select the form that best matches the kind of support you need.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -72,21 +72,21 @@ const HelpdeskPublicNewRequestPage = observer(() => {
             key={form.id}
             type="button"
             onClick={() => navigate(`/helpdesk/p/${pSlug}/forms/${form.slug}`)}
-            className="hover:border-primary/30 rounded-xl border border-subtle bg-surface-2 p-6 text-left transition-colors hover:bg-surface-1"
+            className="hover:border-accent-subtle rounded-xl border border-subtle bg-surface-2 p-6 text-left transition-colors hover:bg-surface-1"
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-lg text-primary">
+              <div className="bg-accent-subtle flex h-10 w-10 items-center justify-center rounded-lg text-accent-primary">
                 <Plus className="size-5" />
               </div>
               <Badge variant={form.visibility === "private" ? "warning" : "success"} size="sm">
                 {form.visibility === "private" ? "Private" : "Public"}
               </Badge>
             </div>
-            <h2 className="text-lg text-text-100 mt-4 font-semibold">{form.name}</h2>
-            <p className="text-sm text-text-400 mt-2 line-clamp-3">
+            <h2 className="text-lg text-primary mt-4 font-semibold">{form.name}</h2>
+            <p className="text-sm text-placeholder mt-2 line-clamp-3">
               {form.description || "Open this form to submit a request to the support team."}
             </p>
-            <div className="text-xs text-text-400 mt-4 flex items-center gap-2">
+            <div className="text-xs text-placeholder mt-4 flex items-center gap-2">
               {form.visibility === "private" ? <Lock className="size-3.5" /> : null}
               <span>
                 {form.visibility === "private"

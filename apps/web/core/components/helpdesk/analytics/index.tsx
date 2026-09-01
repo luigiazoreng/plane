@@ -1,6 +1,8 @@
 "use client";
 
+import React from "react";
 import { observer } from "mobx-react";
+import { BarChart3, Clock, PieChart, TrendingUp, Trophy } from "lucide-react";
 import type { IHelpdeskAnalyticsFilters, IHelpdeskAnalyticsResponse, IHelpdeskPortal } from "@plane/types";
 import { KpiCards } from "./kpi-cards";
 import { SLAComplianceCard } from "./sla-compliance-card";
@@ -18,49 +20,67 @@ type Props = {
   onFiltersChange: (filters: IHelpdeskAnalyticsFilters) => void;
 };
 
-const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="border-custom-border-200 bg-custom-background-100 flex flex-col gap-4 rounded-xl border p-5">
-    <h3 className="text-sm text-custom-text-200 font-semibold">{title}</h3>
-    {children}
+const AnalyticsCardWrapper = ({
+  title,
+  icon: Icon,
+  subtitle,
+  children,
+}: {
+  title: string;
+  icon?: React.ElementType;
+  subtitle?: string;
+  children: React.ReactNode;
+}) => (
+  <div className="flex flex-col justify-between gap-4 rounded-md border border-subtle bg-layer-1 p-4 transition-all duration-200">
+    <div className="flex items-center justify-between border-b border-subtle pb-3">
+      <div className="flex items-center gap-2">
+        {Icon && <Icon className="size-4 text-tertiary" />}
+        <h3 className="text-11 font-semibold uppercase tracking-wider text-primary">{title}</h3>
+      </div>
+      {subtitle && <span className="text-11 font-medium text-tertiary">{subtitle}</span>}
+    </div>
+    <div className="flex-1">{children}</div>
   </div>
 );
 
 export const HelpdeskAnalyticsView = observer(function HelpdeskAnalyticsView({ analytics, isLoading }: Props) {
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-6 p-6">
       {/* KPI Cards */}
       <KpiCards kpis={analytics?.kpis} isLoading={isLoading} />
 
-      {/* Row: SLA + Requests over time */}
-      <div className="grid grid-cols-3 gap-5">
+      {/* Row 1: SLA + Requests over time */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <SLAComplianceCard sla={analytics?.sla} isLoading={isLoading} />
-        <div className="col-span-2">
-          <SectionCard title="Requests over time">
+        <div className="lg:col-span-2">
+          <AnalyticsCardWrapper title="Requests Volume Over Time" icon={TrendingUp} subtitle="Daily / Monthly trend">
             <RequestsOverTimeChart data={analytics?.charts.requests_over_time} isLoading={isLoading} />
-          </SectionCard>
+          </AnalyticsCardWrapper>
         </div>
       </div>
 
-      {/* Row: By status + By source */}
-      <div className="grid grid-cols-2 gap-5">
-        <SectionCard title="By status">
+      {/* Row 2: By status + By source */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <AnalyticsCardWrapper title="Requests by Status" icon={BarChart3} subtitle="Current breakdown">
           <RequestsByStatusChart data={analytics?.charts.by_status} isLoading={isLoading} />
-        </SectionCard>
-        <SectionCard title="By source">
+        </AnalyticsCardWrapper>
+
+        <AnalyticsCardWrapper title="Requests by Channel Source" icon={PieChart} subtitle="Inbound origin">
           <RequestsBySourceChart data={analytics?.charts.by_source} isLoading={isLoading} />
-        </SectionCard>
+        </AnalyticsCardWrapper>
       </div>
 
-      {/* Row: Resolution trend + Top agents */}
-      <div className="grid grid-cols-3 gap-5">
-        <div className="col-span-2">
-          <SectionCard title="Avg resolution time trend">
+      {/* Row 3: Resolution trend + Top agents */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <AnalyticsCardWrapper title="Average Resolution Time Trend" icon={Clock} subtitle="In hours">
             <ResolutionTimeTrendChart data={analytics?.charts.resolution_time_trend} isLoading={isLoading} />
-          </SectionCard>
+          </AnalyticsCardWrapper>
         </div>
-        <SectionCard title="Top agents (resolved)">
+
+        <AnalyticsCardWrapper title="Top Performing Agents" icon={Trophy} subtitle="Resolved count">
           <TopAgentsChart data={analytics?.charts.top_agents} isLoading={isLoading} />
-        </SectionCard>
+        </AnalyticsCardWrapper>
       </div>
     </div>
   );

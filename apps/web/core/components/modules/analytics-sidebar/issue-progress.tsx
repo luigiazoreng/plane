@@ -62,7 +62,10 @@ export const ModuleAnalyticsProgress = observer(function ModuleAnalyticsProgress
   const isCurrentProjectEstimateEnabled = projectId && areEstimateEnabledByProjectId(projectId) ? true : false;
   const estimateDetails =
     isCurrentProjectEstimateEnabled && currentActiveEstimateId && estimateById(currentActiveEstimateId);
-  const isCurrentEstimateTypeIsPoints = estimateDetails && estimateDetails?.type === EEstimateSystem.POINTS;
+  const isCurrentEstimateTypeIsPoints =
+    estimateDetails &&
+    estimateDetails.type &&
+    [EEstimateSystem.POINTS, EEstimateSystem.TIME].includes(estimateDetails.type);
   const completedIssues = moduleDetails?.completed_issues || 0;
   const totalIssues = moduleDetails?.total_issues || 0;
   const completedEstimatePoints = moduleDetails?.completed_estimate_points || 0;
@@ -129,7 +132,7 @@ export const ModuleAnalyticsProgress = observer(function ModuleAnalyticsProgress
                 <Disclosure.Button className="relative flex w-full items-center gap-2">
                   <div className="text-13 font-medium text-secondary">{t("progress")}</div>
                   {progressHeaderPercentage > 0 && (
-                    <div className="bg-amber-500/20 text-amber-500 flex h-5 w-9 items-center justify-center rounded-sm text-11 font-medium">{`${progressHeaderPercentage}%`}</div>
+                    <div className="bg-warning-subtle text-warning-primary flex h-5 w-9 items-center justify-center rounded-sm text-11 font-medium">{`${progressHeaderPercentage}%`}</div>
                   )}
                 </Disclosure.Button>
                 {isCurrentEstimateTypeIsPoints && (

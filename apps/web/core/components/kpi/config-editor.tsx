@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, Plus } from "lucide-react";
 import { Button } from "@plane/propel/button";
-import type { IKpiConfig, IKpiPriorityRow, IKpiTables, TKpiDayCount, TKpiDayRounding } from "@plane/types";
+import type { IKpiConfig, IKpiPriorityRow, IKpiTables, TKpiDayCount, TKpiDayRounding, IIssueLabel } from "@plane/types";
 import { CustomSelect, Input, ToggleSwitch } from "@plane/ui";
 import { cn } from "@plane/utils";
 import { SettingsBoxedControlItem } from "@/components/settings/boxed-control-item";
@@ -21,79 +21,92 @@ type Props = {
   onSave: (data: Partial<IKpiConfig>) => void;
   onReset?: () => void;
   estimateOptions?: { id: string; name: string; type?: string }[];
-  estimateValuesById?: Record<string, string[]>;
+  estimateValuesById?: Record<string, { id: string; value: string }[]>;
+  projectLabels?: IIssueLabel[];
+  // Difficulty/Repetitive are EstimateProperty rows (kpi_role-tagged), not
+  // KpiConfig fields -- saved immediately on change, independent of the
+  // draft+Save flow the rest of this form uses.
+  difficultyEstimateId?: string | null;
+  repetitiveEstimateId?: string | null;
+  onDifficultyEstimateChange?: (estimateId: string | null) => void;
+  onRepetitiveEstimateChange?: (estimateId: string | null) => void;
 };
 
 type SimpleTableKey = "type";
 
 const CARD = "rounded-lg border border-subtle bg-layer-2 p-4";
 
-const SimpleTableEditor = (props: {
+const LabelMappingEditor = (props: {
   title: string;
+  description: string;
   table: Record<string, number>;
+  projectLabels: IIssueLabel[];
   disabled: boolean;
   onChange: (table: Record<string, number>) => void;
 }) => {
-  const { title, table, disabled, onChange } = props;
-  const [newLevel, setNewLevel] = useState("");
+  const { title, description, table, projectLabels, disabled, onChange } = props;
 
-  const setPoints = (level: string, points: number) => onChange({ ...table, [level]: points });
-  const removeLevel = (level: string) => {
+  const setPoints = (labelId: string, points: number) => onChange({ ...table, [labelId]: points });
+  const removeKey = (labelId: string) => {
     const next = { ...table };
-    delete next[level];
+    delete next[labelId];
     onChange(next);
   };
-  const addLevel = () => {
-    const key = newLevel.trim();
-    if (!key || table[key] !== undefined) return;
-    onChange({ ...table, [key]: 0 });
-    setNewLevel("");
-  };
+
+  const projectLabelIds = new Set(projectLabels.map((l) => l.id));
+  const orphanKeys = Object.keys(table).filter((k) => !projectLabelIds.has(k));
 
   return (
     <div className={CARD}>
-      <h4 className="mb-3 text-body-sm-medium text-primary">{title}</h4>
-      <div className="space-y-2">
-        {Object.entries(table).map(([level, points]) => (
-          <div key={level} className="flex items-center gap-2">
-            <span className="flex-1 truncate text-13 text-secondary">{level}</span>
-            <Input
-              type="number"
-              inputSize="xs"
-              className="w-20"
-              value={points}
-              disabled={disabled}
-              onChange={(e) => setPoints(level, Number(e.target.value))}
-            />
-            {!disabled && (
-              <button
-                type="button"
-                onClick={() => removeLevel(level)}
-                className="text-tertiary transition-colors hover:text-danger-primary"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      {!disabled && (
-        <div className="mt-3 flex items-center gap-2">
-          <Input
-            inputSize="xs"
-            className="flex-1"
-            placeholder="New level name"
-            value={newLevel}
-            onChange={(e) => setNewLevel(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addLevel()}
-          />
-          <button
-            type="button"
-            onClick={addLevel}
-            className="flex items-center gap-1 text-12 font-medium whitespace-nowrap text-accent-primary"
-          >
-            <Plus className="size-3.5" /> Add
-          </button>
+      <h4 className="mb-1 text-body-sm-medium text-primary">{title}</h4>
+      <p className="mb-3 text-caption-md-regular text-tertiary">{description}</p>
+      
+      {projectLabels.length === 0 && orphanKeys.length === 0 ? (
+        <p className="text-12 text-tertiary italic">
+          No labels exist in this project yet.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {projectLabels.map((label) => (
+            <div key={label.id} className="flex items-center gap-2">
+              <span className="flex-1 truncate text-13 text-secondary flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: label.color ?? "#000" }} />
+                {label.name}
+              </span>
+              <Input
+                type="number"
+                inputSize="xs"
+                className="w-20"
+                value={table[label.id] ?? 0}
+                disabled={disabled}
+                onChange={(e) => setPoints(label.id, Number(e.target.value))}
+              />
+            </div>
+          ))}
+          {orphanKeys.map((labelId) => (
+            <div key={labelId} className="flex items-center gap-2 opacity-70">
+              <span className="flex-1 truncate text-13 text-tertiary">
+                Deleted label/type <span className="text-12 italic">({labelId})</span>
+              </span>
+              <Input
+                type="number"
+                inputSize="xs"
+                className="w-20"
+                value={table[labelId] ?? 0}
+                disabled={disabled}
+                onChange={(e) => setPoints(labelId, Number(e.target.value))}
+              />
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => removeKey(labelId)}
+                  className="text-tertiary transition-colors hover:text-danger-primary"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -110,7 +123,7 @@ const EstimateMappingEditor = (props: {
   table: Record<string, number>;
   estimateId: string | null;
   estimateOptions: { id: string; name: string; type?: string }[];
-  estimateValues: string[];
+  estimateValues: { id: string; value: string }[];
   disabled: boolean;
   onEstimateChange: (estimateId: string | null) => void;
   onChange: (table: Record<string, number>) => void;
@@ -127,15 +140,18 @@ const EstimateMappingEditor = (props: {
     onChange,
   } = props;
 
-  const setPoints = (key: string, points: number) => onChange({ ...table, [key]: points });
-  const removeKey = (key: string) => {
+  // table is keyed by EstimatePoint id (not value), so renaming a point's value
+  // doesn't silently zero its configured contribution to Vp.
+  const setPoints = (pointId: string, points: number) => onChange({ ...table, [pointId]: points });
+  const removeKey = (pointId: string) => {
     const next = { ...table };
-    delete next[key];
+    delete next[pointId];
     onChange(next);
   };
 
-  // Keys present in the mapping but no longer in the active estimate.
-  const orphanKeys = Object.keys(table).filter((k) => !estimateValues.includes(k));
+  const estimatePointIds = new Set(estimateValues.map((point) => point.id));
+  // Keys present in the mapping but no longer in the active estimate (point deleted).
+  const orphanKeys = Object.keys(table).filter((k) => !estimatePointIds.has(k));
   const selectedEstimateName = estimateId ? (estimateOptions.find((o) => o.id === estimateId)?.name ?? "—") : null;
 
   return (
@@ -169,36 +185,36 @@ const EstimateMappingEditor = (props: {
         </p>
       ) : (
         <div className="space-y-2">
-          {estimateValues.map((val) => (
-            <div key={val} className="flex items-center gap-2">
-              <span className="flex-1 truncate text-13 text-secondary">{val}</span>
+          {estimateValues.map((point) => (
+            <div key={point.id} className="flex items-center gap-2">
+              <span className="flex-1 truncate text-13 text-secondary">{point.value}</span>
               <Input
                 type="number"
                 inputSize="xs"
                 className="w-20"
-                value={table[val] ?? 0}
+                value={table[point.id] ?? 0}
                 disabled={disabled}
-                onChange={(e) => setPoints(val, Number(e.target.value))}
+                onChange={(e) => setPoints(point.id, Number(e.target.value))}
               />
             </div>
           ))}
-          {orphanKeys.map((val) => (
-            <div key={val} className="flex items-center gap-2 opacity-70">
+          {orphanKeys.map((pointId) => (
+            <div key={pointId} className="flex items-center gap-2 opacity-70">
               <span className="flex-1 truncate text-13 text-tertiary">
-                {val} <span className="text-12 italic">(not in current estimate)</span>
+                Deleted point <span className="text-12 italic">(not in current estimate)</span>
               </span>
               <Input
                 type="number"
                 inputSize="xs"
                 className="w-20"
-                value={table[val] ?? 0}
+                value={table[pointId] ?? 0}
                 disabled={disabled}
-                onChange={(e) => setPoints(val, Number(e.target.value))}
+                onChange={(e) => setPoints(pointId, Number(e.target.value))}
               />
               {!disabled && (
                 <button
                   type="button"
-                  onClick={() => removeKey(val)}
+                  onClick={() => removeKey(pointId)}
                   className="text-tertiary transition-colors hover:text-danger-primary"
                 >
                   <Trash2 className="size-4" />
@@ -267,7 +283,20 @@ const PriorityTableEditor = (props: {
 };
 
 export const KpiConfigEditor = (props: Props) => {
-  const { config, canEdit, saving, onSave, onReset, estimateOptions = [], estimateValuesById = {} } = props;
+  const {
+    config,
+    canEdit,
+    saving,
+    onSave,
+    onReset,
+    estimateOptions = [],
+    estimateValuesById = {},
+    projectLabels = [],
+    difficultyEstimateId = null,
+    repetitiveEstimateId = null,
+    onDifficultyEstimateChange,
+    onRepetitiveEstimateChange,
+  } = props;
   const [draft, setDraft] = useState<IKpiConfig>(config);
   const [selectedPriorityLevel, setSelectedPriorityLevel] = useState<string | null>(null);
 
@@ -287,12 +316,8 @@ export const KpiConfigEditor = (props: Props) => {
       allow_negative: draft.allow_negative,
       max_multiplier: draft.max_multiplier,
       vf_decimals: draft.vf_decimals,
-      difficulty_estimate: draft.difficulty_estimate,
-      repetitive_estimate: draft.repetitive_estimate,
     });
   };
-
-  const simpleTables: { key: SimpleTableKey; title: string }[] = [{ key: "type", title: "Type (T)" }];
 
   // Live preview: recalculates as the draft (b, k, mode, ...) changes.
   const priorityLevels = Object.keys(draft.tables.priority ?? {});
@@ -453,13 +478,11 @@ export const KpiConfigEditor = (props: Props) => {
                   title="Difficulty (D)"
                   description="Choose which project estimate system represents difficulty, then map each point to the value it adds to Vp."
                   table={draft.tables.difficulty ?? {}}
-                  estimateId={draft.difficulty_estimate}
+                  estimateId={difficultyEstimateId}
                   estimateOptions={estimateOptions}
-                  estimateValues={
-                    draft.difficulty_estimate ? (estimateValuesById[draft.difficulty_estimate] ?? []) : []
-                  }
+                  estimateValues={difficultyEstimateId ? (estimateValuesById[difficultyEstimateId] ?? []) : []}
                   disabled={!canEdit}
-                  onEstimateChange={(estimateId) => patch({ difficulty_estimate: estimateId })}
+                  onEstimateChange={(estimateId) => onDifficultyEstimateChange?.(estimateId)}
                   onChange={(table) => patchTable("difficulty", table)}
                 />
 
@@ -467,27 +490,24 @@ export const KpiConfigEditor = (props: Props) => {
                   title="Repetitive (R)"
                   description="Choose which project estimate system represents repetition, then map each point to the value it adds to Vp."
                   table={draft.tables.repetitive ?? {}}
-                  estimateId={draft.repetitive_estimate}
+                  estimateId={repetitiveEstimateId}
                   estimateOptions={estimateOptions}
-                  estimateValues={
-                    draft.repetitive_estimate ? (estimateValuesById[draft.repetitive_estimate] ?? []) : []
-                  }
+                  estimateValues={repetitiveEstimateId ? (estimateValuesById[repetitiveEstimateId] ?? []) : []}
                   disabled={!canEdit}
-                  onEstimateChange={(estimateId) => patch({ repetitive_estimate: estimateId })}
+                  onEstimateChange={(estimateId) => onRepetitiveEstimateChange?.(estimateId)}
                   onChange={(table) => patchTable("repetitive", table)}
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {simpleTables.map((t) => (
-                  <SimpleTableEditor
-                    key={t.key}
-                    title={t.title}
-                    table={draft.tables[t.key] ?? {}}
-                    disabled={!canEdit}
-                    onChange={(table) => patchTable(t.key, table)}
-                  />
-                ))}
+                <LabelMappingEditor
+                  title="Labels (L)"
+                  description="Assign points to specific labels. Work items with multiple labels will sum the points."
+                  table={draft.tables.type ?? {}}
+                  projectLabels={projectLabels}
+                  disabled={!canEdit}
+                  onChange={(table) => patchTable("type", table)}
+                />
               </div>
 
               <PriorityTableEditor

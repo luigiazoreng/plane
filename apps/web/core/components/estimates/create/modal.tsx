@@ -110,7 +110,14 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
           estimate: {
             name: trimmedEstimateName,
             type: estimateSystem,
-            last_used: true,
+            // Don't force this estimate active: a project's first-ever estimate
+            // is auto-activated by the backend regardless, but a second (or
+            // later) estimate might back an EstimateProperty (e.g. Difficulty/
+            // Repetitive for KPI, which don't require last_used) that shouldn't
+            // silently replace the project's current active numeric estimate.
+            // Admins can still explicitly activate it via "Set default" in the
+            // estimates list.
+            last_used: false,
           },
           estimate_points: estimatePoints,
         };
@@ -176,7 +183,7 @@ export const CreateEstimateModal = observer(function CreateEstimateModal(props: 
             )}
             <div className="text-18 font-medium text-primary">{t("project_settings.estimates.new")}</div>
           </div>
-          <div className="text-gray-400 text-11">
+          <div className="text-placeholder text-11">
             {t("project_settings.estimates.create.step", {
               step: renderEstimateStepsCount,
               total: 2,

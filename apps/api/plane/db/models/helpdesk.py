@@ -1,5 +1,9 @@
+# Python imports
+from datetime import timedelta
+
 # Django imports
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -48,11 +52,51 @@ class HelpdeskPortal(WorkspaceBaseModel):
     auto_assignment_config = models.JSONField(default=dict, blank=True)
     sla_first_response_hours = models.IntegerField(null=True, blank=True)
     sla_resolution_hours = models.IntegerField(null=True, blank=True)
+    no_reply_email_address = models.EmailField(max_length=255, null=True, blank=True)
+    default_agent_email_address = models.EmailField(max_length=255, null=True, blank=True)
+    smtp_host = models.CharField(max_length=255, null=True, blank=True)
+    smtp_port = models.IntegerField(null=True, blank=True)
+    smtp_username = models.CharField(max_length=255, null=True, blank=True)
+    smtp_password = models.CharField(max_length=255, null=True, blank=True)
+    smtp_use_tls = models.BooleanField(default=False)
+    smtp_use_ssl = models.BooleanField(default=False)
+    is_imap_enabled = models.BooleanField(default=False)
+    imap_host = models.CharField(max_length=255, null=True, blank=True)
+    imap_port = models.IntegerField(null=True, blank=True)
+    imap_username = models.CharField(max_length=255, null=True, blank=True)
+    imap_password = models.CharField(max_length=255, null=True, blank=True)
+    imap_use_tls = models.BooleanField(default=False)
+    imap_use_ssl = models.BooleanField(default=False)
+    imap_archive_folder = models.CharField(max_length=255, null=True, blank=True)
+    # Per-portal attachment ceiling, in bytes. Null means "use the instance
+    # limit". It can only ever lower that limit, never raise it: the instance
+    # FILE_SIZE_LIMIT is also enforced by the reverse proxy and by the
+    # presigned upload conditions, so a higher value here would not actually
+    # let a larger file through -- it would just fail further along.
+    max_attachment_size = models.BigIntegerField(null=True, blank=True)
+
+    def effective_max_attachment_size(self):
+        """Resolve the attachment ceiling that actually applies to this portal."""
+        from django.conf import settings
+
+        if not self.max_attachment_size:
+            return settings.FILE_SIZE_LIMIT
+        return min(self.max_attachment_size, settings.FILE_SIZE_LIMIT)
 
     class Meta:
         verbose_name = "Helpdesk Portal"
         verbose_name_plural = "Helpdesk Portals"
         db_table = "helpdesk_portals"
+        constraints = [
+            # Django's SMTP backend raises ValueError when both are set, turning
+            # every outbound email of the portal into FAILED. The serializer
+            # already rejects the combination; this closes the ORM-level and
+            # raw-update paths that bypass it.
+            models.CheckConstraint(
+                check=~(Q(smtp_use_tls=True) & Q(smtp_use_ssl=True)),
+                name="helpdesk_portal_smtp_tls_ssl_exclusive",
+            )
+        ]
 
     def __str__(self):
         return self.public_slug
@@ -97,6 +141,7 @@ class HelpdeskFormFieldType(models.TextChoices):
     CHECKBOX = "checkbox", "Checkbox"
     DATE = "date", "Date"
     CASCADE_SELECT = "cascade_select", "Cascading Dropdown"
+    ATTACHMENT = "attachment", "Attachment"
 
 
 class HelpdeskFormField(WorkspaceBaseModel):
@@ -142,6 +187,9 @@ class HelpdeskStatus(WorkspaceBaseModel):
     sequence = models.FloatField(default=65535)
     is_default = models.BooleanField(default=False)
     is_terminal = models.BooleanField(default=False)
+    # While a request sits in a status with pauses_sla=True (e.g. "Waiting"),
+    # the SLA clock stops -- see HelpdeskRequest.sla_paused_at.
+    pauses_sla = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Helpdesk Status"
@@ -156,6 +204,20 @@ class HelpdeskStatus(WorkspaceBaseModel):
 class HelpdeskRequestSource(models.TextChoices):
     PUBLIC_FORM = "public_form", "Public Form"
     INTERNAL_FORM = "internal_form", "Internal Form"
+
+
+class HelpdeskRequestPriority(models.TextChoices):
+    """
+    Deliberately the same values as Issue.PRIORITY_CHOICES so a ticket and the
+    work item it is forwarded to speak the same language, and so the frontend
+    reuses PriorityIcon / PriorityDropdown unchanged.
+    """
+
+    URGENT = "urgent", "Urgent"
+    HIGH = "high", "High"
+    MEDIUM = "medium", "Medium"
+    LOW = "low", "Low"
+    NONE = "none", "None"
 
 
 class HelpdeskRequest(WorkspaceBaseModel):
@@ -173,12 +235,23 @@ class HelpdeskRequest(WorkspaceBaseModel):
     source = models.CharField(
         max_length=50, choices=HelpdeskRequestSource.choices, default=HelpdeskRequestSource.PUBLIC_FORM
     )
+    priority = models.CharField(
+        max_length=30,
+        choices=HelpdeskRequestPriority.choices,
+        default=HelpdeskRequestPriority.NONE,
+        verbose_name="Helpdesk Request Priority",
+    )
     form_responses = models.JSONField(default=dict, blank=True)
     display_id = models.CharField(max_length=64, blank=True, default="")
     first_responded_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
+    snoozed_until = models.DateTimeField(null=True, blank=True)
     sla_resolution_due_at = models.DateTimeField(null=True, blank=True)
+    # Set while the request sits in a status with pauses_sla=True; cleared (and
+    # folded into total_paused_duration) the moment it leaves that status.
+    sla_paused_at = models.DateTimeField(null=True, blank=True)
+    total_paused_duration = models.DurationField(default=timedelta(0))
     start_date = models.DateField(null=True, blank=True)
     target_date = models.DateField(null=True, blank=True)
     external_source = models.CharField(max_length=255, blank=True, default="")
@@ -190,6 +263,18 @@ class HelpdeskRequest(WorkspaceBaseModel):
         related_name="helpdesk_requests",
         through="HelpdeskRequestAssignee",
         through_fields=("request", "assignee"),
+    )
+    labels = models.ManyToManyField(
+        "db.Label",
+        blank=True,
+        related_name="helpdesk_requests",
+    )
+    team = models.ForeignKey(
+        "db.HelpdeskTeam",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requests",
     )
 
     class Meta:
@@ -212,10 +297,71 @@ class HelpdeskRequestComment(WorkspaceBaseModel):
     content = models.TextField()
     is_internal = models.BooleanField(default=False)
 
+    class EmailDeliveryStatus(models.TextChoices):
+        NOT_SENT = "not_sent", "Not Sent"
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    class SenderVerification(models.TextChoices):
+        """Authenticity of the From: address of an inbound email.
+
+        Values mirror the constants in
+        ``plane.app.helpdesk.sender_authenticity``; that module stays free of
+        Django imports, so the literals are duplicated on purpose and
+        ``test_states_match_the_model_choices`` keeps them from drifting.
+
+        Never exposed by the public comment serializer: telling the sender
+        whether the spoof was detected hands the attacker a detection oracle.
+        """
+
+        PASS = "pass", "Pass"
+        FAIL = "fail", "Fail"
+        UNVERIFIED = "unverified", "Unverified"
+        NOT_APPLICABLE = "not_applicable", "Not Applicable"
+
+    sender_verification = models.CharField(
+        max_length=20,
+        choices=SenderVerification.choices,
+        default=SenderVerification.NOT_APPLICABLE,
+    )
+
+    delivery_channels = models.JSONField(default=list, blank=True)
+    email_status = models.CharField(
+        max_length=20,
+        choices=EmailDeliveryStatus.choices,
+        default=EmailDeliveryStatus.NOT_SENT,
+    )
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    email_message_id = models.CharField(max_length=255, null=True, blank=True)
+    email_error = models.TextField(null=True, blank=True)
+
     class Meta:
         verbose_name = "Helpdesk Request Comment"
         verbose_name_plural = "Helpdesk Request Comments"
         db_table = "helpdesk_request_comments"
+        constraints = [
+            # Deliberately a partial UniqueConstraint and not unique=True on the
+            # field: a database-level unique index also sees soft-deleted rows
+            # (SoftDeletionManager filters in the ORM only), so a deleted
+            # comment would make a legitimate resend of the same Message-ID
+            # raise IntegrityError -> 500 -> endless provider retries.
+            #
+            # The condition is intentionally limited to these two clauses. An
+            # extra ~Q(email_message_id="") would not be provable from
+            # `email_message_id = $1` once psycopg3 (server-side binding,
+            # prepare_threshold=5) switches the statement to a generic plan --
+            # the planner could no longer show the query implies the index
+            # condition, and the lookup would silently degrade to a seq scan
+            # under exactly the repetition that characterises production.
+            # Excluding "" is redundant anyway: the inbound view normalises ""
+            # to None before writing.
+            models.UniqueConstraint(
+                fields=["email_message_id"],
+                condition=Q(deleted_at__isnull=True) & Q(email_message_id__isnull=False),
+                name="helpdesk_comment_unique_email_message_id",
+            )
+        ]
 
 
 class HelpdeskRequestIssue(WorkspaceBaseModel):
@@ -292,3 +438,145 @@ class HelpdeskMember(WorkspaceBaseModel):
 
     def __str__(self):
         return f"{self.member.email} <Helpdesk>"
+
+class HelpdeskIMAPSyncLog(WorkspaceBaseModel):
+    portal = models.ForeignKey(
+        "db.HelpdeskPortal",
+        on_delete=models.CASCADE,
+        related_name="imap_sync_logs",
+    )
+    status = models.CharField(max_length=50, choices=[('success', 'Success'), ('error', 'Error')])
+    emails_fetched = models.IntegerField(default=0)
+    error_message = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Helpdesk IMAP Sync Log"
+        verbose_name_plural = "Helpdesk IMAP Sync Logs"
+        db_table = "helpdesk_imap_sync_logs"
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.portal.public_slug} - {self.status} - {self.created_at}"
+
+
+class HelpdeskRequestActivity(WorkspaceBaseModel):
+    """Audit log entry for a single field change on a helpdesk request.
+
+    Mirrors the IssueActivity pattern (field/old_value/new_value/actor) but
+    lives on WorkspaceBaseModel to match the helpdesk scope.
+    """
+
+    request = models.ForeignKey(HelpdeskRequest, on_delete=models.CASCADE, related_name="activities")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="helpdesk_activities",
+    )
+    verb = models.CharField(max_length=50, default="updated")  # created, updated, commented
+    field = models.CharField(max_length=255, blank=True, default="")
+    old_value = models.TextField(blank=True, default="")
+    new_value = models.TextField(blank=True, default="")
+    old_identifier = models.UUIDField(null=True, blank=True)
+    new_identifier = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Helpdesk Request Activity"
+        verbose_name_plural = "Helpdesk Request Activities"
+        db_table = "helpdesk_request_activities"
+        ordering = ("created_at",)
+
+    def __str__(self):
+        return f"{self.request.title} - {self.field} - {self.verb}"
+
+
+class HelpdeskTeam(WorkspaceBaseModel):
+    """Team / agent group for assigning tickets and organizing work."""
+
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    color = models.CharField(max_length=20, default="#3B82F6")
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="helpdesk_teams",
+    )
+
+    class Meta:
+        verbose_name = "Helpdesk Team"
+        verbose_name_plural = "Helpdesk Teams"
+        db_table = "helpdesk_teams"
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+
+class HelpdeskRequestReadReceipt(WorkspaceBaseModel):
+    """Tracks when an agent last viewed a specific request to compute unread status."""
+
+    request = models.ForeignKey(
+        HelpdeskRequest, on_delete=models.CASCADE, related_name="read_receipts"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="helpdesk_read_receipts"
+    )
+    last_read_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Helpdesk Request Read Receipt"
+        verbose_name_plural = "Helpdesk Request Read Receipts"
+        db_table = "helpdesk_request_read_receipts"
+        unique_together = ["request", "user", "deleted_at"]
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.request.title} @ {self.last_read_at}"
+
+
+class HelpdeskMacro(WorkspaceBaseModel):
+    """Canned response / macro template for agents in composer.
+
+    If is_public is True, all agents in the workspace can view and use it.
+    If is_public is False, only the author (created_by) can view and use it.
+    """
+
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    content = models.TextField(blank=True, default="")
+    is_public = models.BooleanField(default=True)
+    actions = models.JSONField(default=list, blank=True)
+    sequence = models.FloatField(default=65535)
+
+    class Meta:
+        verbose_name = "Helpdesk Macro"
+        verbose_name_plural = "Helpdesk Macros"
+        db_table = "helpdesk_macros"
+        ordering = ("sequence", "name")
+
+    def __str__(self):
+        return self.name
+
+
+class HelpdeskRequestBookmark(WorkspaceBaseModel):
+    """Favorite / bookmarked request for a specific agent."""
+
+    request = models.ForeignKey(
+        HelpdeskRequest, on_delete=models.CASCADE, related_name="bookmarks"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="helpdesk_request_bookmarks"
+    )
+
+    class Meta:
+        verbose_name = "Helpdesk Request Bookmark"
+        verbose_name_plural = "Helpdesk Request Bookmarks"
+        db_table = "helpdesk_request_bookmarks"
+        unique_together = ["request", "user", "deleted_at"]
+
+    def __str__(self):
+        return f"{self.user.email} star -> {self.request.title}"
+
+
+
+

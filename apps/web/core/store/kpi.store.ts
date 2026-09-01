@@ -14,8 +14,10 @@ import type {
   IKpiIssueRow,
   IKpiMemberAggregate,
   IKpiMemberAggregateResponse,
+  IKpiOverviewResponse,
   IKpiPreviewResponse,
   IKpiTaskInput,
+  TKpiPeriod,
 } from "@plane/types";
 // services
 import { KpiService } from "@plane/services";
@@ -30,6 +32,7 @@ export interface IKpiStore {
   aggregates: Record<string, IKpiAggregates>; // projectId -> aggregates
   memberAggregates: Record<string, IKpiMemberAggregateResponse>; // projectId -> per-member breakdown
   workspaceMemberAggregates: Record<string, IKpiMemberAggregateResponse>; // workspaceSlug -> per-member breakdown
+  workspaceOverview: Record<string, IKpiOverviewResponse>; // workspaceSlug -> consolidated panel
   issueAttributes: Record<string, IKpiIssueAttribute>; // issueId -> KPI attributes
   loadingState: Record<string, boolean>;
   errorState: Record<string, string | null>;
@@ -40,9 +43,21 @@ export interface IKpiStore {
   updateProjectConfig: (workspaceSlug: string, projectId: string, data: Partial<IKpiConfig>) => Promise<IKpiConfig>;
   resetProjectConfig: (workspaceSlug: string, projectId: string) => Promise<void>;
   // issue actions
-  fetchProjectIssues: (workspaceSlug: string, projectId: string) => Promise<IKpiIssueRow[]>;
-  fetchProjectMemberAggregates: (workspaceSlug: string, projectId: string) => Promise<IKpiMemberAggregate[]>;
+  fetchProjectIssues: (
+    workspaceSlug: string,
+    projectId: string,
+    params?: { aggregates_only?: boolean; period?: TKpiPeriod; start?: string; end?: string }
+  ) => Promise<IKpiIssueRow[]>;
+  fetchProjectMemberAggregates: (
+    workspaceSlug: string,
+    projectId: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ) => Promise<IKpiMemberAggregate[]>;
   fetchWorkspaceMemberAggregates: (workspaceSlug: string) => Promise<IKpiMemberAggregate[]>;
+  fetchWorkspaceOverview: (
+    workspaceSlug: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ) => Promise<IKpiOverviewResponse>;
   fetchIssueAttributes: (workspaceSlug: string, projectId: string, issueId: string) => Promise<IKpiIssueAttribute>;
   updateIssueAttributes: (
     workspaceSlug: string,
@@ -50,24 +65,6 @@ export interface IKpiStore {
     issueId: string,
     data: Partial<IKpiIssueAttribute>
   ) => Promise<IKpiIssueAttribute>;
-  updateIssueEstimate: (
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ) => Promise<void>;
-  updateIssueDifficultyEstimate: (
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ) => Promise<void>;
-  updateIssueRepetitiveEstimate: (
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ) => Promise<void>;
   updateIssuePriority: (workspaceSlug: string, projectId: string, issueId: string, priority: string) => Promise<void>;
   preview: (
     workspaceSlug: string,
@@ -83,6 +80,7 @@ export class KpiStore implements IKpiStore {
   aggregates: Record<string, IKpiAggregates> = {};
   memberAggregates: Record<string, IKpiMemberAggregateResponse> = {};
   workspaceMemberAggregates: Record<string, IKpiMemberAggregateResponse> = {};
+  workspaceOverview: Record<string, IKpiOverviewResponse> = {};
   issueAttributes: Record<string, IKpiIssueAttribute> = {};
   loadingState: Record<string, boolean> = {};
   errorState: Record<string, string | null> = {};
@@ -96,6 +94,8 @@ export class KpiStore implements IKpiStore {
       issues: observable,
       aggregates: observable,
       memberAggregates: observable,
+      workspaceMemberAggregates: observable,
+      workspaceOverview: observable,
       issueAttributes: observable,
       loadingState: observable,
       errorState: observable,
@@ -107,11 +107,9 @@ export class KpiStore implements IKpiStore {
       fetchProjectIssues: action,
       fetchProjectMemberAggregates: action,
       fetchWorkspaceMemberAggregates: action,
+      fetchWorkspaceOverview: action,
       fetchIssueAttributes: action,
       updateIssueAttributes: action,
-      updateIssueEstimate: action,
-      updateIssueDifficultyEstimate: action,
-      updateIssueRepetitiveEstimate: action,
       updateIssuePriority: action,
       preview: action,
     });
@@ -166,10 +164,14 @@ export class KpiStore implements IKpiStore {
     await this.fetchProjectConfig(workspaceSlug, projectId);
   };
 
-  fetchProjectIssues = async (workspaceSlug: string, projectId: string): Promise<IKpiIssueRow[]> => {
+  fetchProjectIssues = async (
+    workspaceSlug: string,
+    projectId: string,
+    params?: { aggregates_only?: boolean; period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiIssueRow[]> => {
     this._setLoading(`issues-${projectId}`, true);
     try {
-      const response = await this.kpiService.getProjectIssues(workspaceSlug, projectId);
+      const response = await this.kpiService.getProjectIssues(workspaceSlug, projectId, params);
       runInAction(() => {
         set(this.issues, [projectId], response.results);
         set(this.aggregates, [projectId], response.aggregates);
@@ -180,10 +182,14 @@ export class KpiStore implements IKpiStore {
     }
   };
 
-  fetchProjectMemberAggregates = async (workspaceSlug: string, projectId: string): Promise<IKpiMemberAggregate[]> => {
+  fetchProjectMemberAggregates = async (
+    workspaceSlug: string,
+    projectId: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiMemberAggregate[]> => {
     this._setLoading(`member-aggregates-${projectId}`, true);
     try {
-      const response = await this.kpiService.getProjectMemberAggregates(workspaceSlug, projectId);
+      const response = await this.kpiService.getProjectMemberAggregates(workspaceSlug, projectId, params);
       runInAction(() => set(this.memberAggregates, [projectId], response));
       return response.results;
     } finally {
@@ -199,6 +205,20 @@ export class KpiStore implements IKpiStore {
       return response.results;
     } finally {
       this._setLoading(`ws-member-aggregates-${workspaceSlug}`, false);
+    }
+  };
+
+  fetchWorkspaceOverview = async (
+    workspaceSlug: string,
+    params?: { period?: TKpiPeriod; start?: string; end?: string }
+  ): Promise<IKpiOverviewResponse> => {
+    this._setLoading(`ws-overview-${workspaceSlug}`, true);
+    try {
+      const response = await this.kpiService.getWorkspaceOverview(workspaceSlug, params);
+      runInAction(() => set(this.workspaceOverview, [workspaceSlug], response));
+      return response;
+    } finally {
+      this._setLoading(`ws-overview-${workspaceSlug}`, false);
     }
   };
 
@@ -222,41 +242,6 @@ export class KpiStore implements IKpiStore {
     // Refresh the scored list so Vp/Vf reflect the new attributes.
     await this.fetchProjectIssues(workspaceSlug, projectId);
     return attribute;
-  };
-
-  updateIssueEstimate = async (
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ): Promise<void> => {
-    await this.updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
-  };
-
-  updateIssueDifficultyEstimate = async (
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ): Promise<void> => {
-    await this.kpiService.updateIssueDifficultyEstimate(workspaceSlug, projectId, issueId, estimatePointId);
-    await Promise.all([
-      this.fetchProjectIssues(workspaceSlug, projectId),
-      this.fetchIssueAttributes(workspaceSlug, projectId, issueId),
-    ]);
-  };
-
-  updateIssueRepetitiveEstimate = async (
-    workspaceSlug: string,
-    projectId: string,
-    issueId: string,
-    estimatePointId: string | null
-  ): Promise<void> => {
-    await this.kpiService.updateIssueRepetitiveEstimate(workspaceSlug, projectId, issueId, estimatePointId);
-    await Promise.all([
-      this.fetchProjectIssues(workspaceSlug, projectId),
-      this.fetchIssueAttributes(workspaceSlug, projectId, issueId),
-    ]);
   };
 
   updateIssuePriority = async (

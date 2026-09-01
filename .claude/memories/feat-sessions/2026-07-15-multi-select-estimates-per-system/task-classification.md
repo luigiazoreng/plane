@@ -1,0 +1,14 @@
+# Task Classification
+- Type: Full-stack feature
+- Stage A (Plan): ✅ All 4 phases
+- Stage B (Build): ✅
+- Stage C (Harden): ✅
+- Stage D (Review): ✅ (always mandatory)
+- Stage E (Validate): ✅ (always mandatory)
+- Spec/Requirements Document: none (requirements captured via user prompt + Phase 2 AskUserQuestion rounds)
+- Notes:
+  - Touches apps/api (Django backend: estimate models/serializers/views) and apps/web (React/Vite frontend: work item Properties panel)
+  - NOT Lite Mode: spans 2 services, likely requires new DB structure (per-work-item, per-estimate-system value storage) and new/changed API contract — exceeds "≤3 files, ONE service" threshold
+  - Builds on recent EstimateProperty refactor (commits: "Refactor KPI estimate handling to use EstimateProperty model", "Migrate KPI difficulty and repetitive estimates to new EstimateProperty model", "feat(estimates): add deleted_at to read_only_fields in EstimateSerializer")
+  - Verified current behavior via browser testing: workspace "growatt", project "teste" has 2 active estimate systems ("teste": Easy/Hard; "Categories": Easy/Medium/Hard/Very Hard, default). TESTE-1 currently has only "teste: Hard" set — today's UI only allows ONE estimate value total per work item, mutually exclusive across systems.
+  - Target behavior: "Estimate" row in Properties panel becomes "Estimates" group with one independent sub-row/selector per active estimate system; a work item can hold one value per system simultaneously.

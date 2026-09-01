@@ -204,6 +204,16 @@ def validate_helpdesk_form_submission(form, payload):
                 except ValueError:
                     errors[field.key] = "Please provide a valid date in YYYY-MM-DD format."
                     continue
+        elif field.field_type == HelpdeskFormFieldType.ATTACHMENT:
+            if missing:
+                normalized = []
+            elif isinstance(value, str):
+                normalized = [value.strip()]
+            elif isinstance(value, list) and all(isinstance(v, str) for v in value):
+                normalized = [v.strip() for v in value if v.strip()]
+            else:
+                errors[field.key] = "This field must be a valid file ID or a list of file IDs."
+                continue
         else:
             continue
 

@@ -138,7 +138,7 @@ export const ProjectNavigation = observer(function ProjectNavigation(props: TPro
         href: `/${_workspaceSlug}/projects/${_projectId}/kpi`,
         icon: Gauge,
         access: [EUserPermissions.ADMIN, EUserPermissions.MEMBER, EUserPermissions.GUEST],
-        shouldRender: true,
+        shouldRender: project?.kpi_view ?? false,
         sortOrder: 7,
       },
     ],
