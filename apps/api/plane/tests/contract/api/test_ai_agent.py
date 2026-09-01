@@ -52,6 +52,7 @@ class AIAgentContractTests(APITestCase):
     def test_ai_agent_run_create_and_list(self, mock_ai_service):
         """Test creating an AI Agent Run and listing runs"""
         mock_ai_service.return_value = {
+            "success": True,
             "plan": {
                 "mode": "build",
                 "actions": [
