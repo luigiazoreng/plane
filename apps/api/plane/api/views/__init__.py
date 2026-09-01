@@ -66,4 +66,11 @@ from .invite import WorkspaceInvitationsViewset
 
 from .sticky import StickyViewSet
 
-from .ai import AIAgentRunApprovalEndpoint
+from .ai import (
+    AIAgentRunEndpoint,
+    AIAgentRunDetailEndpoint,
+    AIAgentRunApprovalEndpoint,
+    AIAgentConversationEndpoint,
+    AIAgentConversationDetailEndpoint,
+)
+
