@@ -11,7 +11,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("db", "0171_alter_helpdeskmacro_created_by_and_more"),
+        ("db", "0171_workspace_kpi_access"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -23,10 +23,10 @@ class Migration(migrations.Migration):
                 ("updated_at", models.DateTimeField(auto_now=True, verbose_name="Last Modified At")),
                 ("deleted_at", models.DateTimeField(blank=True, null=True, verbose_name="Deleted At")),
                 ("id", models.UUIDField(db_index=True, default=uuid.uuid4, editable=False, primary_key=True, serialize=False, unique=True)),
-                ("mode", models.CharField(max_length=20)),
-                ("provider", models.CharField(max_length=50)),
-                ("llm_model", models.CharField(max_length=50)),
-                ("status", models.CharField(max_length=20)),
+                ("mode", models.CharField(choices=[("ask", "Ask"), ("build", "Build")], default="ask", max_length=20)),
+                ("provider", models.CharField(choices=[("openai", "OpenAI"), ("anthropic", "Anthropic"), ("gemini", "Gemini"), ("deepseek", "DeepSeek"), ("mock", "Mock")], default="openai", max_length=50)),
+                ("llm_model", models.CharField(blank=True, default="", max_length=50)),
+                ("status", models.CharField(choices=[("running", "Running"), ("completed", "Completed"), ("failed", "Failed"), ("awaiting_approval", "Awaiting Approval")], default="running", max_length=20)),
                 ("input_text", models.TextField()),
                 ("output_text", models.TextField(blank=True, null=True)),
                 ("context_snapshot", models.JSONField(default=dict)),
@@ -76,7 +76,7 @@ class Migration(migrations.Migration):
                 ("target_entity_id", models.UUIDField(blank=True, null=True)),
                 ("planned_payload", models.JSONField(default=dict)),
                 ("executed_payload", models.JSONField(blank=True, default=dict, null=True)),
-                ("status", models.CharField(max_length=20)),
+                ("status", models.CharField(choices=[("planned", "Planned"), ("approved", "Approved"), ("executed", "Executed"), ("failed", "Failed")], default="planned", max_length=20)),
                 ("error_message", models.TextField(blank=True)),
                 ("executed_at", models.DateTimeField(blank=True, null=True)),
                 ("approved_by", models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="approved_ai_actions", to=settings.AUTH_USER_MODEL)),

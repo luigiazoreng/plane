@@ -250,7 +250,9 @@ export class GeminiProvider implements ILLMProvider {
 
 export const ProviderFactory = {
   getProvider(providerName?: string): ILLMProvider {
-    const name = (providerName || process.env.AI_PROVIDER || "mock").toLowerCase();
+    const rawName = providerName || process.env.AI_PROVIDER || "openai";
+    const name = rawName.toLowerCase().trim();
+
     switch (name) {
       case "openai":
         return new OpenAIProvider();
@@ -263,8 +265,11 @@ export const ProviderFactory = {
       case "google":
         return new GeminiProvider();
       case "mock":
-      default:
         return new MockProvider();
+      default:
+        throw new Error(
+          `Unsupported or unknown AI provider: '${providerName || rawName}'. Supported providers: openai, deepseek, anthropic, gemini, mock.`
+        );
     }
   },
 };

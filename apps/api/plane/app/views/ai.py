@@ -13,12 +13,12 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
-from plane.api.serializers import (
+from plane.app.permissions import ROLE, allow_permission
+from plane.app.serializers import (
     AIAgentConversationSerializer,
     AIAgentRunCreateSerializer,
     AIAgentRunSerializer,
 )
-from plane.app.permissions import ROLE, allow_permission
 from plane.app.views.base import BaseAPIView
 from plane.db.models import (
     AIAgentAction,
@@ -30,13 +30,11 @@ from plane.db.models import (
 
 logger = logging.getLogger(__name__)
 
-AI_SERVICE_URL = getattr(settings, "AI_SERVICE_URL", "http://localhost:8001")
-
 
 def _call_ai_service(endpoint: str, payload: dict) -> dict:
-    url = f"{AI_SERVICE_URL.rstrip('/')}{endpoint}"
-    data = json.dumps(payload).encode("utf-8")
-    secret = getattr(settings, "AI_SERVICE_SECRET", None) or getattr(process_env_secret(), "secret", None)
+    service_url = getattr(settings, "AI_SERVICE_URL", "http://localhost:8001")
+    url = f"{service_url.rstrip('/')}{endpoint}"
+    secret = getattr(settings, "AI_SERVICE_SECRET", None)
     if not secret:
         import os
         secret = os.environ.get("AI_SERVICE_SECRET")
@@ -45,6 +43,7 @@ def _call_ai_service(endpoint: str, payload: dict) -> dict:
         logger.error("[AI Service Error] AI_SERVICE_SECRET is not configured in settings or environment.")
         return {}
 
+    data = json.dumps(payload).encode("utf-8")
     headers = {
         "Content-Type": "application/json",
         "X-AI-Service-Key": secret,
@@ -59,10 +58,6 @@ def _call_ai_service(endpoint: str, payload: dict) -> dict:
     except Exception as exc:
         logger.error(f"[AI Service Error] {url}: {exc}")
         return {}
-
-
-def process_env_secret():
-    return None
 
 
 class AIAgentRunEndpoint(BaseAPIView):
@@ -90,7 +85,7 @@ class AIAgentRunEndpoint(BaseAPIView):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def post(self, request, slug):
         workspace = Workspace.objects.get(slug=slug)
-        serializer = AIAgentRunCreateSerializer(data=request.data)
+        serializer = AIAgentRunCreateSerializer(data=request.data, context={"workspace": workspace, "request": request})
         if serializer.is_valid():
             run = serializer.save(
                 workspace=workspace,

@@ -147,3 +147,11 @@ from .draft import (
     DraftIssueSerializer,
     DraftIssueDetailSerializer,
 )
+
+from .ai import (
+    AIAgentActionSerializer,
+    AIAgentRunSerializer,
+    AIAgentRunCreateSerializer,
+    AIAgentConversationSerializer,
+)
+

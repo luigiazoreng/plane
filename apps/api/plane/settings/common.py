@@ -558,3 +558,8 @@ if ENABLE_DRF_SPECTACULAR:
 # MongoDB Settings
 MONGO_DB_URL = os.environ.get("MONGO_DB_URL", False)
 MONGO_DB_DATABASE = os.environ.get("MONGO_DB_DATABASE", False)
+
+# AI Service Settings
+AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8001")
+AI_SERVICE_SECRET = os.environ.get("AI_SERVICE_SECRET", None)
+

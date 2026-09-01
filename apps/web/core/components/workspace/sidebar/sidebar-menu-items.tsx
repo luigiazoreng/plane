@@ -4,6 +4,8 @@
  * See the LICENSE file for details.
  */
 
+/* eslint-disable react/no-array-index-key, oxc/no-map-spread */
+
 import React, { useMemo } from "react";
 import { observer } from "mobx-react";
 import { Ellipsis } from "lucide-react";
@@ -88,19 +90,21 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
 
   const sortedNavigationItems = useMemo(
     () =>
-      WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.map((item) =>
-        Object.assign({}, item, {
-          sort_order: workspacePreferences.items[item.key] ? workspacePreferences.items[item.key].sort_order : 0,
-        })
-      ).sort((a, b) => a.sort_order - b.sort_order),
+      WORKSPACE_SIDEBAR_DYNAMIC_NAVIGATION_ITEMS_LINKS.map((item) => {
+        const preference = workspacePreferences.items[item.key];
+        return {
+          ...item,
+          sort_order: preference ? preference.sort_order : 0,
+        };
+      }).sort((a, b) => a.sort_order - b.sort_order),
     [workspacePreferences]
   );
 
   return (
     <>
       <div className="flex flex-col gap-0.5">
-        {filteredStaticNavigationItems.map((item) => (
-          <SidebarItem key={item.key || item.name} item={item} />
+        {filteredStaticNavigationItems.map((item, _index) => (
+          <SidebarItem key={`static_${_index}`} item={item} />
         ))}
         {workspaceSlug && <AIAgentSidebarButton workspaceSlug={workspaceSlug} />}
       </div>
@@ -151,11 +155,11 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
           {isWorkspaceMenuOpen && (
             <Disclosure.Panel as="div" className="flex flex-col gap-0.5" static>
               <>
-                {WORKSPACE_SIDEBAR_STATIC_PINNED_NAVIGATION_ITEMS_LINKS.map((item) => (
-                  <SidebarItem key={item.key || item.name} item={item} />
+                {WORKSPACE_SIDEBAR_STATIC_PINNED_NAVIGATION_ITEMS_LINKS.map((item, _index) => (
+                  <SidebarItem key={`static_${_index}`} item={item} />
                 ))}
-                {sortedNavigationItems.map((item) => (
-                  <SidebarItem key={item.key || item.name} item={item} />
+                {sortedNavigationItems.map((item, _index) => (
+                  <SidebarItem key={`dynamic_${_index}`} item={item} />
                 ))}
                 <SidebarNavItem>
                   <button

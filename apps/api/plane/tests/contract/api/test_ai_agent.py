@@ -10,6 +10,8 @@ from plane.db.models import (
     AIAgentAction,
     AIAgentConversation,
     AIAgentRun,
+    Project,
+    ProjectMember,
     User,
     Workspace,
     WorkspaceMember,
@@ -224,3 +226,72 @@ class AIAgentContractTests(APITestCase):
         data = response.json()
         self.assertEqual(data["status"], "failed")
         self.assertIn("Failed to communicate", data["output_text"])
+
+    def test_ai_agent_run_invalid_provider_choice(self):
+        """Test creating run with invalid provider choice returns 400"""
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/"
+        payload = {
+            "mode": "ask",
+            "provider": "gpt5",
+            "input_text": "Hello",
+        }
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("provider", response.json())
+
+    def test_ai_agent_run_cross_workspace_project_rejected(self):
+        """Test project from another workspace is rejected with 400"""
+        other_workspace = Workspace.objects.create(
+            name="Other Workspace",
+            slug="other-workspace",
+            owner=self.user,
+            created_by=self.user,
+        )
+        other_project = Project.objects.create(
+            name="Other Project",
+            workspace=other_workspace,
+            created_by=self.user,
+        )
+
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/"
+        payload = {
+            "mode": "ask",
+            "provider": "openai",
+            "project": str(other_project.id),
+            "input_text": "Hello",
+        }
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("project", response.json())
+
+    def test_ai_agent_run_project_membership_enforced(self):
+        """Test project creation requires membership for non-admin workspace users"""
+        member_user = User.objects.create_user(
+            email="member_user@plane.so",
+            username="member_user",
+            password="testpassword123",
+        )
+        WorkspaceMember.objects.create(
+            workspace=self.workspace,
+            member=member_user,
+            role=15,  # Regular member (not admin)
+            is_active=True,
+        )
+        project = Project.objects.create(
+            name="Restricted Project",
+            workspace=self.workspace,
+            created_by=self.user,
+        )
+
+        self.client.force_authenticate(user=member_user)
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/"
+        payload = {
+            "mode": "ask",
+            "provider": "openai",
+            "project": str(project.id),
+            "input_text": "Hello",
+        }
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("project", response.json())
+

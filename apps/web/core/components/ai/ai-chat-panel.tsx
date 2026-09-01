@@ -124,7 +124,7 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ workspaceSlug, project
   const handleApprovalAction = async (messageId: string, actionIndex: number, approved: boolean, runId?: string) => {
     if (runId) {
       try {
-        const resp = await fetch(`/api/v1/workspaces/${workspaceSlug}/ai/runs/${runId}/approval/`, {
+        const resp = await fetch(`/api/workspaces/${workspaceSlug}/ai/runs/${runId}/approval/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: approved ? "approve" : "reject" }),

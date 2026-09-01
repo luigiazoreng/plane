@@ -30,10 +30,16 @@ async function runTests() {
   };
 
   // 1. ProviderFactory Tests
-  await test("ProviderFactory returns MockProvider by default or on unknown provider", () => {
-    const provider = ProviderFactory.getProvider();
+  await test("ProviderFactory returns MockProvider when requested as 'mock'", () => {
+    const provider = ProviderFactory.getProvider("mock");
     assert.strictEqual(provider.name, "mock");
     assert(provider instanceof MockProvider);
+  });
+
+  await test("ProviderFactory throws error on unknown or unsupported provider", () => {
+    assert.throws(() => {
+      ProviderFactory.getProvider("gpt5");
+    }, /Unsupported or unknown AI provider/);
   });
 
   await test("ProviderFactory returns OpenAIProvider for 'openai'", () => {

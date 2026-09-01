@@ -45,6 +45,9 @@ services:
     command: ./bin/docker-entrypoint-api.sh
     env_file:
       - ./apps/api/.env
+    environment:
+      - AI_SERVICE_URL=http://ai-service:8001
+      - AI_SERVICE_SECRET=${AI_SERVICE_SECRET}
     depends_on:
       - plane-db
       - plane-redis
@@ -55,11 +58,19 @@ services:
       context: ./apps/ai-service
       dockerfile: Dockerfile
     restart: always
-    ports:
-      - "8001:8001"
+    expose:
+      - "8001"
     environment:
       - PORT=8001
       - AI_SERVICE_SECRET=${AI_SERVICE_SECRET}
+      - PLANE_API_URL=http://api:8000
+      - PLANE_API_TOKEN=${PLANE_API_TOKEN}
+      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://web:3000}
     depends_on:
       - api
 

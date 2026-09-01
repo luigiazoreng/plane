@@ -95,10 +95,10 @@ export const createServer = () => {
             result = await createWorkItem(workspaceSlug, projectId || payload.project_id, payload);
             break;
           case "update_work_item":
-            result = await updateWorkItem(workspaceSlug, projectId, payload.issue_id, payload);
+            result = await updateWorkItem(workspaceSlug, projectId || payload.project_id, payload.issue_id, payload);
             break;
           case "create_comment":
-            result = await createComment(workspaceSlug, projectId, payload.issue_id, payload);
+            result = await createComment(workspaceSlug, projectId || payload.project_id, payload.issue_id, payload);
             break;
           case "create_cycle":
             result = await createCycle(workspaceSlug, projectId || payload.project_id, payload);
