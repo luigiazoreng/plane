@@ -4,8 +4,6 @@
  * See the LICENSE file for details.
  */
 
-/* eslint-disable react/no-array-index-key, oxc/no-map-spread */
-
 import React, { useMemo } from "react";
 import { observer } from "mobx-react";
 import { Ellipsis } from "lucide-react";
