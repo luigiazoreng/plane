@@ -11,6 +11,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 
 from plane.app.permissions import ROLE, allow_permission
@@ -60,7 +61,22 @@ def _call_ai_service(endpoint: str, payload: dict) -> dict:
         return {}
 
 
-class AIAgentRunEndpoint(BaseAPIView):
+class AIAgentBaseEndpoint(BaseAPIView):
+    """Base for the AI agent endpoints.
+
+    The feature depends on a separate service (apps/ai-service) that is not part of
+    every deployment, so it stays behind AI_AGENT_ENABLED. When the flag is off the
+    endpoints answer 404, which is what the feature not existing should look like to
+    a client, rather than 403 (which implies it exists but is forbidden).
+    """
+
+    def initial(self, request, *args, **kwargs):
+        if not getattr(settings, "AI_AGENT_ENABLED", False):
+            raise NotFound("AI agent is not enabled on this instance.")
+        super().initial(request, *args, **kwargs)
+
+
+class AIAgentRunEndpoint(AIAgentBaseEndpoint):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug):
         is_admin = WorkspaceMember.objects.filter(
@@ -163,7 +179,7 @@ class AIAgentRunEndpoint(BaseAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class AIAgentRunDetailEndpoint(BaseAPIView):
+class AIAgentRunDetailEndpoint(AIAgentBaseEndpoint):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug, run_id):
         try:
@@ -184,7 +200,7 @@ class AIAgentRunDetailEndpoint(BaseAPIView):
             return Response({"error": "AI Agent Run not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
-class AIAgentRunApprovalEndpoint(BaseAPIView):
+class AIAgentRunApprovalEndpoint(AIAgentBaseEndpoint):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def post(self, request, slug, run_id):
         try:
@@ -250,7 +266,7 @@ class AIAgentRunApprovalEndpoint(BaseAPIView):
             return Response({"error": "Run not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
-class AIAgentConversationEndpoint(BaseAPIView):
+class AIAgentConversationEndpoint(AIAgentBaseEndpoint):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug):
         conversations = AIAgentConversation.objects.filter(
@@ -275,7 +291,7 @@ class AIAgentConversationEndpoint(BaseAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class AIAgentConversationDetailEndpoint(BaseAPIView):
+class AIAgentConversationDetailEndpoint(AIAgentBaseEndpoint):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def get(self, request, slug, conversation_id):
         try:

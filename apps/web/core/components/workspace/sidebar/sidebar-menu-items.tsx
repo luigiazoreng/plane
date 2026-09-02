@@ -107,7 +107,11 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
         {filteredStaticNavigationItems.map((item, _index) => (
           <SidebarItem key={`static_${_index}`} item={item} />
         ))}
-        {workspaceSlug && <AIAgentSidebarButton workspaceSlug={workspaceSlug} />}
+        {/* Beta. Gated separately from the backend's AI_AGENT_ENABLED because web and api
+            are built and deployed as separate images. */}
+        {workspaceSlug && process.env.VITE_AI_AGENT_ENABLED === "1" && (
+          <AIAgentSidebarButton workspaceSlug={workspaceSlug} />
+        )}
       </div>
       <Disclosure as="div" className="flex flex-col" defaultOpen={!!isWorkspaceMenuOpen}>
         <div className="group flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-placeholder hover:bg-layer-transparent-hover">

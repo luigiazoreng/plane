@@ -19,6 +19,10 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# The AI agent ships disabled behind AI_AGENT_ENABLED. The contract tests exercise the
+# endpoints, so turn it on here; the disabled case has its own test that overrides it back.
+AI_AGENT_ENABLED = True
+
 INSTALLED_APPS.append(  # noqa
     "plane.tests"
 )

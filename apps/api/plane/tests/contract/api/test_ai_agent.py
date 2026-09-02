@@ -3,6 +3,7 @@
 # See the LICENSE file for details.
 
 from unittest.mock import patch
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -289,6 +290,35 @@ class AIAgentContractTests(APITestCase):
     def test_ai_agent_run_rejected_status_is_a_valid_choice(self):
         """Test the status the rejection path writes is declared in the model choices"""
         self.assertIn("rejected", dict(AIAgentRun.STATUS_CHOICES))
+
+    @override_settings(AI_AGENT_ENABLED=False)
+    def test_ai_agent_endpoints_return_404_when_feature_disabled(self):
+        """Test every AI endpoint is invisible when AI_AGENT_ENABLED is off"""
+        run = AIAgentRun.objects.create(
+            workspace=self.workspace,
+            requested_by=self.user,
+            mode="ask",
+            provider="openai",
+            status="awaiting_approval",
+            input_text="Anything",
+        )
+        base = f"/api/workspaces/{self.workspace.slug}/ai"
+
+        self.assertEqual(self.client.get(f"{base}/runs/").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            self.client.post(f"{base}/runs/", {"mode": "ask", "input_text": "Hi"}, format="json").status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(self.client.get(f"{base}/runs/{run.id}/").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            self.client.post(f"{base}/runs/{run.id}/approval/", {"action": "approve"}, format="json").status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(self.client.get(f"{base}/conversations/").status_code, status.HTTP_404_NOT_FOUND)
+
+        # The run must be untouched: a disabled feature must not execute anything.
+        run.refresh_from_db()
+        self.assertEqual(run.status, "awaiting_approval")
 
     def test_ai_agent_run_cross_workspace_project_rejected(self):
         """Test project from another workspace is rejected with 400"""
