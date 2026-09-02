@@ -98,8 +98,8 @@ class AIAgentContractTests(APITestCase):
             workspace=self.workspace,
             requested_by=self.user,
             mode="build",
-            provider="mock",
-            llm_model="mock-model",
+            provider="openai",
+            llm_model="gpt-4o-mini",
             status="awaiting_approval",
             input_text="Create task",
         )
@@ -126,8 +126,8 @@ class AIAgentContractTests(APITestCase):
             workspace=self.workspace,
             requested_by=self.user,
             mode="build",
-            provider="mock",
-            llm_model="mock-model",
+            provider="openai",
+            llm_model="gpt-4o-mini",
             status="awaiting_approval",
             input_text="Create another task",
         )
@@ -175,8 +175,8 @@ class AIAgentContractTests(APITestCase):
             workspace=self.workspace,
             requested_by=self.user,
             mode="build",
-            provider="mock",
-            llm_model="mock-model",
+            provider="openai",
+            llm_model="gpt-4o-mini",
             status="completed",
             input_text="Already finished run",
         )
@@ -191,8 +191,8 @@ class AIAgentContractTests(APITestCase):
             workspace=self.workspace,
             requested_by=self.user,
             mode="build",
-            provider="mock",
-            llm_model="mock-model",
+            provider="openai",
+            llm_model="gpt-4o-mini",
             status="awaiting_approval",
             input_text="Pending run",
         )
@@ -238,6 +238,57 @@ class AIAgentContractTests(APITestCase):
         response = self.client.post(url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("provider", response.json())
+
+    def test_ai_agent_run_mock_provider_not_selectable(self):
+        """Test the fabricating mock provider cannot be requested through the API"""
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/"
+        payload = {
+            "mode": "build",
+            "provider": "mock",
+            "input_text": "Create a bug for login error",
+        }
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("provider", response.json())
+
+    @patch("plane.app.views.ai._call_ai_service")
+    def test_ai_agent_run_auto_executed_action_failure_marks_run_failed(self, mock_ai_service):
+        """Test a run whose auto-executed action fails is reported as failed, not completed"""
+        mock_ai_service.side_effect = [
+            {
+                "success": True,
+                "plan": {
+                    "mode": "build",
+                    "actions": [
+                        {
+                            "type": "create_work_item",
+                            "targetEntityType": "issue",
+                            "payload": {"name": "Test Bug"},
+                            "requiresApproval": False,
+                        }
+                    ],
+                },
+            },
+            {"success": False, "error": "Plane API rejected the write"},
+        ]
+
+        url = f"/api/workspaces/{self.workspace.slug}/ai/runs/"
+        payload = {
+            "mode": "build",
+            "provider": "openai",
+            "input_text": "Create a bug for login error",
+        }
+        response = self.client.post(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        self.assertEqual(data["status"], "failed")
+        self.assertEqual(len(data["actions"]), 1)
+        self.assertEqual(data["actions"][0]["status"], "failed")
+        self.assertEqual(data["actions"][0]["error_message"], "Plane API rejected the write")
+
+    def test_ai_agent_run_rejected_status_is_a_valid_choice(self):
+        """Test the status the rejection path writes is declared in the model choices"""
+        self.assertIn("rejected", dict(AIAgentRun.STATUS_CHOICES))
 
     def test_ai_agent_run_cross_workspace_project_rejected(self):
         """Test project from another workspace is rejected with 400"""

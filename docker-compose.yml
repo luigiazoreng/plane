@@ -63,7 +63,9 @@ services:
     environment:
       - PORT=8001
       - AI_SERVICE_SECRET=${AI_SERVICE_SECRET}
-      - PLANE_API_URL=http://api:8000
+      # Must include the /api/v1 prefix: the retriever and tools append
+      # /workspaces/<slug>/... directly to this value.
+      - PLANE_API_URL=http://api:8000/api/v1
       - PLANE_API_TOKEN=${PLANE_API_TOKEN}
       - AI_PROVIDER=${AI_PROVIDER:-openai}
       - OPENAI_API_KEY=${OPENAI_API_KEY}

@@ -14,12 +14,7 @@ export const createComment = async (
   console.log(`[AI Agent Tool] Creating comment on issue ${issueId}`);
 
   if (!apiToken) {
-    return {
-      id: `comment-${Date.now()}`,
-      issue_id: issueId,
-      comment_html: payload.comment_html,
-      status: "created_mock",
-    };
+    throw new Error("Plane API token missing. Configure PLANE_API_TOKEN environment variable.");
   }
 
   const res = await fetch(

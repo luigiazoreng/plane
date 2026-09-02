@@ -12,13 +12,7 @@ export const createCycle = async (workspaceSlug: string, projectId: string, payl
   console.log(`[AI Agent Tool] Creating cycle in project ${projectId}:`, payload.name);
 
   if (!apiToken) {
-    return {
-      id: `cycle-${Date.now()}`,
-      name: payload.name,
-      project: projectId,
-      workspace: workspaceSlug,
-      status: "created_mock",
-    };
+    throw new Error("Plane API token missing. Configure PLANE_API_TOKEN environment variable.");
   }
 
   const res = await fetch(`${apiBaseUrl}/workspaces/${workspaceSlug}/projects/${projectId}/cycles/`, {

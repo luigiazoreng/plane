@@ -20,26 +20,7 @@ export class WorkspaceRetriever {
 
   async getWorkspaceContext(workspaceSlug: string, projectId?: string): Promise<WorkspaceContext> {
     if (!this.apiToken) {
-      return {
-        workspaceSlug,
-        projectId,
-        projects: [
-          { id: "proj-1", name: "Mobile App", identifier: "MOB" },
-          { id: "proj-2", name: "Web Application", identifier: "WEB" },
-        ],
-        workItems: [
-          { id: "issue-1", name: "Fix login redirect loop", sequence_id: 101, state_name: "In Progress" },
-          { id: "issue-2", name: "Add dark mode toggle", sequence_id: 102, state_name: "Todo" },
-        ],
-        cycles: [{ id: "cycle-1", name: "Sprint 24", status: "current" }],
-        modules: [{ id: "mod-1", name: "Authentication" }],
-        pages: [{ id: "page-1", name: "Architecture & Design Docs" }],
-        states: [
-          { id: "state-1", name: "Backlog", group: "backlog" },
-          { id: "state-2", name: "In Progress", group: "started" },
-          { id: "state-3", name: "Done", group: "completed" },
-        ],
-      };
+      throw new Error("Plane API token missing. Configure PLANE_API_TOKEN environment variable.");
     }
 
     try {
@@ -116,13 +97,7 @@ export class WorkspaceRetriever {
 
   async getIssueContext(workspaceSlug: string, projectId: string, issueId: string) {
     if (!this.apiToken) {
-      return {
-        issueId,
-        name: "Fix login redirect loop",
-        sequence_id: 101,
-        description: "Users report getting trapped in auth redirect when session expires.",
-        state: "In Progress",
-      };
+      throw new Error("Plane API token missing. Configure PLANE_API_TOKEN environment variable.");
     }
 
     const headers = { "Content-Type": "application/json", "X-Api-Key": this.apiToken };

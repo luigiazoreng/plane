@@ -14,14 +14,7 @@ export const createWorkItem = async (workspaceSlug: string, projectId: string, p
   console.log(`[AI Agent Tool] Creating work item in project ${projectId}:`, payload.name);
 
   if (!apiToken) {
-    return {
-      id: `issue-${Date.now()}`,
-      name: payload.name,
-      description: payload.description || "",
-      project: projectId,
-      workspace: workspaceSlug,
-      status: "created_mock",
-    };
+    throw new Error("Plane API token missing. Configure PLANE_API_TOKEN environment variable.");
   }
 
   const res = await fetch(`${apiBaseUrl}/workspaces/${workspaceSlug}/projects/${projectId}/issues/`, {
@@ -53,13 +46,7 @@ export const updateWorkItem = async (
   console.log(`[AI Agent Tool] Updating work item ${issueId}:`, payload);
 
   if (!apiToken) {
-    return {
-      id: issueId,
-      ...payload,
-      workspace: workspaceSlug,
-      project: projectId,
-      status: "updated_mock",
-    };
+    throw new Error("Plane API token missing. Configure PLANE_API_TOKEN environment variable.");
   }
 
   const res = await fetch(`${apiBaseUrl}/workspaces/${workspaceSlug}/projects/${projectId}/issues/${issueId}/`, {

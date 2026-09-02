@@ -12,13 +12,7 @@ export const createModule = async (workspaceSlug: string, projectId: string, pay
   console.log(`[AI Agent Tool] Creating module in project ${projectId}:`, payload.name);
 
   if (!apiToken) {
-    return {
-      id: `module-${Date.now()}`,
-      name: payload.name,
-      project: projectId,
-      workspace: workspaceSlug,
-      status: "created_mock",
-    };
+    throw new Error("Plane API token missing. Configure PLANE_API_TOKEN environment variable.");
   }
 
   const res = await fetch(`${apiBaseUrl}/workspaces/${workspaceSlug}/projects/${projectId}/modules/`, {

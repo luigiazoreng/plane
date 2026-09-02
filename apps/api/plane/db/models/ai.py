@@ -8,12 +8,13 @@ from .base import BaseModel
 
 
 class AIAgentRun(BaseModel):
+    # "mock" is deliberately absent: the AI service still ships a mock provider for its own
+    # tests, but it fabricates actions, so it must not be selectable through the API.
     PROVIDER_CHOICES = (
         ("openai", "OpenAI"),
         ("anthropic", "Anthropic"),
         ("gemini", "Gemini"),
         ("deepseek", "DeepSeek"),
-        ("mock", "Mock"),
     )
     MODE_CHOICES = (
         ("ask", "Ask"),
@@ -24,6 +25,7 @@ class AIAgentRun(BaseModel):
         ("completed", "Completed"),
         ("failed", "Failed"),
         ("awaiting_approval", "Awaiting Approval"),
+        ("rejected", "Rejected"),
     )
 
     workspace = models.ForeignKey("db.Workspace", on_delete=models.CASCADE, related_name="ai_agent_runs")

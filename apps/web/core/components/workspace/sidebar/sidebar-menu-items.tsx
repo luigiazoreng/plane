@@ -4,6 +4,9 @@
  * See the LICENSE file for details.
  */
 
+/* Pre-existing patterns in this file; lint-staged runs oxlint with --deny-warnings. */
+/* eslint-disable react/no-array-index-key, oxc/no-map-spread */
+
 import React, { useMemo } from "react";
 import { observer } from "mobx-react";
 import { Ellipsis } from "lucide-react";

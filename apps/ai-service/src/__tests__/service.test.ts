@@ -71,18 +71,43 @@ async function runTests() {
   });
 
   // 2. WorkspaceRetriever Tests
-  await test("WorkspaceRetriever returns mock context when no API token is set", async () => {
+  await test("WorkspaceRetriever throws instead of inventing context when no API token is set", async () => {
     const retriever = new WorkspaceRetriever();
-    const ctx = await retriever.getWorkspaceContext("test-workspace", "proj-1");
 
-    assert.strictEqual(ctx.workspaceSlug, "test-workspace");
-    assert.strictEqual(ctx.projectId, "proj-1");
-    assert(Array.isArray(ctx.projects) && ctx.projects.length > 0);
-    assert(Array.isArray(ctx.workItems) && ctx.workItems.length > 0);
-    assert(Array.isArray(ctx.cycles) && ctx.cycles.length > 0);
-    assert(Array.isArray(ctx.modules) && ctx.modules.length > 0);
-    assert(Array.isArray(ctx.pages) && ctx.pages.length > 0);
-    assert(Array.isArray(ctx.states) && ctx.states.length > 0);
+    await assert.rejects(() => retriever.getWorkspaceContext("test-workspace", "proj-1"), /Plane API token missing/);
+    await assert.rejects(
+      () => retriever.getIssueContext("test-workspace", "proj-1", "issue-1"),
+      /Plane API token missing/
+    );
+  });
+
+  await test("WorkspaceRetriever returns real context when an API token is set", async () => {
+    const retriever = new WorkspaceRetriever("http://retriever.test/api/v1", "test-token");
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+
+    globalThis.fetch = (async (url: any, init: any) => {
+      requested.push(String(url));
+      assert.strictEqual(init.headers["X-Api-Key"], "test-token");
+      return {
+        ok: true,
+        json: async () => ({ results: [{ id: "real-1", name: "Real Project", identifier: "REA" }] }),
+      };
+    }) as unknown as typeof fetch;
+
+    try {
+      const ctx = await retriever.getWorkspaceContext("test-workspace", "proj-1");
+
+      assert.strictEqual(ctx.workspaceSlug, "test-workspace");
+      assert.strictEqual(ctx.projectId, "proj-1");
+      assert.deepStrictEqual(ctx.projects, [{ id: "real-1", name: "Real Project", identifier: "REA" }]);
+      assert(
+        requested.includes("http://retriever.test/api/v1/workspaces/test-workspace/projects/"),
+        `expected the projects endpoint to be called, got: ${requested.join(", ")}`
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   // 3. ExecutionPlanner Tests
@@ -143,6 +168,23 @@ async function runTests() {
     "X-AI-Service-Key": "test-ai-service-secret",
   };
 
+  // The retriever now refuses to invent context, so the server tests need a token and a
+  // stubbed Plane API. Requests to anything else (the test server itself) go through untouched.
+  const PLANE_API_STUB = "http://plane-api.test/api/v1";
+  process.env.PLANE_API_TOKEN = "test-plane-token";
+  process.env.PLANE_API_URL = PLANE_API_STUB;
+
+  const passthroughFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init?: any) => {
+    if (String(url).startsWith(PLANE_API_STUB)) {
+      const isWrite = Boolean(init?.method) && init.method !== "GET";
+      const body = isWrite && init.body ? JSON.parse(init.body) : null;
+      // Plane echoes the created/updated entity back; reads are paginated.
+      return { ok: true, json: async () => (isWrite ? { id: "stub-entity-1", ...body } : { results: [] }) };
+    }
+    return passthroughFetch(url, init);
+  }) as unknown as typeof fetch;
+
   await test("HTTP Server returns 401 Unauthorized when X-AI-Service-Key is missing", async () => {
     const app = createServer();
     const server = app.listen(0);
@@ -190,7 +232,7 @@ async function runTests() {
     }
   });
 
-  await test("HTTP Server /api/agent/execute endpoint executes mock actions", async () => {
+  await test("HTTP Server /api/agent/execute endpoint executes actions against the Plane API", async () => {
     const app = createServer();
     const server = app.listen(0);
     const address = server.address() as any;

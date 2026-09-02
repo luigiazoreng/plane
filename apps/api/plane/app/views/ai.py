@@ -115,6 +115,7 @@ class AIAgentRunEndpoint(BaseAPIView):
             run.output_text = plan.get("responseText", "")
             actions = plan.get("actions", [])
             has_pending_approval = False
+            all_success = True
 
             for act in actions:
                 requires_approval = act.get("requiresApproval", True)
@@ -144,6 +145,7 @@ class AIAgentRunEndpoint(BaseAPIView):
                     action_obj.executed_payload = exec_res.get("result", {})
                     action_obj.executed_at = timezone.now()
                     if not exec_res.get("success"):
+                        all_success = False
                         action_obj.status = "failed"
                         action_obj.error_message = exec_res.get("error", "Execution failed")
                     action_obj.save()
@@ -151,7 +153,7 @@ class AIAgentRunEndpoint(BaseAPIView):
             if has_pending_approval:
                 run.status = "awaiting_approval"
             else:
-                run.status = "completed"
+                run.status = "completed" if all_success else "failed"
                 run.completed_at = timezone.now()
 
             run.save()
