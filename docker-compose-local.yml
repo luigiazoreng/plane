@@ -82,6 +82,11 @@ services:
       # reaches the mailpit service defined below. Production (common.py) already
       # uses the SMTP backend, so this only restores parity for local dev.
       EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+    # The AI service runs on the host during local dev (pnpm --filter @plane/ai-service dev)
+    # so that provider keys and prompts can be changed without rebuilding a container.
+    # AI_SERVICE_URL in apps/api/.env points at host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - plane-db
       - plane-redis

@@ -123,3 +123,9 @@ from .kpi import (
     KpiIssueAttribute,
     WorkspaceKpiAccess,
 )
+
+from .ai import (
+    AIAgentRun,
+    AIAgentAction,
+    AIAgentConversation,
+)

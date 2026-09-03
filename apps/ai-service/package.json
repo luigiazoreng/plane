@@ -1,0 +1,28 @@
+{
+  "name": "@plane/ai-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plane AI Agent orchestration service",
+  "keywords": [],
+  "license": "AGPL-3.0-only",
+  "author": "",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "test": "ts-node src/__tests__/service.test.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "catalog:",
+    "express": "catalog:"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "4.17.23",
+    "@types/node": "catalog:",
+    "ts-node": "^10.9.2",
+    "typescript": "catalog:"
+  }
+}

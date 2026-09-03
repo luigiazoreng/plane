@@ -24,6 +24,7 @@ from .timezone import urlpatterns as timezone_urls
 from .exporter import urlpatterns as exporter_urls
 from .helpdesk import urlpatterns as helpdesk_urls
 from .kpi import urlpatterns as kpi_urls
+from .ai import urlpatterns as ai_urls
 urlpatterns = [
     *analytic_urls,
     *asset_urls,
@@ -47,4 +48,5 @@ urlpatterns = [
     *exporter_urls,
     *helpdesk_urls,
     *kpi_urls,
+    *ai_urls,
 ]

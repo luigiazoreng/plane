@@ -246,3 +246,11 @@ from .notification.base import MarkAllReadNotificationViewSet
 from .user.base import AccountEndpoint, ProfileEndpoint, UserSessionEndpoint
 
 from .timezone.base import TimezoneEndpoint
+
+from .ai import (
+    AIAgentRunEndpoint,
+    AIAgentRunDetailEndpoint,
+    AIAgentRunApprovalEndpoint,
+    AIAgentConversationEndpoint,
+    AIAgentConversationDetailEndpoint,
+)

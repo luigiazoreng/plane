@@ -4,6 +4,9 @@
  * See the LICENSE file for details.
  */
 
+/* Pre-existing patterns in this file; lint-staged runs oxlint with --deny-warnings. */
+/* eslint-disable react/no-array-index-key, oxc/no-map-spread */
+
 import React, { useMemo } from "react";
 import { observer } from "mobx-react";
 import { Ellipsis } from "lucide-react";
@@ -20,8 +23,10 @@ import { ChevronRightIcon } from "@plane/propel/icons";
 import { cn } from "@plane/utils";
 // components
 import { SidebarNavItem } from "@/components/sidebar/sidebar-navigation";
+import { AIAgentSidebarButton } from "@/components/sidebar/ai-agent-button";
 // store hooks
 import { useAppTheme } from "@/hooks/store/use-app-theme";
+import { useWorkspace } from "@/hooks/store/use-workspace";
 import useLocalStorage from "@/hooks/use-local-storage";
 import {
   usePersonalNavigationPreferences,
@@ -39,6 +44,8 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
 
   // store hooks
   const { isExtendedSidebarOpened, toggleExtendedSidebar } = useAppTheme();
+  const { currentWorkspace: activeWorkspace } = useWorkspace();
+  const workspaceSlug = activeWorkspace?.slug;
   // hooks
   const { preferences: personalPreferences } = usePersonalNavigationPreferences();
   const { preferences: workspacePreferences } = useWorkspaceNavigationPreferences();
@@ -100,6 +107,11 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
         {filteredStaticNavigationItems.map((item, _index) => (
           <SidebarItem key={`static_${_index}`} item={item} />
         ))}
+        {/* Beta. Gated separately from the backend's AI_AGENT_ENABLED because web and api
+            are built and deployed as separate images. */}
+        {workspaceSlug && process.env.VITE_AI_AGENT_ENABLED === "1" && (
+          <AIAgentSidebarButton workspaceSlug={workspaceSlug} />
+        )}
       </div>
       <Disclosure as="div" className="flex flex-col" defaultOpen={!!isWorkspaceMenuOpen}>
         <div className="group flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-placeholder hover:bg-layer-transparent-hover">

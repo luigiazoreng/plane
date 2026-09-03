@@ -558,3 +558,12 @@ if ENABLE_DRF_SPECTACULAR:
 # MongoDB Settings
 MONGO_DB_URL = os.environ.get("MONGO_DB_URL", False)
 MONGO_DB_DATABASE = os.environ.get("MONGO_DB_DATABASE", False)
+
+# AI Service Settings
+# Off by default: the endpoints need apps/ai-service, which is a separate deployment.
+# The web sidebar entry is gated independently by VITE_AI_AGENT_ENABLED, since the two
+# are built and shipped separately.
+AI_AGENT_ENABLED = os.environ.get("AI_AGENT_ENABLED", "0") == "1"
+AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://localhost:8001")
+AI_SERVICE_SECRET = os.environ.get("AI_SERVICE_SECRET", None)
+
