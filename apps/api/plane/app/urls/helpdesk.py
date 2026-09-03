@@ -36,6 +36,9 @@ from plane.app.views.helpdesk import (
     HelpdeskCustomerStatsEndpoint,
     HelpdeskTeamViewSet,
     HelpdeskMacroViewSet,
+    HelpdeskSLAPolicyViewSet,
+    HelpdeskSLASummaryEndpoint,
+    HelpdeskRequestRecurrenceEndpoint,
 )
 from plane.app.views.helpdesk.inbound import PublicHelpdeskInboundEmailEndpoint
 
@@ -355,6 +358,34 @@ urlpatterns = [
         "workspaces/<str:slug>/helpdesk/customers/<uuid:pk>/",
         HelpdeskCustomerViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
         name="helpdesk-customer-detail",
+    ),
+
+    # --- SLA policies (workspace-level) ---
+    path(
+        "workspaces/<str:slug>/helpdesk/sla-policies/",
+        HelpdeskSLAPolicyViewSet.as_view({"get": "list", "post": "create"}),
+        name="helpdesk-sla-policy",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/sla-policies/<uuid:pk>/",
+        HelpdeskSLAPolicyViewSet.as_view({
+            "get": "retrieve",
+            "patch": "partial_update",
+            "delete": "destroy",
+        }),
+        name="helpdesk-sla-policy-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/helpdesk/sla/summary/",
+        HelpdeskSLASummaryEndpoint.as_view(),
+        name="helpdesk-sla-summary",
+    ),
+
+    # --- Recurrence ---
+    path(
+        "workspaces/<str:slug>/helpdesk/requests/<uuid:request_pk>/recurrence/",
+        HelpdeskRequestRecurrenceEndpoint.as_view(),
+        name="helpdesk-request-recurrence",
     ),
 
     # --- Analytics ---

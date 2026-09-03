@@ -24,6 +24,12 @@ from plane.app.helpdesk.form_core import validate_helpdesk_form_submission, gene
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
 from plane.app.helpdesk.activity import diff_and_record_activities
+from plane.app.helpdesk import sla as sla_service
+from plane.app.helpdesk.recurrence import (
+    annotate_is_recurrent,
+    annotate_recurrence_count,
+    detect_recurrence,
+)
 from plane.utils.order_queryset import PRIORITY_ORDER
 
 HELPDESK_ARCHIVABLE_STATUS_NAMES = ("resolved", "closed", "completed", "canceled", "cancelled")
@@ -53,6 +59,10 @@ class HelpdeskRequestViewSet(BaseViewSet):
         "title",
         "priority",
         "-priority",
+        # Triage order: the ticket closest to breaching comes first. Nulls
+        # (no SLA target) sort last on Postgres for ASC, which is what we want.
+        "sla_resolution_due_at",
+        "-sla_resolution_due_at",
     }
 
     # comma-separated multi-value params -> queryset lookups (Plane convention)
@@ -90,6 +100,22 @@ class HelpdeskRequestViewSet(BaseViewSet):
             queryset = queryset.filter(created_at__date__gte=created_at_gte)
         if created_at_lte:
             queryset = queryset.filter(created_at__date__lte=created_at_lte)
+
+        # SLA state (?sla_status=breached|at_risk|ok|none). Annotated
+        # unconditionally so the serializer can report deadlines even when the
+        # caller is not filtering on them.
+        queryset = sla_service.annotate_sla(queryset)
+        sla_status = self.request.query_params.get("sla_status")
+        if sla_status:
+            sla_filter = sla_service.sla_status_filter(sla_status)
+            if sla_filter is not None:
+                queryset = queryset.filter(sla_filter)
+
+        # Recurrence (?is_recurrent=true|false)
+        queryset = annotate_recurrence_count(annotate_is_recurrent(queryset))
+        is_recurrent = self.request.query_params.get("is_recurrent")
+        if is_recurrent is not None:
+            queryset = queryset.filter(is_recurrent=is_recurrent.lower() in ("1", "true", "yes"))
 
         # ordering (whitelisted)
         order_by = self.request.query_params.get("order_by", "-created_at")
@@ -300,15 +326,23 @@ class HelpdeskRequestViewSet(BaseViewSet):
             was_paused = bool(old_status and old_status.pauses_sla)
             will_pause = bool(new_status and new_status.pauses_sla and not new_status.is_terminal)
             if was_paused and not will_pause and instance.sla_paused_at:
-                update_fields["total_paused_duration"] = instance.total_paused_duration + (
-                    timezone.now() - instance.sla_paused_at
-                )
-                update_fields["sla_paused_at"] = None
+                # Also pushes both deadlines forward by the length of the pause,
+                # so the ticket resumes with the SLA it had left.
+                update_fields.update(sla_service.resume_fields_after_pause(instance))
             if will_pause and not was_paused:
                 update_fields["sla_paused_at"] = timezone.now()
 
             if update_fields:
                 HelpdeskRequest.objects.filter(id=instance.id).update(**update_fields)
+
+        # A ticket escalated to a higher priority inherits that priority's
+        # deadline, counted from when the customer opened it -- otherwise
+        # escalating would silently hand the team a fresh window.
+        new_priority = request.data.get("priority")
+        if new_priority and new_priority != old_snapshot["priority"]:
+            instance.refresh_from_db()
+            sla_service.apply_sla_due_dates(instance)
+
         # Record activity for any changed fields
         diff_and_record_activities(instance, request.user, old_snapshot, request.data)
         publish(self.kwargs.get("slug", ""), {"type": "request.updated", "request_id": str(instance.id)})
@@ -333,6 +367,8 @@ class HelpdeskRequestViewSet(BaseViewSet):
             if display_id:
                 HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(display_id=display_id)
                 helpdesk_request.display_id = display_id
+        sla_service.apply_sla_due_dates(helpdesk_request, portal=portal)
+        detect_recurrence(helpdesk_request)
         assign_helpdesk_request_automatically(helpdesk_request, request_payload=self.request.data)
         publish(self.kwargs.get("slug", ""), {"type": "request.created", "request_id": str(helpdesk_request.id)})
 
@@ -435,6 +471,8 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                     entity_type=REQUEST_ENTITY,
                     entity_identifier=helpdesk_request.id,
                 )
+                sla_service.apply_sla_due_dates(helpdesk_request, portal=portal)
+                detect_recurrence(helpdesk_request)
                 assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
                 publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
                 return Response(
@@ -456,6 +494,8 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
                 entity_type=REQUEST_ENTITY,
                 entity_identifier=helpdesk_request.id,
             )
+            sla_service.apply_sla_due_dates(helpdesk_request, portal=portal)
+            detect_recurrence(helpdesk_request)
             assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
             publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
             return Response(

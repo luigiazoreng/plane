@@ -6,6 +6,7 @@ from plane.db.models import Issue
 from plane.db.models.helpdesk import HelpdeskRequestIssue
 from plane.app.serializers.helpdesk import HelpdeskRequestIssueSerializer
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER
+from plane.app.helpdesk.recurrence import detect_recurrence
 
 
 class HelpdeskRequestIssueViewSet(BaseViewSet):
@@ -45,7 +46,12 @@ class HelpdeskRequestIssueViewSet(BaseViewSet):
     def perform_create(self, serializer):
         from plane.db.models import Workspace
         workspace = Workspace.objects.get(slug=self.kwargs.get("slug"))
-        serializer.save(workspace=workspace)
+        link = serializer.save(workspace=workspace)
+        # Linking a ticket to a work item is a statement that they share a root
+        # cause, which is exactly the shared_issue recurrence signal. Run it for
+        # the ticket just linked so both it and the tickets already on that
+        # issue pick up the connection.
+        detect_recurrence(link.request)
 
 
 class HelpdeskLinkedIssueLookupEndpoint(BaseAPIView):

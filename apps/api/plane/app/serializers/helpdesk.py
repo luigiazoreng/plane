@@ -21,6 +21,8 @@ from plane.db.models import (
     HelpdeskRequestComment,
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
+    HelpdeskRequestRecurrence,
+    HelpdeskSLAPolicy,
     HelpdeskStatus,
     HelpdeskTeam,
     HelpdeskMacro,
@@ -31,6 +33,7 @@ from plane.app.serializers.base import BaseSerializer
 from plane.app.serializers.user import UserLiteSerializer
 from plane.app.helpdesk.attachments import COMMENT_ENTITY, REQUEST_ENTITY, assets_for
 from plane.app.helpdesk.auto_assignment import normalize_helpdesk_auto_assignment_config
+from plane.app.helpdesk.sla import sla_snapshot
 from plane.utils.content_validator import validate_html_content
 
 READ_ONLY_BASE = ["workspace", "created_at", "updated_at", "created_by", "updated_by", "deleted_at"]
@@ -273,6 +276,18 @@ class HelpdeskRequestSerializer(BaseSerializer):
     # in-progress pause -- the frontend adds `now() - sla_paused_at` itself so
     # the SLA countdown can keep ticking live between fetches.
     total_paused_seconds = serializers.SerializerMethodField()
+    # Resolved deadlines and breach state for the ticket's priority. Computed
+    # rather than stored so a ticket paused right now reports the deadline it
+    # will actually resume with.
+    sla = serializers.SerializerMethodField()
+    # Both come from queryset annotations (annotate_is_recurrent /
+    # annotate_recurrence_count). The defaults keep the serializer usable on a
+    # plain instance, e.g. right after create().
+    is_recurrent = serializers.BooleanField(read_only=True, default=False)
+    recurrence_count = serializers.IntegerField(read_only=True, default=0)
+
+    def get_sla(self, obj):
+        return sla_snapshot(obj)
 
     def get_attachments(self, obj):
         grouped = self.context.get("request_attachments_by_entity")
@@ -294,6 +309,10 @@ class HelpdeskRequestSerializer(BaseSerializer):
             "archived_at",
             "sla_paused_at",
             "total_paused_duration",
+            # Derived from the SLA policy of the ticket's priority; letting a
+            # client set them would let anyone move their own deadline.
+            "sla_first_response_due_at",
+            "sla_resolution_due_at",
         ]
 
     def _sync_assignees(self, instance, assignee_ids):
@@ -541,6 +560,81 @@ class HelpdeskRequestCommentAdminSerializer(HelpdeskRequestCommentSerializer):
     class Meta(HelpdeskRequestCommentSerializer.Meta):
         exclude = None
         fields = "__all__"
+
+
+class HelpdeskSLAPolicySerializer(BaseSerializer):
+    class Meta:
+        model = HelpdeskSLAPolicy
+        # Explicit rather than "__all__": workspace and project are tenant
+        # fields the client must never choose.
+        fields = [
+            "id",
+            "portal",
+            "priority",
+            "first_response_hours",
+            "resolution_hours",
+            "is_active",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "created_by", "updated_by"]
+
+    def validate(self, data):
+        # A policy with neither leg set is indistinguishable from having no
+        # policy at all, except that it silently suppresses the portal
+        # fallback -- which is a confusing way to spell "no SLA".
+        instance = self.instance
+        first = data.get("first_response_hours", getattr(instance, "first_response_hours", None))
+        resolution = data.get("resolution_hours", getattr(instance, "resolution_hours", None))
+        if first is None and resolution is None:
+            raise serializers.ValidationError(
+                "Set at least one of first_response_hours or resolution_hours, "
+                "or delete the policy to fall back to the portal defaults."
+            )
+        for name, value in (("first_response_hours", first), ("resolution_hours", resolution)):
+            if value is not None and value <= 0:
+                raise serializers.ValidationError({name: "Must be greater than zero."})
+        if first is not None and resolution is not None and first > resolution:
+            raise serializers.ValidationError(
+                "first_response_hours cannot exceed resolution_hours -- a ticket "
+                "cannot be required to be solved before it is answered."
+            )
+        return data
+
+
+class HelpdeskRequestRecurrenceSerializer(BaseSerializer):
+    """A repeat link, rendered from the point of view of the ticket being read."""
+
+    related_request_detail = serializers.SerializerMethodField()
+
+    def get_related_request_detail(self, obj):
+        related = obj.related_request
+        return {
+            "id": str(related.id),
+            "display_id": related.display_id,
+            "title": related.title,
+            "priority": related.priority,
+            "status": str(related.status_id) if related.status_id else None,
+            "created_at": related.created_at,
+            "resolved_at": related.resolved_at,
+        }
+
+    class Meta:
+        model = HelpdeskRequestRecurrence
+        # Links are produced by detection, never posted by a client, so the
+        # whole thing is read-only.
+        fields = [
+            "id",
+            "request",
+            "related_request",
+            "related_request_detail",
+            "match_type",
+            "score",
+            "created_at",
+        ]
+        read_only_fields = fields
 
 
 class HelpdeskRequestIssueSerializer(BaseSerializer):
