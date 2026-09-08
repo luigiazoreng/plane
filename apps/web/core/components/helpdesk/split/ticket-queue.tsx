@@ -85,7 +85,7 @@ export function TicketQueue({
         "flex flex-col border-r border-subtle bg-surface-1",
         // Below lg the three columns cannot coexist: the queue takes the whole
         // width until a ticket is opened, then yields it to the conversation.
-        "w-full lg:w-[312px] lg:min-w-[312px]",
+        "w-full lg:w-78 lg:min-w-78",
         isTicketOpen && "hidden lg:flex"
       )}
     >
