@@ -19,6 +19,26 @@ import { useAttachmentUpload } from "@/components/helpdesk/attachments/use-attac
 
 const publicHelpdeskService = new PublicHelpdeskService();
 
+function RequestDescription({ description }: { description?: string }) {
+  if (!description || !description.trim() || description === "<p></p>") {
+    return <p className="text-sm text-tertiary italic">No description provided.</p>;
+  }
+
+  const hasHtml = /<[a-z][\s\S]*>/i.test(description);
+
+  if (hasHtml) {
+    return (
+      <div
+        className="prose-sm max-w-none leading-relaxed text-secondary prose [&_li]:my-0.5 [&_ol]:my-1 [&_p]:my-1 [&_ul]:my-1"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: description }}
+      />
+    );
+  }
+
+  return <p className="text-sm break-words whitespace-pre-wrap text-secondary">{description}</p>;
+}
+
 const HelpdeskPublicRequestPage = observer(() => {
   const { publicSlug, requestId } = useParams();
   const navigate = useNavigate();
@@ -155,7 +175,7 @@ const HelpdeskPublicRequestPage = observer(() => {
   if (loading) {
     return (
       <div className="flex h-40 items-center justify-center">
-        <div className="border-accent-subtle h-8 w-8 animate-spin rounded-full border-b-2"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-accent-subtle"></div>
       </div>
     );
   }
@@ -165,18 +185,18 @@ const HelpdeskPublicRequestPage = observer(() => {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <div className="mb-4 flex justify-center">
-          <div className="bg-accent-subtle flex h-14 w-14 items-center justify-center rounded-full">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-subtle">
             <Lock className="size-7 text-primary" />
           </div>
         </div>
-        <h2 className="text-xl text-primary font-bold">Sign in to view this ticket</h2>
-        <p className="text-placeholder text-sm mt-2">
+        <h2 className="text-xl font-bold text-primary">Sign in to view this ticket</h2>
+        <p className="text-sm mt-2 text-placeholder">
           You need an account to access ticket details and follow the conversation.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button
             onClick={() => navigate(loginUrl)}
-            className="bg-accent-primary hover:bg-accent-primary-hover text-sm rounded-md px-5 py-2 font-medium text-white transition-colors"
+            className="text-sm rounded-md bg-accent-primary px-5 py-2 font-medium text-white transition-colors hover:bg-accent-primary-hover"
           >
             Sign in
           </button>
@@ -186,12 +206,12 @@ const HelpdeskPublicRequestPage = observer(() => {
                 `/helpdesk/p/${publicSlug}/register?next=${encodeURIComponent(`/helpdesk/p/${publicSlug}/${requestId}`)}`
               )
             }
-            className="text-sm text-secondary rounded-md border border-subtle px-5 py-2 font-medium transition-colors hover:bg-surface-2"
+            className="text-sm rounded-md border border-subtle px-5 py-2 font-medium text-secondary transition-colors hover:bg-surface-2"
           >
             Create account
           </button>
         </div>
-        <Link to={`/helpdesk/p/${publicSlug}`} className="text-sm text-placeholder mt-6 block hover:underline">
+        <Link to={`/helpdesk/p/${publicSlug}`} className="text-sm mt-6 block text-placeholder hover:underline">
           Return to Portal
         </Link>
       </div>
@@ -220,7 +240,7 @@ const HelpdeskPublicRequestPage = observer(() => {
           <ArrowLeft className="size-5" />
         </Link>
         <h1 className="text-2xl flex-1 font-bold text-primary">{request.title}</h1>
-        <span className="bg-accent-subtle text-sm rounded-full px-3 py-1 font-medium text-accent-primary">
+        <span className="text-sm rounded-full bg-accent-subtle px-3 py-1 font-medium text-accent-primary">
           {request.status_detail?.name || "Open"}
         </span>
       </div>
@@ -231,6 +251,12 @@ const HelpdeskPublicRequestPage = observer(() => {
           <span>Submitted on {new Date(request.created_at).toLocaleString()}</span>
         </div>
         <div className="prose-sm max-w-none text-secondary prose">{request.description}</div>
+        <RequestDescription description={request.description} />
+        {request.attachments && request.attachments.length > 0 && (
+          <div className="mt-4 border-t border-subtle pt-4">
+            <CommentAttachments attachments={request.attachments} />
+          </div>
+        )}
       </div>
 
       {/* Chat History */}
@@ -263,7 +289,7 @@ const HelpdeskPublicRequestPage = observer(() => {
               return (
                 <div key={comment.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`shadow-sm max-w-[85%] rounded-lg border p-4 ${isOwnMessage ? "bg-accent-subtle border-accent-subtle" : "border-subtle bg-surface-1"}`}
+                    className={`shadow-sm max-w-[85%] rounded-lg border p-4 ${isOwnMessage ? "border-accent-subtle bg-accent-subtle" : "border-subtle bg-surface-1"}`}
                   >
                     <div className="mb-2 flex items-baseline justify-between gap-4">
                       <span className="text-sm font-semibold text-primary">{authorLabel}</span>
@@ -287,8 +313,8 @@ const HelpdeskPublicRequestPage = observer(() => {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={cn(
-              "focus-within:border-accent-subtle focus-within:ring-accent-primary/20 shadow-sm relative flex flex-col gap-2 rounded-md border border-subtle bg-surface-1 transition-all focus-within:ring-1",
-              isDragOver && "border-accent-primary bg-accent-subtle/50 border-dashed"
+              "focus-within:ring-accent-primary/20 shadow-sm relative flex flex-col gap-2 rounded-md border border-subtle bg-surface-1 transition-all focus-within:border-accent-subtle focus-within:ring-1",
+              isDragOver && "border-accent-primary border-dashed bg-accent-subtle/50"
             )}
           >
             <textarea
@@ -307,7 +333,7 @@ const HelpdeskPublicRequestPage = observer(() => {
               <button
                 onClick={handleAddComment}
                 disabled={submitting || !newComment.trim()}
-                className="bg-accent-primary text-sm hover:bg-accent-primary-hover flex items-center gap-2 rounded-md px-4 py-2 font-medium text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                className="text-sm flex items-center gap-2 rounded-md bg-accent-primary px-4 py-2 font-medium text-white transition-all hover:bg-accent-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span>Send Reply</span>
                 <Send className="size-4" />

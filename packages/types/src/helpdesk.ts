@@ -172,6 +172,7 @@ export interface IHelpdeskRequest {
   sla_paused_at: string | null;
   /** Closed pause time only, in seconds -- does not include an in-progress pause. */
   total_paused_seconds: number;
+  attachments?: IHelpdeskAttachment[];
   created_at: string;
   updated_at: string;
 }

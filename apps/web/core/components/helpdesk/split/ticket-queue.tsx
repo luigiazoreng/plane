@@ -186,7 +186,7 @@ export function TicketQueue({
 }
 
 /** Descriptions arrive as HTML from the editor; the queue preview is a single plain line. */
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   return html
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/g, " ")
