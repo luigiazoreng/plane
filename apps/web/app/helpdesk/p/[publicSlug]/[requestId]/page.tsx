@@ -36,7 +36,6 @@ function RequestDescription({ description }: { description?: string }) {
     );
   }
 
-  return <p className="text-sm break-words whitespace-pre-wrap text-secondary">{description}</p>;
   return <p className="text-sm wrap-break-word whitespace-pre-wrap text-secondary">{description}</p>;
 }
 
@@ -322,7 +321,6 @@ const HelpdeskPublicRequestPage = observer(() => {
               onChange={(e) => setNewComment(e.target.value)}
               onPaste={handlePaste}
               placeholder="Type your reply here..."
-              className="text-sm min-h-[120px] w-full resize-none bg-transparent p-4 text-primary outline-none"
               className="text-sm min-h-30 w-full resize-none bg-transparent p-4 text-primary outline-none"
             />
             <PendingAttachmentChips attachments={attachments.pending} onRemove={attachments.remove} />
