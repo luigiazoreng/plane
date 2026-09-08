@@ -741,6 +741,9 @@ const WorkspaceHelpdeskPage = observer(() => {
                             <div className="hidden shrink-0 items-center gap-4 text-tertiary md:flex">
                               <div className="flex items-center gap-1.5 text-13">
                                 <UserRound className="size-3.5 shrink-0" />
+                                <span className="max-w-[120px] truncate">
+                                  {request.contact_email || "Authenticated"}
+                                </span>
                                 <span className="max-w-30 truncate">{request.contact_email || "Authenticated"}</span>
                               </div>
                               <div className="flex items-center gap-1 text-13">
@@ -1060,12 +1063,14 @@ function HelpdeskKanbanRequestCard({
         <div className="block w-full rounded-lg border border-subtle bg-layer-2 p-3 text-13 shadow-raised-100 outline-[0.5px] outline-transparent transition-all hover:border-strong hover:shadow-raised-200">
           {request.display_id && <p className="font-mono mb-1 text-11 text-tertiary">{request.display_id}</p>}
           <div className="line-clamp-1 w-full text-body-sm-medium text-primary">{request.title}</div>
+          {request.description && <p className="mt-1 line-clamp-2 text-12 text-tertiary">{request.description}</p>}
           {request.description && (
             <p className="mt-1 line-clamp-2 text-12 text-tertiary">{stripHtml(request.description)}</p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2 pt-1 text-tertiary">
             <div className="flex items-center gap-1.5 text-13">
               <UserRound className="size-3 shrink-0" />
+              <span className="max-w-[120px] truncate text-12">{request.contact_email || "Authenticated"}</span>
               <span className="max-w-30 truncate text-12">{request.contact_email || "Authenticated"}</span>
             </div>
             <div className="flex items-center gap-1 text-13">
