@@ -5,10 +5,14 @@ on:
   pull_request:
     branches:
       - "preview"
+      - "stable-*"
+      - "master"
+      - "main"
     types:
       - "opened"
       - "synchronize"
       - "reopened"
+      - "ready_for_review"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,6 +27,7 @@ jobs:
     if: |
       github.event.pull_request.draft == false &&
       github.event.pull_request.requested_reviewers != null
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     env:
       TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
       TURBO_SCM_HEAD: ${{ github.sha }}
@@ -65,6 +70,7 @@ jobs:
     if: |
       github.event.pull_request.draft == false &&
       github.event.pull_request.requested_reviewers != null
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     env:
       TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
       TURBO_SCM_HEAD: ${{ github.sha }}
@@ -123,6 +129,7 @@ jobs:
     if: |
       github.event.pull_request.draft == false &&
       github.event.pull_request.requested_reviewers != null
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     env:
       TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
       TURBO_SCM_HEAD: ${{ github.sha }}
