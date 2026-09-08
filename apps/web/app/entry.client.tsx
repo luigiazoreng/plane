@@ -13,7 +13,6 @@ startTransition(() => {
     document,
     <StrictMode>
       <HydratedRouter />
-    </StrictMode>
     </StrictMode>,
     {
       onRecoverableError(error, errorInfo) {

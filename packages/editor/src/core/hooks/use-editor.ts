@@ -5,7 +5,7 @@
  */
 
 import { useEditorState, useEditor as useTiptapEditor } from "@tiptap/react";
-import { useImperativeHandle, useEffect } from "react";
+import { useImperativeHandle, useEffect, useRef } from "react";
 import type { MarkdownStorage } from "tiptap-markdown";
 // extensions
 import { CoreEditorExtensions } from "@/extensions";
@@ -54,6 +54,8 @@ export const useEditor = (props: TEditorHookProps) => {
     treatImagesAsAttachments,
   } = props;
 
+  const lastEmittedHTMLRef = useRef<string | null>(null);
+
   const editor = useTiptapEditor(
     {
       editable,
@@ -92,10 +94,12 @@ export const useEditor = (props: TEditorHookProps) => {
       onTransaction: () => {
         onTransaction?.();
       },
-      onUpdate: ({ editor, transaction }) => {
+      onUpdate: ({ editor: currentEditor, transaction }) => {
         // Check if this update is only due to migration update
         const isMigrationUpdate = transaction?.getMeta("uniqueIdOnlyChange") === true;
-        onChange?.(editor.getJSON(), editor.getHTML(), { isMigrationUpdate });
+        const html = currentEditor.getHTML();
+        lastEmittedHTMLRef.current = html;
+        onChange?.(currentEditor.getJSON(), html, { isMigrationUpdate });
       },
       onDestroy: () => handleEditorReady?.(false),
       onFocus: onEditorFocus,
@@ -111,6 +115,10 @@ export const useEditor = (props: TEditorHookProps) => {
     if (editor) {
       const { uploadInProgress: isUploadInProgress } = editor.storage.utility;
       if (!editor.isDestroyed && !isUploadInProgress) {
+        // Avoid destroying document and cursor position if value matches current content or was just emitted by the editor
+        if (value === lastEmittedHTMLRef.current || editor.getHTML() === value) {
+          return;
+        }
         try {
           editor.commands.setContent(value, false, {
             preserveWhitespace: true,
@@ -137,8 +145,8 @@ export const useEditor = (props: TEditorHookProps) => {
   // subscribe to assets list changes
   const assetsList = useEditorState({
     editor,
-    selector: ({ editor }) => ({
-      assets: editor?.storage.utility?.assetsList ?? [],
+    selector: ({ editor: currentEditor }) => ({
+      assets: currentEditor?.storage.utility?.assetsList ?? [],
     }),
   });
   // trigger callback when assets list changes
