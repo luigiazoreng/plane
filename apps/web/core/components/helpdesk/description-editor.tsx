@@ -59,6 +59,22 @@ export const HelpdeskDescriptionEditor = ({
   // How many files are mid-upload from a single paste/drop batch, to enforce
   // the per-operation cap even while uploads are still in flight.
   const inFlightCountRef = useRef(0);
+  const lastEmittedValueRef = useRef(value);
+
+  const handleChange = useCallback(
+    (_json: object, html: string) => {
+      lastEmittedValueRef.current = html;
+      onChange(html);
+    },
+    [onChange]
+  );
+
+  // Only pass value if changed externally (e.g. form reset), avoiding setContent on every keystroke
+  const isExternalChange = value !== lastEmittedValueRef.current;
+  const syncValue = isExternalChange ? value : null;
+  if (isExternalChange) {
+    lastEmittedValueRef.current = value;
+  }
 
   const uploadFile: TFileHandler["upload"] = useCallback(
     async (_blockId, file) => {
@@ -126,8 +142,8 @@ export const HelpdeskDescriptionEditor = ({
       ref={editorRef}
       id="helpdesk-request-description"
       initialValue={value || "<p></p>"}
-      value={value}
-      onChange={(_json, html) => onChange(html)}
+      value={syncValue}
+      onChange={handleChange}
       editable={!disabled}
       disabledExtensions={[]}
       flaggedExtensions={[]}
