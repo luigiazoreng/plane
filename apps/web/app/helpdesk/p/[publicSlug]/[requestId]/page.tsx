@@ -250,7 +250,6 @@ const HelpdeskPublicRequestPage = observer(() => {
         <div className="text-sm mb-4 flex justify-between text-tertiary">
           <span>Submitted on {new Date(request.created_at).toLocaleString()}</span>
         </div>
-        <div className="prose-sm max-w-none text-secondary prose">{request.description}</div>
         <RequestDescription description={request.description} />
         {request.attachments && request.attachments.length > 0 && (
           <div className="mt-4 border-t border-subtle pt-4">
