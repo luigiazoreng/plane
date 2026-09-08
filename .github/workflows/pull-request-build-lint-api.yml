@@ -26,6 +26,9 @@ jobs:
     name: Lint API
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.requested_reviewers != null
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v6
