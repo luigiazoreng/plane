@@ -133,6 +133,7 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
               as="button"
               type="button"
               className="flex-shrink-0 rounded-sm p-0.5 hover:bg-layer-1"
+              className="shrink-0 rounded-sm p-0.5 hover:bg-layer-1"
               onClick={() => toggleListDisclosure(!isWorkspaceMenuOpen)}
               aria-label={t(
                 isWorkspaceMenuOpen
@@ -142,6 +143,7 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
             >
               <ChevronRightIcon
                 className={cn("size-3 flex-shrink-0 transition-all", {
+                className={cn("size-3 shrink-0 transition-all", {
                   "rotate-90": isWorkspaceMenuOpen,
                 })}
               />
@@ -171,6 +173,7 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
                     type="button"
                     onClick={() => toggleExtendedSidebar()}
                     className="flex flex-grow items-center gap-1.5 text-13 font-medium text-tertiary"
+                    className="flex grow items-center gap-1.5 text-13 font-medium text-tertiary"
                     id="extended-sidebar-toggle"
                     aria-label={t(
                       isExtendedSidebarOpened
@@ -179,6 +182,7 @@ export const SidebarMenuItems = observer(function SidebarMenuItems() {
                     )}
                   >
                     <Ellipsis className="size-4 flex-shrink-0" />
+                    <Ellipsis className="size-4 shrink-0" />
                     <span>{isExtendedSidebarOpened ? "Hide" : "More"}</span>
                   </button>
                 </SidebarNavItem>

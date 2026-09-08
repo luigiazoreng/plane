@@ -107,6 +107,7 @@ from .helpdesk import (
     HelpdeskMacro,
     HelpdeskMember,
     HelpdeskPortal,
+    HelpdeskRecurrenceMatchType,
     HelpdeskRequest,
     HelpdeskRequestActivity,
     HelpdeskRequestAssignee,
@@ -114,7 +115,10 @@ from .helpdesk import (
     HelpdeskRequestComment,
     HelpdeskRequestIntakeIssue,
     HelpdeskRequestIssue,
+    HelpdeskRequestPriority,
     HelpdeskRequestReadReceipt,
+    HelpdeskRequestRecurrence,
+    HelpdeskSLAPolicy,
     HelpdeskStatus,
     HelpdeskTeam,
 )

@@ -59,7 +59,10 @@ services:
     environment:
       PGDATA: /var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Overridable: 5432 is often taken by another project's postgres on the host.
+      # Only affects host access (psql, pytest from a local venv); the other
+      # containers reach the database over the dev_env network on 5432 regardless.
+      - "${PLANE_DB_PORT:-5432}:5432"
 
   api:
     build:

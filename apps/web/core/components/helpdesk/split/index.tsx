@@ -25,7 +25,7 @@ import { useLabel } from "@/hooks/store/use-label";
 import { useProject } from "@/hooks/store/use-project";
 import { ConversationPanel } from "./conversation-panel";
 import { DetailPanel } from "./detail-panel";
-import { TicketQueue } from "./ticket-queue";
+import { TicketQueue, stripHtml } from "./ticket-queue";
 import type { TComposerMode } from "./composer";
 
 // A public reply always reaches the customer through both channels; the only
@@ -507,7 +507,7 @@ export const HelpdeskSplitView = observer(
           projectIds={workspaceProjectIds || []}
           getProjectById={getProjectById}
           defaultTitle={selectedRequest?.title ?? ""}
-          defaultDescription={selectedRequest?.description ?? ""}
+          defaultDescription={selectedRequest?.description ? stripHtml(selectedRequest.description) : ""}
           onSubmit={handleForward}
         />
       </>

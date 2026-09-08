@@ -12,6 +12,8 @@ from plane.app.helpdesk.auto_assignment import assign_helpdesk_request_automatic
 from plane.app.helpdesk.form_core import build_default_helpdesk_system_fields, validate_helpdesk_form_submission, generate_ticket_display_id
 from plane.app.helpdesk.sse_broker import publish as sse_publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, ADMIN
+from plane.app.helpdesk.recurrence import detect_recurrence
+from plane.app.helpdesk.sla import apply_sla_due_dates
 from plane.db.models import Workspace
 from plane.db.models.helpdesk import (
     HelpdeskCustomer,
@@ -349,6 +351,8 @@ class PublicHelpdeskFormSubmitEndpoint(BaseAPIView):
             entity_identifier=helpdesk_request.id,
         )
 
+        apply_sla_due_dates(helpdesk_request, portal=portal)
+        detect_recurrence(helpdesk_request)
         assign_helpdesk_request_automatically(helpdesk_request, request_payload=request.data)
         sse_publish(str(portal.workspace.slug), {"type": "request.created", "request_id": str(helpdesk_request.id)})
         serializer = HelpdeskRequestSerializer(helpdesk_request, context={"public_slug": public_slug})

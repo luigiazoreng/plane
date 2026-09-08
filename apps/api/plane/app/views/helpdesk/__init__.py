@@ -37,4 +37,6 @@ from .activity import (
 )
 from .team import HelpdeskTeamViewSet
 from .macro import HelpdeskMacroViewSet
+from .sla import HelpdeskSLAPolicyViewSet, HelpdeskSLASummaryEndpoint
+from .recurrence import HelpdeskRequestRecurrenceEndpoint
 

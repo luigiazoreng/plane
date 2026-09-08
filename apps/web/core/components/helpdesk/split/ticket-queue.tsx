@@ -86,6 +86,7 @@ export function TicketQueue({
         // Below lg the three columns cannot coexist: the queue takes the whole
         // width until a ticket is opened, then yields it to the conversation.
         "w-full lg:w-[312px] lg:min-w-[312px]",
+        "w-full lg:w-78 lg:min-w-78",
         isTicketOpen && "hidden lg:flex"
       )}
     >
@@ -186,7 +187,7 @@ export function TicketQueue({
 }
 
 /** Descriptions arrive as HTML from the editor; the queue preview is a single plain line. */
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   return html
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/g, " ")

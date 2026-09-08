@@ -247,6 +247,11 @@ class HelpdeskRequest(WorkspaceBaseModel):
     resolved_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     snoozed_until = models.DateTimeField(null=True, blank=True)
+    # Deadlines resolved from the SLA policy of the ticket's priority (see
+    # plane.app.helpdesk.sla). Both are pushed forward when a pause ends, so a
+    # deadline in the past always means a real breach -- no need to subtract
+    # total_paused_duration at read time.
+    sla_first_response_due_at = models.DateTimeField(null=True, blank=True)
     sla_resolution_due_at = models.DateTimeField(null=True, blank=True)
     # Set while the request sits in a status with pauses_sla=True; cleared (and
     # folded into total_paused_duration) the moment it leaves that status.
@@ -578,5 +583,73 @@ class HelpdeskRequestBookmark(WorkspaceBaseModel):
         return f"{self.user.email} star -> {self.request.title}"
 
 
+class HelpdeskSLAPolicy(WorkspaceBaseModel):
+    """Per-priority SLA target for a portal.
+
+    HelpdeskPortal already carries sla_first_response_hours / sla_resolution_hours,
+    but a single pair for the whole portal cannot express the one thing SLAs exist
+    for: an urgent ticket and a low one do not get the same deadline. This model
+    overrides the portal pair per priority; a priority with no active policy falls
+    back to the portal values, so existing portals keep behaving exactly as before.
+
+    Null hours means "no target for this leg" -- a policy may set a resolution
+    deadline without promising a first-response one, or the reverse.
+    """
+
+    portal = models.ForeignKey(HelpdeskPortal, on_delete=models.CASCADE, related_name="sla_policies")
+    priority = models.CharField(max_length=30, choices=HelpdeskRequestPriority.choices)
+    first_response_hours = models.IntegerField(null=True, blank=True)
+    resolution_hours = models.IntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Helpdesk SLA Policy"
+        verbose_name_plural = "Helpdesk SLA Policies"
+        db_table = "helpdesk_sla_policies"
+        unique_together = ["portal", "priority", "deleted_at"]
+        ordering = ("portal", "priority")
+
+    def __str__(self):
+        return f"{self.portal.public_slug} / {self.priority}"
+
+
+class HelpdeskRecurrenceMatchType(models.TextChoices):
+    SAME_CUSTOMER_SIMILAR = "same_customer_similar", "Same customer, similar problem"
+    SHARED_ISSUE = "shared_issue", "Linked to the same work item"
+
+
+class HelpdeskRequestRecurrence(WorkspaceBaseModel):
+    """A detected link between a ticket and an earlier one covering the same problem.
+
+    Rows are directional: ``request`` is the newer ticket, ``related_request`` the
+    earlier one it repeats. Storing the link rather than recomputing it on read
+    keeps the detection cost at write time and lets an agent see *why* two tickets
+    were tied together (match_type) and how confident the tie is (score).
+    """
+
+    request = models.ForeignKey(HelpdeskRequest, on_delete=models.CASCADE, related_name="recurrence_links")
+    related_request = models.ForeignKey(
+        HelpdeskRequest, on_delete=models.CASCADE, related_name="recurrence_backlinks"
+    )
+    match_type = models.CharField(max_length=50, choices=HelpdeskRecurrenceMatchType.choices)
+    # 0..1 for same_customer_similar (token overlap of the titles); 1.0 for
+    # shared_issue, which is an exact link rather than a heuristic.
+    score = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Helpdesk Request Recurrence"
+        verbose_name_plural = "Helpdesk Request Recurrences"
+        db_table = "helpdesk_request_recurrences"
+        unique_together = ["request", "related_request", "match_type", "deleted_at"]
+        ordering = ("-created_at",)
+        constraints = [
+            models.CheckConstraint(
+                check=~Q(request=models.F("related_request")),
+                name="helpdesk_recurrence_no_self_link",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.request_id} repeats {self.related_request_id} ({self.match_type})"
 
 

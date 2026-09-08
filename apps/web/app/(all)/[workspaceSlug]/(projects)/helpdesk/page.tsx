@@ -39,6 +39,7 @@ import {
 import { BaseKanbanLayout } from "@/components/base-layouts/kanban/layout";
 import { AppHeader } from "@/components/core/app-header";
 import { HelpdeskSplitView } from "@/components/helpdesk/split";
+import { stripHtml } from "@/components/helpdesk/split/ticket-queue";
 import { CreateTicketModal } from "@/components/helpdesk/create-ticket-modal";
 import { HelpdeskAppliedFilters } from "@/components/helpdesk/filters/helpdesk-applied-filters";
 import { HelpdeskDisplayDropdown } from "@/components/helpdesk/filters/helpdesk-display-dropdown";
@@ -381,19 +382,19 @@ const WorkspaceHelpdeskPage = observer(() => {
         header={
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="bg-accent-subtle text-accent-primary flex size-6 shrink-0 items-center justify-center rounded-md">
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-accent-subtle text-accent-primary">
                 <Headset className="size-3.5" />
               </div>
-              <span className="text-sm text-primary font-semibold">Helpdesk</span>
+              <span className="text-sm font-semibold text-primary">Helpdesk</span>
               <div className="hidden items-center gap-1.5 md:flex">
                 <span className="text-13 text-tertiary">·</span>
                 <span className="rounded-md bg-layer-1 px-2 py-0.5 text-12 text-secondary">
                   {requests.length < totalRequests ? `${requests.length} / ${totalRequests}` : `${totalRequests}`} total
                 </span>
-                <span className="bg-warning-subtle text-warning-primary rounded-md px-2 py-0.5 text-12">
+                <span className="rounded-md bg-warning-subtle px-2 py-0.5 text-12 text-warning-primary">
                   {activeRequests} active
                 </span>
-                <span className="bg-success-subtle text-success-primary rounded-md px-2 py-0.5 text-12">
+                <span className="rounded-md bg-success-subtle px-2 py-0.5 text-12 text-success-primary">
                   {resolvedRequests} resolved
                 </span>
               </div>
@@ -430,7 +431,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                     className={cn(
                       "flex items-center gap-1.5 rounded px-2.5 py-1 text-13 font-medium transition-colors",
                       layout === key
-                        ? "bg-accent-primary shadow-sm text-white"
+                        ? "shadow-sm bg-accent-primary text-white"
                         : "text-secondary hover:bg-layer-2 hover:text-primary"
                     )}
                   >
@@ -606,7 +607,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                           type="button"
                           onClick={() => handleAddRequest(statusId)}
                           disabled={!newRequestTitle.trim() || !defaultPortalId}
-                          className="bg-accent-primary rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                          className="rounded bg-accent-primary px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                         >
                           Add
                         </button>
@@ -620,7 +621,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                         >
                           Cancel
                         </button>
-                        {!defaultPortalId && <span className="text-danger-primary text-11">No portal configured</span>}
+                        {!defaultPortalId && <span className="text-11 text-danger-primary">No portal configured</span>}
                       </div>
                     </div>
                   );
@@ -730,7 +731,9 @@ const WorkspaceHelpdeskPage = observer(() => {
                               )}
                               <p className="truncate text-body-sm-medium text-primary">{request.title}</p>
                               {request.description && (
-                                <p className="mt-0.5 truncate text-12 text-tertiary">{request.description}</p>
+                                <p className="mt-0.5 truncate text-12 text-tertiary">
+                                  {stripHtml(request.description)}
+                                </p>
                               )}
                             </button>
 
@@ -741,6 +744,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                                 <span className="max-w-[120px] truncate">
                                   {request.contact_email || "Authenticated"}
                                 </span>
+                                <span className="max-w-30 truncate">{request.contact_email || "Authenticated"}</span>
                               </div>
                               <div className="flex items-center gap-1 text-13">
                                 <CalendarDays className="size-3.5 shrink-0" />
@@ -780,7 +784,7 @@ const WorkspaceHelpdeskPage = observer(() => {
                               type="button"
                               onClick={() => handleAddRequest(group.id)}
                               disabled={!newRequestTitle.trim() || !defaultPortalId}
-                              className="bg-accent-primary rounded px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                              className="rounded bg-accent-primary px-2 py-0.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                             >
                               Add
                             </button>
@@ -1060,10 +1064,14 @@ function HelpdeskKanbanRequestCard({
           {request.display_id && <p className="font-mono mb-1 text-11 text-tertiary">{request.display_id}</p>}
           <div className="line-clamp-1 w-full text-body-sm-medium text-primary">{request.title}</div>
           {request.description && <p className="mt-1 line-clamp-2 text-12 text-tertiary">{request.description}</p>}
+          {request.description && (
+            <p className="mt-1 line-clamp-2 text-12 text-tertiary">{stripHtml(request.description)}</p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2 pt-1 text-tertiary">
             <div className="flex items-center gap-1.5 text-13">
               <UserRound className="size-3 shrink-0" />
               <span className="max-w-[120px] truncate text-12">{request.contact_email || "Authenticated"}</span>
+              <span className="max-w-30 truncate text-12">{request.contact_email || "Authenticated"}</span>
             </div>
             <div className="flex items-center gap-1 text-13">
               <CalendarDays className="size-3 shrink-0" />
