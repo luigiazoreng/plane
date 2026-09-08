@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * See the LICENSE file for details.
  */
+/* eslint-disable jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events, unicorn/consistent-function-scoping */
 
 import type { SyntheticEvent } from "react";
 import { useCallback, useMemo, useEffect } from "react";
@@ -185,8 +186,7 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
   // F2: derive from issue.project_id, NOT the route's `projectId` -- the
   // latter is undefined outside `/[slug]/projects/[projectId]/...` (e.g.
   // `/[slug]/workspace-views/[id]`), which silently hid estimates there.
-  const estimateSystemPropertyIds =
-    (issue.project_id && estimateSystemPropertyIdsByProjectId(issue.project_id)) || [];
+  const estimateSystemPropertyIds = (issue.project_id && estimateSystemPropertyIdsByProjectId(issue.project_id)) || [];
   const estimatePropertyIds = (issue.project_id && activeEstimatePropertyIdsByProjectId(issue.project_id)) || [];
 
   const handleEstimateChange = async (propertyId: string, val: string | undefined) => {
@@ -426,7 +426,7 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
                   value={value?.estimate_point ?? undefined}
                   estimateId={property.estimate}
                   onChange={(val) => handleEstimateChange(propertyId, val)}
-                  projectId={issue.project_id}
+                  projectId={issue.project_id ?? undefined}
                   disabled={isReadOnly}
                   buttonVariant="border-with-text"
                   renderByDefault={isMobile}
@@ -448,7 +448,7 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
                   value={value?.estimate_point ?? undefined}
                   estimateId={property.estimate}
                   onChange={(val) => handleEstimateChange(propertyId, val)}
-                  projectId={issue.project_id}
+                  projectId={issue.project_id ?? undefined}
                   disabled={isReadOnly}
                   buttonVariant="border-with-text"
                   renderByDefault={isMobile}
