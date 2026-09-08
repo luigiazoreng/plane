@@ -54,6 +54,7 @@ const HelpdeskPublicRequestPage = observer(() => {
 
   useEffect(() => {
     if (publicSlug && requestId) {
+      publicHelpdeskStore.hydrateCustomerSession();
       const pSlug = publicSlug.toString();
       const rId = requestId.toString();
       const token = publicHelpdeskStore.customerToken || undefined;

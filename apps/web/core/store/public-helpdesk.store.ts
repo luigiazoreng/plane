@@ -112,6 +112,7 @@ export class PublicHelpdeskStore {
   };
 
   async fetchPublicPortal(publicSlug: string) {
+    this.hydrateCustomerSession();
     const portal = await this.publicHelpdeskService.getPublicPortal(publicSlug);
     runInAction(() => {
       this.currentPortal = portal;
