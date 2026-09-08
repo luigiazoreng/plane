@@ -94,14 +94,11 @@ export const useEditor = (props: TEditorHookProps) => {
       onTransaction: () => {
         onTransaction?.();
       },
-      onUpdate: ({ editor, transaction }) => {
       onUpdate: ({ editor: currentEditor, transaction }) => {
         // Check if this update is only due to migration update
         const isMigrationUpdate = transaction?.getMeta("uniqueIdOnlyChange") === true;
-        const html = editor.getHTML();
         const html = currentEditor.getHTML();
         lastEmittedHTMLRef.current = html;
-        onChange?.(editor.getJSON(), html, { isMigrationUpdate });
         onChange?.(currentEditor.getJSON(), html, { isMigrationUpdate });
       },
       onDestroy: () => handleEditorReady?.(false),
@@ -148,8 +145,6 @@ export const useEditor = (props: TEditorHookProps) => {
   // subscribe to assets list changes
   const assetsList = useEditorState({
     editor,
-    selector: ({ editor }) => ({
-      assets: editor?.storage.utility?.assetsList ?? [],
     selector: ({ editor: currentEditor }) => ({
       assets: currentEditor?.storage.utility?.assetsList ?? [],
     }),
