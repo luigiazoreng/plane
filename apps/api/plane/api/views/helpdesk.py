@@ -274,6 +274,7 @@ class HelpdeskRequestDetailAPIEndpoint(HelpdeskRequestBaseAPIEndpoint):
 
         old_priority = helpdesk_request.priority
         old_status = helpdesk_request.status
+        old_target_date = helpdesk_request.target_date
 
         new_status = None
         status_id = request.data.get("status")
@@ -301,7 +302,11 @@ class HelpdeskRequestDetailAPIEndpoint(HelpdeskRequestBaseAPIEndpoint):
         if update_fields:
             HelpdeskRequest.objects.filter(pk=helpdesk_request.pk).update(**update_fields)
 
-        if request.data.get("priority") and request.data["priority"] != old_priority:
+        priority_changed = bool(request.data.get("priority") and request.data["priority"] != old_priority)
+        target_date_changed = "target_date" in request.data and (
+            str(request.data.get("target_date") or "") != str(old_target_date or "")
+        )
+        if priority_changed or target_date_changed:
             helpdesk_request.refresh_from_db()
             sla_service.apply_sla_due_dates(helpdesk_request)
 

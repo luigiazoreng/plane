@@ -224,6 +224,26 @@ class TestRequestDetail:
         req.refresh_from_db()
         assert req.sla_resolution_due_at == req.created_at + timedelta(hours=2)
 
+    def test_updating_target_date_extends_sla_resolution_due_at(
+        self, api_key_client, workspace, portal
+    ):
+        from datetime import datetime, time
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace, portal=portal, title="Estender", priority="medium"
+        )
+        future_date = (req.created_at + timedelta(days=10)).date()
+        response = api_key_client.patch(
+            url("helpdesk-requests", slug=workspace.slug, request_id=req.id),
+            {"target_date": str(future_date)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK, response.data
+        req.refresh_from_db()
+        expected_due = timezone.make_aware(datetime.combine(future_date, time(23, 59, 59)))
+        assert req.sla_resolution_due_at == expected_due
+        # Ensure serializer output in response also reflects the updated SLA
+        assert response.data["sla"]["resolution"]["due_at"] is not None
+
     def test_moving_into_a_pausing_status_stops_the_clock(self, api_key_client, workspace, portal):
         waiting = HelpdeskStatus.objects.create(
             workspace=workspace, name="Waiting on customer", pauses_sla=True, sequence=20000

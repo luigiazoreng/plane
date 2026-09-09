@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 from django.utils import timezone
@@ -130,6 +130,76 @@ class TestApplyDueDates:
 
         assert req.sla_first_response_due_at is None
         assert req.sla_resolution_due_at is None
+
+    def test_target_date_extends_resolution_due_at(self, portal):
+        req = make_request(portal)
+        # Portal resolution is 48 hours (~2 days). Set target_date 10 days out.
+        future_date = (req.created_at + timedelta(days=10)).date()
+        req.target_date = future_date
+        req.save()
+
+        sla.apply_sla_due_dates(req)
+        req.refresh_from_db()
+
+        expected_due = timezone.make_aware(datetime.combine(future_date, time(23, 59, 59)))
+        assert req.sla_resolution_due_at == expected_due
+        # First response is completely unaffected
+        assert req.sla_first_response_due_at == req.created_at + timedelta(hours=8)
+
+    def test_target_date_earlier_does_not_shorten_policy_resolution_sla(self, portal):
+        req = make_request(portal)
+        # Portal resolution is 48 hours. Set target_date to tomorrow (earlier than 48h).
+        near_date = (req.created_at + timedelta(days=1)).date()
+        req.target_date = near_date
+        req.save()
+
+        sla.apply_sla_due_dates(req)
+        req.refresh_from_db()
+
+        # Policy gives 48 hours; an aggressive target date must not shorten the contractual SLA
+        assert req.sla_resolution_due_at == req.created_at + timedelta(hours=48)
+
+    def test_target_date_sets_resolution_due_when_portal_has_no_sla(self, workspace):
+        bare = HelpdeskPortal.objects.create(workspace=workspace, public_slug="bare-target")
+        req = make_request(bare)
+        future_date = (req.created_at + timedelta(days=5)).date()
+        req.target_date = future_date
+        req.save()
+
+        sla.apply_sla_due_dates(req)
+        req.refresh_from_db()
+
+        expected_due = timezone.make_aware(datetime.combine(future_date, time(23, 59, 59)))
+        assert req.sla_resolution_due_at == expected_due
+        assert req.sla_first_response_due_at is None
+
+    def test_clearing_target_date_restores_policy_resolution_due(self, portal):
+        req = make_request(portal)
+        future_date = (req.created_at + timedelta(days=10)).date()
+        req.target_date = future_date
+        req.save()
+        sla.apply_sla_due_dates(req)
+        req.refresh_from_db()
+
+        # Now clear target_date
+        req.target_date = None
+        req.save()
+        sla.apply_sla_due_dates(req)
+        req.refresh_from_db()
+
+        assert req.sla_resolution_due_at == req.created_at + timedelta(hours=48)
+
+    def test_target_date_with_paused_duration_preserves_paused_time(self, portal):
+        req = make_request(portal, total_paused_duration=timedelta(hours=6))
+        future_date = (req.created_at + timedelta(days=10)).date()
+        req.target_date = future_date
+        req.save()
+
+        sla.apply_sla_due_dates(req)
+        req.refresh_from_db()
+
+        expected_due = timezone.make_aware(datetime.combine(future_date, time(23, 59, 59))) + timedelta(hours=6)
+        assert req.sla_resolution_due_at == expected_due
 
 
 @pytest.mark.unit

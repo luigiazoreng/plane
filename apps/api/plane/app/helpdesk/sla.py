@@ -14,7 +14,7 @@ whose deadline is shifted on the fly by the time elapsed since the pause began -
 see ``effective_due_expression``.
 """
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.db.models import (
     Case,
@@ -82,7 +82,7 @@ def resolve_sla_target(portal, priority):
 
 
 def compute_due_dates(helpdesk_request, portal=None, start=None):
-    """Absolute deadlines for a request, from the SLA target of its priority."""
+    """Absolute deadlines for a request, from the SLA target of its priority and target_date."""
     portal = portal if portal is not None else helpdesk_request.portal
     start = start or helpdesk_request.created_at or timezone.now()
     first_hours, resolution_hours = resolve_sla_target(portal, helpdesk_request.priority)
@@ -93,6 +93,16 @@ def compute_due_dates(helpdesk_request, portal=None, start=None):
 
     first_due = start + timedelta(hours=first_hours) + paused if first_hours else None
     resolution_due = start + timedelta(hours=resolution_hours) + paused if resolution_hours else None
+
+    # If target_date (due date) is set, it extends the resolution deadline if later than policy SLA,
+    # or establishes it if no SLA resolution target was configured.
+    if helpdesk_request.target_date:
+        target_due = timezone.make_aware(
+            datetime.combine(helpdesk_request.target_date, time(23, 59, 59))
+        ) + paused
+        if resolution_due is None or target_due > resolution_due:
+            resolution_due = target_due
+
     return first_due, resolution_due
 
 

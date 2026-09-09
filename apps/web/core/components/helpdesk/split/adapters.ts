@@ -94,24 +94,47 @@ export type THelpdeskSla = {
  * Returns null when the portal has no resolution SLA configured.
  */
 export function getRequestSla(request: IHelpdeskRequest, portal: IHelpdeskPortal | undefined): THelpdeskSla | null {
-  const hours = portal?.sla_resolution_hours;
-  if (!hours || hours <= 0) return null;
-
   const startedAt = new Date(request.created_at).getTime();
   if (Number.isNaN(startedAt)) return null;
 
-  const windowMs = hours * 60 * 60 * 1000;
+  let windowMs: number | null = null;
+  let dueAtMs: number | null = null;
+
+  // 1. Prefer server-calculated resolution deadline (incorporates target_date extension & priority SLA policies)
+  if (request.sla_resolution_due_at) {
+    const parsedDue = new Date(request.sla_resolution_due_at).getTime();
+    if (!Number.isNaN(parsedDue)) {
+      dueAtMs = parsedDue;
+      windowMs = Math.max(parsedDue - startedAt - (request.total_paused_seconds ?? 0) * 1000, 1);
+    }
+  }
+
+  // 2. Fallback to portal-configured resolution hours if no deadline is present on the ticket
+  if (!dueAtMs) {
+    const hours = portal?.sla_resolution_hours;
+    if (!hours || hours <= 0) return null;
+    windowMs = hours * 60 * 60 * 1000;
+    dueAtMs = startedAt + windowMs + (request.total_paused_seconds ?? 0) * 1000;
+  }
+
+  if (!windowMs || !dueAtMs) return null;
+
   const settledAt = request.resolved_at ? new Date(request.resolved_at).getTime() : Date.now();
 
   const isPaused = !request.resolved_at && !!request.sla_paused_at;
   let pausedMs = (request.total_paused_seconds ?? 0) * 1000;
+  let currentDueAtMs = dueAtMs;
   if (isPaused) {
     const pausedSince = new Date(request.sla_paused_at as string).getTime();
-    if (!Number.isNaN(pausedSince)) pausedMs += Math.max(Date.now() - pausedSince, 0);
+    if (!Number.isNaN(pausedSince)) {
+      const activePauseMs = Math.max(Date.now() - pausedSince, 0);
+      pausedMs += activePauseMs;
+      currentDueAtMs += activePauseMs;
+    }
   }
 
   const elapsedMs = Math.max(settledAt - startedAt - pausedMs, 0);
-  const remainingMs = windowMs - elapsedMs;
+  const remainingMs = currentDueAtMs - settledAt;
   const progress = Math.min(Math.max(elapsedMs / windowMs, 0), 1);
 
   if (request.resolved_at) {

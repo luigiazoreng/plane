@@ -306,6 +306,7 @@ class HelpdeskRequestViewSet(BaseViewSet):
                 str(uid) for uid in instance.labels.values_list("id", flat=True)
             ),
             "team_id": str(instance.team_id) if instance.team_id else None,
+            "target_date": str(instance.target_date) if instance.target_date else None,
         }
         old_status_id = old_snapshot["status_id"]
         old_status = HelpdeskStatus.objects.filter(id=old_status_id).first() if old_status_id else None
@@ -336,10 +337,13 @@ class HelpdeskRequestViewSet(BaseViewSet):
                 HelpdeskRequest.objects.filter(id=instance.id).update(**update_fields)
 
         # A ticket escalated to a higher priority inherits that priority's
-        # deadline, counted from when the customer opened it -- otherwise
-        # escalating would silently hand the team a fresh window.
+        # deadline, counted from when the customer opened it. An updated target_date
+        # also recalculates SLA deadlines to extend the resolution target accordingly.
         new_priority = request.data.get("priority")
-        if new_priority and new_priority != old_snapshot["priority"]:
+        target_date_changed = "target_date" in request.data and (
+            str(request.data.get("target_date") or "") != str(old_snapshot.get("target_date") or "")
+        )
+        if (new_priority and new_priority != old_snapshot["priority"]) or target_date_changed:
             instance.refresh_from_db()
             sla_service.apply_sla_due_dates(instance)
 

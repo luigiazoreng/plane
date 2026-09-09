@@ -168,6 +168,9 @@ export interface IHelpdeskRequest {
   snoozed_until?: string | null;
   start_date: string | null;
   target_date: string | null;
+  sla_first_response_due_at?: string | null;
+  sla_resolution_due_at?: string | null;
+  sla?: IHelpdeskRequestSlaSnapshot;
   /** Set while the request sits in a pauses_sla status; null otherwise. */
   sla_paused_at: string | null;
   /** Closed pause time only, in seconds -- does not include an in-progress pause. */
@@ -175,6 +178,20 @@ export interface IHelpdeskRequest {
   attachments?: IHelpdeskAttachment[];
   created_at: string;
   updated_at: string;
+}
+
+export interface IHelpdeskRequestSlaLeg {
+  status: "none" | "ok" | "at_risk" | "met" | "breached";
+  due_at: string | null;
+  breached: boolean;
+  remaining_seconds: number | null;
+}
+
+export interface IHelpdeskRequestSlaSnapshot {
+  status: "none" | "ok" | "at_risk" | "met" | "breached";
+  is_paused: boolean;
+  first_response: IHelpdeskRequestSlaLeg;
+  resolution: IHelpdeskRequestSlaLeg;
 }
 
 export interface IHelpdeskTeam {
