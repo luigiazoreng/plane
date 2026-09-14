@@ -284,7 +284,10 @@ const WorkspaceHelpdeskPage = observer(() => {
 
   const statusesState = helpdeskStore.getCollectionState(`statuses:${wSlug}`);
   const requestsState = helpdeskStore.getCollectionState(`requests:${wSlug}`);
-  const isLoading = statusesState.isLoading || requestsState.isLoading;
+  // Only block the whole page on the *first* load. Re-fetches (filter changes,
+  // tab-focus revalidation) happen in the background — swapping the tree for a
+  // spinner here would unmount the open ticket and wipe an unsent reply draft.
+  const isLoading = (statusesState.isLoading && statuses.length === 0) || (requestsState.isLoading && requests.length === 0);
 
   const fetchMore = useCallback(() => {
     if (!isLoadingMore && hasMoreRequests) {
