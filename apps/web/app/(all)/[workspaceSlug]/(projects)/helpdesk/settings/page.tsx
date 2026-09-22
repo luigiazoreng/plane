@@ -36,7 +36,6 @@ import {
   GripVertical,
   Globe,
   Headset,
-  KeyRound,
   Pencil,
   Plus,
   Star,
@@ -55,9 +54,6 @@ import { useMember } from "@/hooks/store/use-member";
 import { useFileSize } from "@/plane-web/hooks/use-file-size";
 import { useHelpdesk } from "@/hooks/store/use-helpdesk";
 import { HelpdeskFormRenderer } from "@/components/helpdesk/form-renderer";
-import { AuthService } from "@/services/auth.service";
-
-const authService = new AuthService();
 
 // Simple hex color palette for status creation
 const COLOR_PALETTE = [
@@ -117,7 +113,6 @@ const HelpdeskSettingsPage = observer(() => {
   const helpdeskStore = useHelpdesk();
   const {
     workspace: { fetchWorkspaceMembers, workspaceMemberIds },
-    getUserDetails,
   } = useMember();
 
   const wSlug = workspaceSlug?.toString() || "";
@@ -162,7 +157,6 @@ const HelpdeskSettingsPage = observer(() => {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [selectedMemberRole, setSelectedMemberRole] = useState<number>(15);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
-  const [sendingResetId, setSendingResetId] = useState<string | null>(null);
 
   // ---- Email Logs state ----
   const [emailLogs, setEmailLogs] = useState<Record<string, IHelpdeskRequestComment[]>>({});
@@ -2400,20 +2394,6 @@ const HelpdeskSettingsPage = observer(() => {
                       }
                     }}
                     onRemove={() => setRemovingMemberId(hm.id)}
-                    isSendingReset={sendingResetId === hm.id}
-                    onSendReset={async () => {
-                      const email = getUserDetails(hm.member_detail.id)?.email;
-                      if (!email) return;
-                      setSendingResetId(hm.id);
-                      try {
-                        await authService.sendResetPasswordLink({ email });
-                        setToast({ type: TOAST_TYPE.SUCCESS, title: "Email sent", message: `Password reset link sent to ${email}` });
-                      } catch {
-                        setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to send password reset email" });
-                      } finally {
-                        setSendingResetId(null);
-                      }
-                    }}
                   />
                 ))}
                 {helpdeskStore.getWorkspaceMembers(wSlug).length === 0 && (
@@ -3003,14 +2983,10 @@ function HelpdeskMemberRow({
   helpdeskMember,
   onRoleChange,
   onRemove,
-  isSendingReset,
-  onSendReset,
 }: {
   helpdeskMember: IHelpdeskMember;
   onRoleChange: (role: EHelpdeskMemberRole) => void;
   onRemove: () => void;
-  isSendingReset: boolean;
-  onSendReset: () => void;
 }) {
   const d = helpdeskMember.member_detail;
   const displayName = d.display_name || `${d.first_name} ${d.last_name}`.trim() || "Unknown";
@@ -3036,19 +3012,6 @@ function HelpdeskMemberRow({
         <option value={15}>Member</option>
         <option value={5}>Guest</option>
       </select>
-      <button
-        type="button"
-        title="Send password reset email"
-        disabled={isSendingReset}
-        onClick={onSendReset}
-        className="text-tertiary transition-colors hover:text-primary disabled:opacity-50"
-      >
-        {isSendingReset ? (
-          <div className="size-4 animate-spin rounded-full border-b-2 border-current" />
-        ) : (
-          <KeyRound className="size-4" />
-        )}
-      </button>
       <button type="button" onClick={onRemove} className="hover:text-danger-primary text-tertiary transition-colors">
         <Trash2 className="size-4" />
       </button>
