@@ -8,5 +8,9 @@ import React from "react";
 import { Outlet } from "react-router";
 
 export default function WorkspaceHelpdeskLayout() {
-  return <Outlet />;
+  return (
+    <div className="h-full w-full overflow-hidden">
+      <Outlet />
+    </div>
+  );
 }
