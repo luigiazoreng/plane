@@ -111,7 +111,8 @@ services:
       - .env
 
   plane-minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio:latest
+    user: "0:0"
     command: server /export --console-address ":9090"
     volumes:
       - uploads:/export
