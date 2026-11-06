@@ -116,6 +116,7 @@ class HelpdeskForm(WorkspaceBaseModel):
         max_length=20, choices=HelpdeskFormVisibility.choices, default=HelpdeskFormVisibility.PUBLIC
     )
     is_active = models.BooleanField(default=True)
+    enable_chat = models.BooleanField(default=False)
     sequence = models.FloatField(default=65535)
     success_message = models.TextField(blank=True, default="")
     ticket_id_pattern = models.CharField(max_length=64, blank=True, default="")

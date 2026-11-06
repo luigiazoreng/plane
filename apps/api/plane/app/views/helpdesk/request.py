@@ -412,14 +412,24 @@ class PublicHelpdeskRequestEndpoint(BaseViewSet):
         if error:
             return error
 
-        hd_request = HelpdeskRequest.objects.filter(id=pk, portal=portal).first()
+        if customer and str(customer.workspace_id) != str(portal.workspace_id):
+            return Response({"error": "Invalid token for this workspace"}, status=status.HTTP_403_FORBIDDEN)
+
+        if portal.require_login and not customer:
+            return Response({"error": "Login required to view this request"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        hd_request = (
+            HelpdeskRequest.objects.select_related("status", "form", "customer", "created_by")
+            .filter(id=pk, portal=portal)
+            .first()
+        )
         if not hd_request:
             return Response({"error": "Request not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if hd_request.customer and hd_request.customer != customer:
             return Response({"error": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = HelpdeskRequestSerializer(hd_request)
+        serializer = HelpdeskRequestSerializer(hd_request, context={"public_slug": public_slug})
         return Response(serializer.data)
 
     def create(self, request, public_slug):

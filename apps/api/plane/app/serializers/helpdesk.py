@@ -216,7 +216,17 @@ class HelpdeskFormLiteSerializer(BaseSerializer):
 
     class Meta:
         model = HelpdeskForm
-        fields = ["id", "name", "slug", "description", "visibility", "is_active", "ticket_id_pattern", "portal"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "visibility",
+            "is_active",
+            "enable_chat",
+            "ticket_id_pattern",
+            "portal",
+        ]
         read_only_fields = fields
 
 

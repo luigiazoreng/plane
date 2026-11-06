@@ -75,7 +75,16 @@ const COLOR_PALETTE = [
   "#78716C",
 ];
 
-type TSettingsTab = "statuses" | "portal-settings" | "forms" | "members" | "email" | "email-logs" | "imap-logs" | "teams" | "macros";
+type TSettingsTab =
+  | "statuses"
+  | "portal-settings"
+  | "forms"
+  | "members"
+  | "email"
+  | "email-logs"
+  | "imap-logs"
+  | "teams"
+  | "macros";
 
 const validateFormForActivation = (fields: IHelpdeskFormField[]): string[] => {
   const errors: string[] = [];
@@ -148,7 +157,10 @@ const HelpdeskSettingsPage = observer(() => {
   // Local draft state for the settings panels — written on every keystroke, flushed on Save
   const [fieldsDraft, setFieldsDraft] = useState<IHelpdeskFormField[] | null>(null);
   const [deletedFieldIds, setDeletedFieldIds] = useState<Set<string>>(new Set());
-  const [formDraft, setFormDraft] = useState<Partial<IHelpdeskForm>>({});
+  const [formDraft, setFormDraft] = useState<{ formId: string | null; data: Partial<IHelpdeskForm> }>({
+    formId: null,
+    data: {},
+  });
   const [emailConfigDrafts, setEmailConfigDrafts] = useState<Record<string, Partial<IHelpdeskPortal>>>({});
   const [portalSettingsDrafts, setPortalSettingsDrafts] = useState<Record<string, Partial<IHelpdeskPortal>>>({});
 
@@ -241,10 +253,7 @@ const HelpdeskSettingsPage = observer(() => {
   useEffect(() => {
     setFieldsDraft(null);
     setDeletedFieldIds(new Set());
-  }, [selectedForm?.id]);
-
-  useEffect(() => {
-    setFormDraft({});
+    setFormDraft({ formId: null, data: {} });
   }, [selectedForm?.id]);
 
   useEffect(() => {
@@ -252,14 +261,16 @@ const HelpdeskSettingsPage = observer(() => {
       setIsLoadingLogs(true);
       const fetchLogs = async () => {
         const logsByPortal: Record<string, IHelpdeskRequestComment[]> = {};
-        for (const portal of portals) {
-          try {
-            const logs = await helpdeskStore.helpdeskService.getPortalEmailLogs(wSlug, portal.id);
-            logsByPortal[portal.id] = logs;
-          } catch (e) {
-            console.error("Failed to fetch email logs for portal", portal.id, e);
-          }
-        }
+        await Promise.all(
+          portals.map(async (portal) => {
+            try {
+              const logs = await helpdeskStore.helpdeskService.getPortalEmailLogs(wSlug, portal.id);
+              logsByPortal[portal.id] = logs;
+            } catch (e) {
+              console.error("Failed to fetch email logs for portal", portal.id, e);
+            }
+          })
+        );
         setEmailLogs(logsByPortal);
         setIsLoadingLogs(false);
       };
@@ -272,14 +283,16 @@ const HelpdeskSettingsPage = observer(() => {
       setIsLoadingImapLogs(true);
       const fetchImapLogs = async () => {
         const logsByPortal: Record<string, import("@plane/types").IHelpdeskIMAPSyncLog[]> = {};
-        for (const portal of portals) {
-          try {
-            const logs = await helpdeskStore.helpdeskService.getPortalIMAPLogs(wSlug, portal.id);
-            logsByPortal[portal.id] = logs;
-          } catch (e) {
-            console.error("Failed to fetch IMAP logs for portal", portal.id, e);
-          }
-        }
+        await Promise.all(
+          portals.map(async (portal) => {
+            try {
+              const logs = await helpdeskStore.helpdeskService.getPortalIMAPLogs(wSlug, portal.id);
+              logsByPortal[portal.id] = logs;
+            } catch (e) {
+              console.error("Failed to fetch IMAP logs for portal", portal.id, e);
+            }
+          })
+        );
         setImapLogs(logsByPortal);
         setIsLoadingImapLogs(false);
       };
@@ -292,10 +305,13 @@ const HelpdeskSettingsPage = observer(() => {
   const draftField: IHelpdeskFormField | null = selectedFieldId
     ? currentFields.find((f) => f.id === selectedFieldId) || null
     : null;
-  const draftForm: IHelpdeskForm | null = selectedForm ? ({ ...selectedForm, ...formDraft } as IHelpdeskForm) : null;
+  const currentFormDraft = formDraft.formId === selectedForm?.id ? formDraft.data : {};
+  const draftForm: IHelpdeskForm | null = selectedForm
+    ? ({ ...selectedForm, ...currentFormDraft } as IHelpdeskForm)
+    : null;
 
   const isDirtyFields = fieldsDraft !== null || deletedFieldIds.size > 0;
-  const isDirty = isDirtyFields || Object.keys(formDraft).length > 0;
+  const isDirty = isDirtyFields || Object.keys(currentFormDraft).length > 0;
 
   // ---- Status handlers ----
 
@@ -387,7 +403,7 @@ const HelpdeskSettingsPage = observer(() => {
     }
   };
 
-  const handleToggle = async (portal: IHelpdeskPortal, field: keyof IHelpdeskPortal) => {
+  const _handleToggle = async (portal: IHelpdeskPortal, field: keyof IHelpdeskPortal) => {
     try {
       await helpdeskStore.updatePortal(wSlug, portal.id, { [field]: !portal[field] });
     } catch (_error) {
@@ -415,7 +431,7 @@ const HelpdeskSettingsPage = observer(() => {
     }
   };
 
-  const handleAutoAssignmentUpdate = async (
+  const _handleAutoAssignmentUpdate = async (
     portal: IHelpdeskPortal,
     patch: Partial<Pick<IHelpdeskPortal, "auto_assignment_enabled" | "auto_assignment_type">> & {
       auto_assignment_config?: Partial<IHelpdeskAutoAssignmentConfig>;
@@ -455,6 +471,7 @@ const HelpdeskSettingsPage = observer(() => {
         slug: draft.slug.trim(),
         visibility: "public",
         is_active: true,
+        enable_chat: false,
         sequence: (helpdeskStore.getPortalForms(portalId).at(-1)?.sequence ?? 0) + 10000,
         description: "",
         success_message: "Your request has been submitted successfully.",
@@ -482,12 +499,19 @@ const HelpdeskSettingsPage = observer(() => {
 
   const handleFormFieldChange = (patch: Partial<IHelpdeskFormField>) => {
     if (!selectedFieldId) return;
-    const current = fieldsDraft ?? selectedFormFields.map((f) => ({ ...f }));
-    setFieldsDraft(current.map((f) => (f.id === selectedFieldId ? { ...f, ...patch } : f)));
+    const current = fieldsDraft ?? selectedFormFields.slice();
+    setFieldsDraft(current.map((f) => (f.id === selectedFieldId ? Object.assign({}, f, patch) : f)));
   };
 
   const handleFormSettingsChange = (patch: Partial<IHelpdeskForm>) => {
-    setFormDraft((prev) => ({ ...prev, ...patch }));
+    if (!selectedForm) return;
+    setFormDraft((prev) => ({
+      formId: selectedForm.id,
+      data: {
+        ...(prev.formId === selectedForm.id ? prev.data : {}),
+        ...patch,
+      },
+    }));
   };
 
   const handleSaveAll = async () => {
@@ -495,8 +519,8 @@ const HelpdeskSettingsPage = observer(() => {
     setIsSaving(true);
     try {
       const saves: Promise<unknown>[] = [];
-      if (selectedForm && Object.keys(formDraft).length > 0) {
-        saves.push(helpdeskStore.updateForm(wSlug, selectedForm.id, formDraft));
+      if (selectedForm && Object.keys(currentFormDraft).length > 0) {
+        saves.push(helpdeskStore.updateForm(wSlug, selectedForm.id, currentFormDraft));
       }
 
       if (isDirtyFields && selectedForm) {
@@ -505,22 +529,21 @@ const HelpdeskSettingsPage = observer(() => {
           saves.push(helpdeskStore.deleteFormField(wSlug, id, selectedForm.id));
         }
 
-        const finalFields = [...(fieldsDraft ?? [])];
-        const createdIdMap = new Map<string, string>(); // tempId -> realId
-
-        for (let i = 0; i < finalFields.length; i++) {
-          const field = finalFields[i];
-          if (field.id.startsWith("temp-")) {
-            const created = await helpdeskStore.createFormField(wSlug, field);
-            createdIdMap.set(field.id, created.id);
-            finalFields[i] = created;
-          } else {
+        const finalFields = await Promise.all(
+          (fieldsDraft ?? []).map(async (field) => {
+            if (field.id.startsWith("temp-")) {
+              const created = await helpdeskStore.createFormField(wSlug, field);
+              return created;
+            }
             const originalField = selectedFormFields.find((f) => f.id === field.id);
             if (originalField) {
               const patch: Partial<IHelpdeskFormField> = {};
               let hasChanges = false;
               for (const key of Object.keys(field) as (keyof IHelpdeskFormField)[]) {
-                if (JSON.stringify(field[key as keyof IHelpdeskFormField]) !== JSON.stringify(originalField[key as keyof IHelpdeskFormField])) {
+                if (
+                  JSON.stringify(field[key as keyof IHelpdeskFormField]) !==
+                  JSON.stringify(originalField[key as keyof IHelpdeskFormField])
+                ) {
                   (patch as any)[key] = field[key as keyof IHelpdeskFormField];
                   hasChanges = true;
                 }
@@ -529,8 +552,9 @@ const HelpdeskSettingsPage = observer(() => {
                 saves.push(helpdeskStore.updateFormField(wSlug, field.id, patch));
               }
             }
-          }
-        }
+            return field;
+          })
+        );
 
         await Promise.all(saves);
 
@@ -546,7 +570,8 @@ const HelpdeskSettingsPage = observer(() => {
 
       setFieldsDraft(null);
       setDeletedFieldIds(new Set());
-      setFormDraft({});
+      setFormDraft({ formId: null, data: {} });
+      setToast({ type: TOAST_TYPE.SUCCESS, title: "Success", message: "Form updated successfully" });
     } catch (_error) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to save changes" });
     } finally {
@@ -691,7 +716,7 @@ const HelpdeskSettingsPage = observer(() => {
             >
               <ArrowLeft className="size-4" />
             </button>
-            <div className="bg-accent-subtle text-accent-primary flex size-6 shrink-0 items-center justify-center rounded-md">
+            <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-accent-subtle text-accent-primary">
               <Headset className="size-3.5" />
             </div>
             <span className="text-sm font-semibold text-primary">Helpdesk Settings</span>
@@ -707,11 +732,7 @@ const HelpdeskSettingsPage = observer(() => {
               isActive={activeTab === "portal-settings"}
               onClick={() => setActiveTab("portal-settings")}
             />
-            <SettingsTabButton
-              label="Email"
-              isActive={activeTab === "email"}
-              onClick={() => setActiveTab("email")}
-            />
+            <SettingsTabButton label="Email" isActive={activeTab === "email"} onClick={() => setActiveTab("email")} />
             <SettingsTabButton
               label="Email logs"
               isActive={activeTab === "email-logs"}
@@ -737,11 +758,7 @@ const HelpdeskSettingsPage = observer(() => {
               isActive={activeTab === "members"}
               onClick={() => setActiveTab("members")}
             />
-            <SettingsTabButton
-              label="Teams"
-              isActive={activeTab === "teams"}
-              onClick={() => setActiveTab("teams")}
-            />
+            <SettingsTabButton label="Teams" isActive={activeTab === "teams"} onClick={() => setActiveTab("teams")} />
             <SettingsTabButton
               label="Macros"
               isActive={activeTab === "macros"}
@@ -817,7 +834,7 @@ const HelpdeskSettingsPage = observer(() => {
                           type="button"
                           onClick={handleCreateStatus}
                           disabled={!newStatusName.trim()}
-                          className="bg-accent-primary rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                          className="rounded-md bg-accent-primary px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                         >
                           Add
                         </button>
@@ -876,7 +893,7 @@ const HelpdeskSettingsPage = observer(() => {
                     type="button"
                     onClick={handleCreatePortal}
                     disabled={!newPortalSlug.trim() || isCreatingPortal}
-                    className="bg-accent-primary flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                    className="flex items-center gap-1.5 rounded-md bg-accent-primary px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                   >
                     <Plus className="size-3.5" />
                     Create
@@ -899,8 +916,8 @@ const HelpdeskSettingsPage = observer(() => {
                 <div className="space-y-3">
                   {portals.map((portal) => {
                     const draft = portalSettingsDrafts[portal.id] || {};
-                    const isDirty = Object.keys(draft).length > 0;
-                    
+                    const isPortalDirty = Object.keys(draft).length > 0;
+
                     const handleDraftChange = (field: keyof IHelpdeskPortal, value: any) => {
                       setPortalSettingsDrafts((prev) => ({
                         ...prev,
@@ -914,12 +931,14 @@ const HelpdeskSettingsPage = observer(() => {
                     const handleAutoAssignDraftConfig = (configPatch: Partial<IHelpdeskAutoAssignmentConfig>) => {
                       const currentConfig = getNormalizedHelpdeskAutoAssignmentConfig(portal);
                       const draftConfig = draft.auto_assignment_config as IHelpdeskAutoAssignmentConfig | undefined;
-                      const merged = draftConfig ? { ...draftConfig, ...configPatch } : { ...currentConfig, ...configPatch };
+                      const merged = draftConfig
+                        ? { ...draftConfig, ...configPatch }
+                        : { ...currentConfig, ...configPatch };
                       handleDraftChange("auto_assignment_config", merged);
                     };
 
                     const handleSave = async () => {
-                      if (!isDirty) return;
+                      if (!isPortalDirty) return;
                       await handlePortalPatch(portal, draft);
                       setPortalSettingsDrafts((prev) => {
                         const next = { ...prev };
@@ -928,12 +947,14 @@ const HelpdeskSettingsPage = observer(() => {
                       });
                     };
 
-                    const autoAssignmentConfig = (draft.auto_assignment_config as IHelpdeskAutoAssignmentConfig | undefined) || getNormalizedHelpdeskAutoAssignmentConfig(portal);
+                    const autoAssignmentConfig =
+                      (draft.auto_assignment_config as IHelpdeskAutoAssignmentConfig | undefined) ||
+                      getNormalizedHelpdeskAutoAssignmentConfig(portal);
                     const isAutoAssignEnabled = draft.auto_assignment_enabled ?? portal.auto_assignment_enabled;
                     const autoAssignType = draft.auto_assignment_type ?? portal.auto_assignment_type ?? "load_balance";
 
                     return (
-                      <div key={portal.id} className="rounded-xl border border-subtle bg-layer-2 shadow-sm">
+                      <div key={portal.id} className="shadow-sm rounded-xl border border-subtle bg-layer-2">
                         <div className="flex items-center justify-between gap-4 border-b border-subtle px-4 py-3">
                           <div className="flex min-w-0 flex-1 items-center gap-3">
                             {editingSlug?.id === portal.id ? (
@@ -958,7 +979,7 @@ const HelpdeskSettingsPage = observer(() => {
                                 <button
                                   type="button"
                                   onClick={handleSaveSlug}
-                                  className="bg-accent-primary rounded-md px-2.5 py-1 text-12 font-medium text-white"
+                                  className="rounded-md bg-accent-primary px-2.5 py-1 text-12 font-medium text-white"
                                 >
                                   Save
                                 </button>
@@ -1002,7 +1023,7 @@ const HelpdeskSettingsPage = observer(() => {
                             <button
                               type="button"
                               onClick={() => setDeletingPortalId(portal.id)}
-                              className="hover:text-danger-primary text-tertiary transition-colors"
+                              className="text-tertiary transition-colors hover:text-danger-primary"
                               title="Delete portal"
                             >
                               <Trash2 className="size-4" />
@@ -1010,8 +1031,8 @@ const HelpdeskSettingsPage = observer(() => {
                             <button
                               type="button"
                               onClick={handleSave}
-                              disabled={!isDirty}
-                              className="bg-accent-primary ml-2 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                              disabled={!isPortalDirty}
+                              className="ml-2 flex items-center gap-1.5 rounded-md bg-accent-primary px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                             >
                               Save configuration
                             </button>
@@ -1022,7 +1043,10 @@ const HelpdeskSettingsPage = observer(() => {
                             label="Public access"
                             description="Anyone with the link can view and submit requests without logging in."
                             control={
-                              <Switch value={draft.is_public ?? portal.is_public} onChange={() => handleDraftChange("is_public", !(draft.is_public ?? portal.is_public))} />
+                              <Switch
+                                value={draft.is_public ?? portal.is_public}
+                                onChange={() => handleDraftChange("is_public", !(draft.is_public ?? portal.is_public))}
+                              />
                             }
                           />
                           <SettingRow
@@ -1031,7 +1055,9 @@ const HelpdeskSettingsPage = observer(() => {
                             control={
                               <Switch
                                 value={draft.require_login ?? portal.require_login}
-                                onChange={() => handleDraftChange("require_login", !(draft.require_login ?? portal.require_login))}
+                                onChange={() =>
+                                  handleDraftChange("require_login", !(draft.require_login ?? portal.require_login))
+                                }
                               />
                             }
                           />
@@ -1039,7 +1065,12 @@ const HelpdeskSettingsPage = observer(() => {
                             label="Customer chat"
                             description="Allow customers to reply to their tickets from the public portal."
                             control={
-                              <Switch value={draft.enable_chat ?? portal.enable_chat} onChange={() => handleDraftChange("enable_chat", !(draft.enable_chat ?? portal.enable_chat))} />
+                              <Switch
+                                value={draft.enable_chat ?? portal.enable_chat}
+                                onChange={() =>
+                                  handleDraftChange("enable_chat", !(draft.enable_chat ?? portal.enable_chat))
+                                }
+                              />
                             }
                           />
                           <div className="space-y-5 px-4 py-4">
@@ -1066,7 +1097,12 @@ const HelpdeskSettingsPage = observer(() => {
                                 <span className="text-12 font-medium text-secondary">Assignment type</span>
                                 <select
                                   value={autoAssignType}
-                                  onChange={(e) => handleDraftChange("auto_assignment_type", e.target.value as IHelpdeskAutoAssignmentType)}
+                                  onChange={(e) =>
+                                    handleDraftChange(
+                                      "auto_assignment_type",
+                                      e.target.value as IHelpdeskAutoAssignmentType
+                                    )
+                                  }
                                   disabled={!isAutoAssignEnabled}
                                   className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none disabled:cursor-not-allowed"
                                 >
@@ -1102,7 +1138,7 @@ const HelpdeskSettingsPage = observer(() => {
                                   />
                                 </div>
                                 {autoAssignmentConfig.member_ids.length === 0 ? (
-                                  <p className="text-warning-primary text-12">
+                                  <p className="text-12 text-warning-primary">
                                     Tickets will remain unassigned until you add agents.
                                   </p>
                                 ) : (
@@ -1147,7 +1183,7 @@ const HelpdeskSettingsPage = observer(() => {
                                         className={cn(
                                           "rounded-md border px-2.5 py-1.5 text-12 transition-colors disabled:cursor-not-allowed",
                                           isSelected
-                                            ? "bg-accent-subtle border-accent-strong text-accent-primary"
+                                            ? "border-accent-strong bg-accent-subtle text-accent-primary"
                                             : "border-subtle bg-layer-2 text-secondary"
                                         )}
                                       >
@@ -1190,7 +1226,10 @@ const HelpdeskSettingsPage = observer(() => {
                                 min={1}
                                 value={draft.sla_first_response_hours ?? portal.sla_first_response_hours ?? ""}
                                 onChange={(e) =>
-                                  handleDraftChange("sla_first_response_hours", e.target.value ? Number(e.target.value) : null)
+                                  handleDraftChange(
+                                    "sla_first_response_hours",
+                                    e.target.value ? Number(e.target.value) : null
+                                  )
                                 }
                                 placeholder="e.g. 4"
                                 className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
@@ -1203,7 +1242,10 @@ const HelpdeskSettingsPage = observer(() => {
                                 min={1}
                                 value={draft.sla_resolution_hours ?? portal.sla_resolution_hours ?? ""}
                                 onChange={(e) =>
-                                  handleDraftChange("sla_resolution_hours", e.target.value ? Number(e.target.value) : null)
+                                  handleDraftChange(
+                                    "sla_resolution_hours",
+                                    e.target.value ? Number(e.target.value) : null
+                                  )
                                 }
                                 placeholder="e.g. 24"
                                 className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
@@ -1232,7 +1274,7 @@ const HelpdeskSettingsPage = observer(() => {
                 <div className="space-y-6">
                   {portals.map((portal) => {
                     const draft = emailConfigDrafts[portal.id] || {};
-                    const isDirty = Object.keys(draft).length > 0;
+                    const isEmailDirty = Object.keys(draft).length > 0;
 
                     const handleDraftChange = (field: keyof IHelpdeskPortal, value: any) => {
                       setEmailConfigDrafts((prev) => ({
@@ -1245,7 +1287,7 @@ const HelpdeskSettingsPage = observer(() => {
                     };
 
                     const handleSave = async () => {
-                      if (!isDirty) return;
+                      if (!isEmailDirty) return;
                       await handlePortalPatch(portal, draft);
                       setEmailConfigDrafts((prev) => {
                         const next = { ...prev };
@@ -1255,16 +1297,16 @@ const HelpdeskSettingsPage = observer(() => {
                     };
 
                     return (
-                      <div key={portal.id} className="rounded-xl border border-subtle bg-layer-2 shadow-sm">
-                        <div className="px-6 py-4 flex items-center justify-between">
+                      <div key={portal.id} className="shadow-sm rounded-xl border border-subtle bg-layer-2">
+                        <div className="flex items-center justify-between px-6 py-4">
                           <div className="flex items-center gap-3">
                             <h3 className="text-14 font-medium text-primary">{portal.public_slug}</h3>
                           </div>
                           <button
                             type="button"
                             onClick={handleSave}
-                            disabled={!isDirty}
-                            className="bg-accent-primary flex items-center gap-1.5 rounded-md px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
+                            disabled={!isEmailDirty}
+                            className="flex items-center gap-1.5 rounded-md bg-accent-primary px-3 py-1.5 text-13 font-medium text-white transition-opacity disabled:opacity-40"
                           >
                             Save configuration
                           </button>
@@ -1286,7 +1328,9 @@ const HelpdeskSettingsPage = observer(() => {
                               <input
                                 type="email"
                                 value={draft.default_agent_email_address ?? portal.default_agent_email_address ?? ""}
-                                onChange={(e) => handleDraftChange("default_agent_email_address", e.target.value || null)}
+                                onChange={(e) =>
+                                  handleDraftChange("default_agent_email_address", e.target.value || null)
+                                }
                                 placeholder="e.g. support@mycompany.com"
                                 className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                               />
@@ -1310,7 +1354,9 @@ const HelpdeskSettingsPage = observer(() => {
                                 <input
                                   type="number"
                                   value={draft.smtp_port ?? portal.smtp_port ?? ""}
-                                  onChange={(e) => handleDraftChange("smtp_port", e.target.value ? Number(e.target.value) : null)}
+                                  onChange={(e) =>
+                                    handleDraftChange("smtp_port", e.target.value ? Number(e.target.value) : null)
+                                  }
                                   placeholder="587"
                                   className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                                 />
@@ -1344,7 +1390,9 @@ const HelpdeskSettingsPage = observer(() => {
                                 control={
                                   <Switch
                                     value={draft.smtp_use_tls ?? portal.smtp_use_tls}
-                                    onChange={() => handleDraftChange("smtp_use_tls", !(draft.smtp_use_tls ?? portal.smtp_use_tls))}
+                                    onChange={() =>
+                                      handleDraftChange("smtp_use_tls", !(draft.smtp_use_tls ?? portal.smtp_use_tls))
+                                    }
                                   />
                                 }
                               />
@@ -1355,14 +1403,16 @@ const HelpdeskSettingsPage = observer(() => {
                                 control={
                                   <Switch
                                     value={draft.smtp_use_ssl ?? portal.smtp_use_ssl}
-                                    onChange={() => handleDraftChange("smtp_use_ssl", !(draft.smtp_use_ssl ?? portal.smtp_use_ssl))}
+                                    onChange={() =>
+                                      handleDraftChange("smtp_use_ssl", !(draft.smtp_use_ssl ?? portal.smtp_use_ssl))
+                                    }
                                   />
                                 }
                               />
                             </div>
 
                             <div className="mt-6 border-t border-subtle pt-4">
-                              <h4 className="mb-4 text-13 font-medium text-primary flex items-center justify-between">
+                              <h4 className="mb-4 flex items-center justify-between text-13 font-medium text-primary">
                                 <span className="flex items-center gap-4">
                                   Inbound Email (IMAP) Configuration
                                   {portal.is_imap_enabled && (
@@ -1370,7 +1420,7 @@ const HelpdeskSettingsPage = observer(() => {
                                       type="button"
                                       onClick={() => handleSyncIMAP(portal.id)}
                                       disabled={isSyncingImap}
-                                      className="text-12 font-medium text-accent-primary bg-accent-subtle hover:bg-accent-subtle-hover px-3 py-1 rounded transition-colors disabled:opacity-50"
+                                      className="rounded bg-accent-subtle px-3 py-1 text-12 font-medium text-accent-primary transition-colors hover:bg-accent-subtle-hover disabled:opacity-50"
                                     >
                                       {isSyncingImap ? "Syncing..." : "Sync Now"}
                                     </button>
@@ -1378,7 +1428,12 @@ const HelpdeskSettingsPage = observer(() => {
                                 </span>
                                 <Switch
                                   value={draft.is_imap_enabled ?? portal.is_imap_enabled ?? false}
-                                  onChange={() => handleDraftChange("is_imap_enabled", !(draft.is_imap_enabled ?? portal.is_imap_enabled))}
+                                  onChange={() =>
+                                    handleDraftChange(
+                                      "is_imap_enabled",
+                                      !(draft.is_imap_enabled ?? portal.is_imap_enabled)
+                                    )
+                                  }
                                 />
                               </h4>
                               {(draft.is_imap_enabled ?? portal.is_imap_enabled) && (
@@ -1399,7 +1454,9 @@ const HelpdeskSettingsPage = observer(() => {
                                       <input
                                         type="number"
                                         value={draft.imap_port ?? portal.imap_port ?? ""}
-                                        onChange={(e) => handleDraftChange("imap_port", e.target.value ? Number(e.target.value) : null)}
+                                        onChange={(e) =>
+                                          handleDraftChange("imap_port", e.target.value ? Number(e.target.value) : null)
+                                        }
                                         placeholder="993"
                                         className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                                       />
@@ -1425,11 +1482,15 @@ const HelpdeskSettingsPage = observer(() => {
                                       />
                                     </label>
                                     <label className="space-y-1">
-                                      <span className="text-12 font-medium text-secondary">Archive Folder (Optional)</span>
+                                      <span className="text-12 font-medium text-secondary">
+                                        Archive Folder (Optional)
+                                      </span>
                                       <input
                                         type="text"
                                         value={draft.imap_archive_folder ?? portal.imap_archive_folder ?? ""}
-                                        onChange={(e) => handleDraftChange("imap_archive_folder", e.target.value || null)}
+                                        onChange={(e) =>
+                                          handleDraftChange("imap_archive_folder", e.target.value || null)
+                                        }
                                         placeholder="e.g. Archive"
                                         className="w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                                       />
@@ -1443,7 +1504,12 @@ const HelpdeskSettingsPage = observer(() => {
                                       control={
                                         <Switch
                                           value={draft.imap_use_tls ?? portal.imap_use_tls}
-                                          onChange={() => handleDraftChange("imap_use_tls", !(draft.imap_use_tls ?? portal.imap_use_tls))}
+                                          onChange={() =>
+                                            handleDraftChange(
+                                              "imap_use_tls",
+                                              !(draft.imap_use_tls ?? portal.imap_use_tls)
+                                            )
+                                          }
                                         />
                                       }
                                     />
@@ -1454,7 +1520,12 @@ const HelpdeskSettingsPage = observer(() => {
                                       control={
                                         <Switch
                                           value={draft.imap_use_ssl ?? portal.imap_use_ssl}
-                                          onChange={() => handleDraftChange("imap_use_ssl", !(draft.imap_use_ssl ?? portal.imap_use_ssl))}
+                                          onChange={() =>
+                                            handleDraftChange(
+                                              "imap_use_ssl",
+                                              !(draft.imap_use_ssl ?? portal.imap_use_ssl)
+                                            )
+                                          }
                                         />
                                       }
                                     />
@@ -1484,9 +1555,9 @@ const HelpdeskSettingsPage = observer(() => {
                                   placeholder={`${instanceMaxAttachmentMb} (padrão da instância)`}
                                   className="mt-1 w-full rounded-md border border-subtle bg-layer-1 px-3 py-2 text-13 text-primary outline-none"
                                 />
-                                <span className="text-11 text-tertiary mt-1 block">
-                                  Deixe vazio para usar o limite da instância ({instanceMaxAttachmentMb} MB).
-                                  Não é possível ultrapassá-lo — o proxy e o storage também o aplicam.
+                                <span className="mt-1 block text-11 text-tertiary">
+                                  Deixe vazio para usar o limite da instância ({instanceMaxAttachmentMb} MB). Não é
+                                  possível ultrapassá-lo — o proxy e o storage também o aplicam.
                                 </span>
                               </label>
                             </div>
@@ -1523,11 +1594,9 @@ const HelpdeskSettingsPage = observer(() => {
                     const logs = emailLogs[portal.id] || [];
 
                     return (
-                      <div key={portal.id} className="rounded-xl border border-subtle bg-layer-2 shadow-sm">
+                      <div key={portal.id} className="shadow-sm rounded-xl border border-subtle bg-layer-2">
                         <div className="border-b border-subtle px-4 py-3">
-                          <h3 className="text-14 font-medium text-primary">
-                            /helpdesk/p/{portal.public_slug}
-                          </h3>
+                          <h3 className="text-14 font-medium text-primary">/helpdesk/p/{portal.public_slug}</h3>
                         </div>
                         <div className="overflow-x-auto">
                           {logs.length === 0 ? (
@@ -1551,21 +1620,25 @@ const HelpdeskSettingsPage = observer(() => {
                                   <tr key={log.id} className="text-primary hover:bg-layer-1">
                                     <td className="px-4 py-3">
                                       {log.email_status === "sent" && (
-                                        <Badge variant="success" size="sm">Sent</Badge>
+                                        <Badge variant="success" size="sm">
+                                          Sent
+                                        </Badge>
                                       )}
                                       {log.email_status === "failed" && (
-                                        <Badge variant="danger" size="sm">Failed</Badge>
+                                        <Badge variant="danger" size="sm">
+                                          Failed
+                                        </Badge>
                                       )}
                                       {log.email_status === "pending" && (
-                                        <Badge variant="warning" size="sm">Pending</Badge>
+                                        <Badge variant="warning" size="sm">
+                                          Pending
+                                        </Badge>
                                       )}
                                     </td>
-                                    <td className="px-4 py-3 truncate max-w-[200px]" title={log.content}>
+                                    <td className="max-w-[200px] truncate px-4 py-3" title={log.content}>
                                       {log.content}
                                     </td>
-                                    <td className="px-4 py-3">
-                                      {log.customer ? "Customer" : "Unknown"}
-                                    </td>
+                                    <td className="px-4 py-3">{log.customer ? "Customer" : "Unknown"}</td>
                                     {/* Authenticity of an inbound sender.
                                         "Unverified" and "Failed" are kept
                                         apart on purpose: the first means we
@@ -1579,23 +1652,31 @@ const HelpdeskSettingsPage = observer(() => {
                                         not of an attack. */}
                                     <td className="px-4 py-3">
                                       {log.sender_verification === "pass" && (
-                                        <Badge variant="success" size="sm">Verified</Badge>
+                                        <Badge variant="success" size="sm">
+                                          Verified
+                                        </Badge>
                                       )}
                                       {log.sender_verification === "fail" && (
-                                        <Badge variant="danger" size="sm">Failed</Badge>
+                                        <Badge variant="danger" size="sm">
+                                          Failed
+                                        </Badge>
                                       )}
                                       {log.sender_verification === "unverified" && (
-                                        <Badge variant="warning" size="sm">Unverified</Badge>
+                                        <Badge variant="warning" size="sm">
+                                          Unverified
+                                        </Badge>
                                       )}
-                                      {(!log.sender_verification ||
-                                        log.sender_verification === "not_applicable") && (
+                                      {(!log.sender_verification || log.sender_verification === "not_applicable") && (
                                         <span className="text-tertiary">—</span>
                                       )}
                                     </td>
                                     <td className="px-4 py-3 text-tertiary">
                                       {new Date(log.created_at).toLocaleString()}
                                     </td>
-                                    <td className="px-4 py-3 text-danger-primary max-w-[200px] truncate" title={log.email_error ?? ""}>
+                                    <td
+                                      className="max-w-[200px] truncate px-4 py-3 text-danger-primary"
+                                      title={log.email_error ?? ""}
+                                    >
                                       {log.email_error || "-"}
                                     </td>
                                   </tr>
@@ -1634,11 +1715,9 @@ const HelpdeskSettingsPage = observer(() => {
                     const logs = imapLogs[portal.id] || [];
 
                     return (
-                      <div key={portal.id} className="rounded-xl border border-subtle bg-layer-2 shadow-sm">
+                      <div key={portal.id} className="shadow-sm rounded-xl border border-subtle bg-layer-2">
                         <div className="border-b border-subtle px-4 py-3">
-                          <h3 className="text-14 font-medium text-primary">
-                            /helpdesk/p/{portal.public_slug}
-                          </h3>
+                          <h3 className="text-14 font-medium text-primary">/helpdesk/p/{portal.public_slug}</h3>
                         </div>
                         <div className="overflow-x-auto">
                           {logs.length === 0 ? (
@@ -1660,19 +1739,24 @@ const HelpdeskSettingsPage = observer(() => {
                                   <tr key={log.id} className="text-primary hover:bg-layer-1">
                                     <td className="px-4 py-3">
                                       {log.status === "success" && (
-                                        <Badge variant="success" size="sm">Success</Badge>
+                                        <Badge variant="success" size="sm">
+                                          Success
+                                        </Badge>
                                       )}
                                       {log.status === "error" && (
-                                        <Badge variant="danger" size="sm">Error</Badge>
+                                        <Badge variant="danger" size="sm">
+                                          Error
+                                        </Badge>
                                       )}
                                     </td>
-                                    <td className="px-4 py-3">
-                                      {log.emails_fetched}
-                                    </td>
+                                    <td className="px-4 py-3">{log.emails_fetched}</td>
                                     <td className="px-4 py-3 text-tertiary">
                                       {new Date(log.created_at).toLocaleString()}
                                     </td>
-                                    <td className="px-4 py-3 text-danger-primary max-w-[200px] truncate" title={log.error_message ?? ""}>
+                                    <td
+                                      className="max-w-[200px] truncate px-4 py-3 text-danger-primary"
+                                      title={log.error_message ?? ""}
+                                    >
                                       {log.error_message || "-"}
                                     </td>
                                   </tr>
@@ -1692,7 +1776,6 @@ const HelpdeskSettingsPage = observer(() => {
               )}
             </section>
           )}
-
 
           {activeTab === "forms" && (
             <section>
@@ -1714,11 +1797,14 @@ const HelpdeskSettingsPage = observer(() => {
                           setSelectedPortalId(portal.id);
                           setSelectedFormId(null);
                           setSelectedFieldId(null);
+                          setFieldsDraft(null);
+                          setDeletedFieldIds(new Set());
+                          setFormDraft({ formId: null, data: {} });
                         }}
                         className={cn(
                           "rounded-md border px-3 py-1.5 text-13 transition-colors",
                           selectedPortal.id === portal.id
-                            ? "bg-accent-subtle border-accent-strong text-accent-primary"
+                            ? "border-accent-strong bg-accent-subtle text-accent-primary"
                             : "border-subtle bg-layer-2 text-secondary hover:text-primary"
                         )}
                       >
@@ -1761,7 +1847,7 @@ const HelpdeskSettingsPage = observer(() => {
                       <button
                         type="button"
                         onClick={() => handleCreateForm(selectedPortal.id)}
-                        className="bg-accent-primary rounded-md px-3 py-2 text-13 font-medium text-white"
+                        className="rounded-md bg-accent-primary px-3 py-2 text-13 font-medium text-white"
                       >
                         Create form
                       </button>
@@ -1790,8 +1876,13 @@ const HelpdeskSettingsPage = observer(() => {
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedFormId(form.id);
-                                setSelectedFieldId(null);
+                                if (form.id !== selectedFormId) {
+                                  setSelectedFormId(form.id);
+                                  setSelectedFieldId(null);
+                                  setFieldsDraft(null);
+                                  setDeletedFieldIds(new Set());
+                                  setFormDraft({ formId: null, data: {} });
+                                }
                               }}
                               className="w-full text-left"
                             >
@@ -1824,12 +1915,12 @@ const HelpdeskSettingsPage = observer(() => {
                                 />
                               </div>
                               {activationErrors.length > 0 && selectedForm?.id === form.id && (
-                                <div className="border-danger-subtle bg-danger-subtle rounded-md border p-2">
+                                <div className="rounded-md border border-danger-subtle bg-danger-subtle p-2">
                                   <div className="flex items-start gap-1.5">
-                                    <AlertCircle className="text-danger-primary mt-0.5 size-3.5 shrink-0" />
+                                    <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-danger-primary" />
                                     <div className="space-y-0.5">
                                       {activationErrors.map((err) => (
-                                        <p key={err} className="text-danger-primary text-11">
+                                        <p key={err} className="text-11 text-danger-primary">
                                           {err}
                                         </p>
                                       ))}
@@ -1840,7 +1931,7 @@ const HelpdeskSettingsPage = observer(() => {
                               <button
                                 type="button"
                                 onClick={() => setDeletingFormId({ formId: form.id, portalId: selectedPortal.id })}
-                                className="text-danger-primary text-12"
+                                className="text-12 text-danger-primary"
                               >
                                 Delete form
                               </button>
@@ -1877,7 +1968,7 @@ const HelpdeskSettingsPage = observer(() => {
                               type="button"
                               onClick={handleSaveAll}
                               disabled={!isDirty || isSaving}
-                              className="bg-accent-primary flex items-center gap-1.5 rounded-md px-3 py-1.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
+                              className="flex items-center gap-1.5 rounded-md bg-accent-primary px-3 py-1.5 text-12 font-medium text-white transition-opacity disabled:opacity-40"
                             >
                               {isSaving ? "Saving…" : "Save"}
                             </button>
@@ -2029,6 +2120,22 @@ const HelpdeskSettingsPage = observer(() => {
                               )}
                               <p className="text-11 text-tertiary">Tokens: YYYY, YY, MM, DD, ##### (any number of #)</p>
                             </div>
+                            <div className="flex items-center justify-between gap-3 rounded-md border border-subtle bg-layer-1 px-3 py-2.5">
+                              <div className="min-w-0">
+                                <p className="text-12 font-medium text-primary">Customer chat</p>
+                                <p className="mt-0.5 text-11 text-tertiary">
+                                  Allow customers to send messages and reply to comments from the public portal.
+                                </p>
+                              </div>
+                              <Switch
+                                value={draftForm?.enable_chat ?? false}
+                                onChange={() =>
+                                  handleFormSettingsChange({
+                                    enable_chat: !(draftForm?.enable_chat ?? false),
+                                  })
+                                }
+                              />
+                            </div>
                           </div>
 
                           {draftField ? (
@@ -2109,7 +2216,7 @@ const HelpdeskSettingsPage = observer(() => {
                                             <button
                                               type="button"
                                               onClick={() => handleRemoveDropdownOption(index)}
-                                              className="text-danger-primary rounded-md px-2 text-12"
+                                              className="rounded-md px-2 text-12 text-danger-primary"
                                               disabled={draftField.options.length <= 1}
                                             >
                                               Remove
@@ -2180,7 +2287,7 @@ const HelpdeskSettingsPage = observer(() => {
                                               <button
                                                 type="button"
                                                 onClick={() => handleRemoveCascadeOption(idx)}
-                                                className="text-danger-primary hover:text-danger-primary shrink-0 rounded p-1"
+                                                className="shrink-0 rounded p-1 text-danger-primary hover:text-danger-primary"
                                               >
                                                 <X className="size-3" />
                                               </button>
@@ -2273,12 +2380,12 @@ const HelpdeskSettingsPage = observer(() => {
                                         if (!selectedField.id.startsWith("temp-")) {
                                           setDeletedFieldIds((prev) => new Set(prev).add(selectedField.id));
                                         }
-                                        const current = fieldsDraft ?? selectedFormFields.map((f) => ({ ...f }));
+                                        const current = fieldsDraft ?? selectedFormFields.slice();
                                         setFieldsDraft(current.filter((f) => f.id !== selectedField.id));
                                         setSelectedFieldId(null);
                                       }
                                     }}
-                                    className="text-danger-primary text-12"
+                                    className="text-12 text-danger-primary"
                                   >
                                     Remove field
                                   </button>
@@ -2363,7 +2470,7 @@ const HelpdeskSettingsPage = observer(() => {
                           setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to add members" });
                         }
                       }}
-                      className="bg-accent-primary rounded-md px-3 py-2 text-13 font-medium text-white disabled:opacity-50"
+                      className="rounded-md bg-accent-primary px-3 py-2 text-13 font-medium text-white disabled:opacity-50"
                     >
                       Add
                     </button>
@@ -2503,8 +2610,11 @@ const HelpdeskSettingsPage = observer(() => {
               <div className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle bg-layer-2">
                 {helpdeskStore.getWorkspaceTeams(wSlug).map((team) => (
                   <div key={team.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: team.color || "#3B82F6" }} />
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <span
+                        className="size-3 shrink-0 rounded-full"
+                        style={{ backgroundColor: team.color || "#3B82F6" }}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-13 font-medium text-primary">{team.name}</p>
                         {team.description && <p className="truncate text-12 text-tertiary">{team.description}</p>}
@@ -2578,9 +2688,9 @@ const HelpdeskSettingsPage = observer(() => {
                       rows={3}
                       value={macroContent}
                       onChange={(e) => setMacroContent(e.target.value)}
-                      className="rounded-md border border-subtle bg-layer-1 p-3 text-13 text-primary outline-none resize-none"
+                      className="resize-none rounded-md border border-subtle bg-layer-1 p-3 text-13 text-primary outline-none"
                     />
-                    <label className="flex items-center gap-2 cursor-pointer text-12 text-secondary">
+                    <label className="flex cursor-pointer items-center gap-2 text-12 text-secondary">
                       <input
                         type="checkbox"
                         checked={macroIsPublic}
@@ -2636,15 +2746,19 @@ const HelpdeskSettingsPage = observer(() => {
               <div className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle bg-layer-2">
                 {helpdeskStore.getWorkspaceMacros(wSlug).map((macro) => (
                   <div key={macro.id} className="flex items-start justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-13 text-primary">{macro.name}</span>
+                        <span className="text-13 font-medium text-primary">{macro.name}</span>
                         {!macro.is_public && (
-                          <span className="text-[10px] bg-layer-1 border border-subtle px-1.5 py-0.5 rounded text-tertiary">Privada</span>
+                          <span className="rounded border border-subtle bg-layer-1 px-1.5 py-0.5 text-[10px] text-tertiary">
+                            Privada
+                          </span>
                         )}
                       </div>
                       {macro.description && <p className="text-12 text-tertiary">{macro.description}</p>}
-                      <p className="text-12 text-secondary font-mono bg-layer-1 p-2 rounded border border-subtle whitespace-pre-wrap">{macro.content}</p>
+                      <p className="font-mono rounded border border-subtle bg-layer-1 p-2 text-12 whitespace-pre-wrap text-secondary">
+                        {macro.content}
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -2656,7 +2770,7 @@ const HelpdeskSettingsPage = observer(() => {
                           setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to delete macro" });
                         }
                       }}
-                      className="hover:text-red-500 text-tertiary transition-colors shrink-0"
+                      className="hover:text-red-500 shrink-0 text-tertiary transition-colors"
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -2766,7 +2880,7 @@ function SettingsTabButton({ label, isActive, onClick }: { label: string; isActi
       className={cn(
         "rounded-md border px-3 py-1.5 text-13 font-medium transition-colors",
         isActive
-          ? "bg-accent-subtle border-accent-strong text-accent-primary"
+          ? "border-accent-strong bg-accent-subtle text-accent-primary"
           : "border-subtle bg-layer-2 text-secondary hover:bg-layer-1 hover:text-primary"
       )}
     >
@@ -2852,7 +2966,7 @@ function StatusRow({
           <span className="flex-1 text-13 font-medium text-primary">{status.name}</span>
 
           {status.is_default && (
-            <span className="bg-accent-subtle text-accent-primary rounded-full px-2 py-0.5 text-11 font-medium">
+            <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-11 font-medium text-accent-primary">
               Default
             </span>
           )}
@@ -2881,7 +2995,7 @@ function StatusRow({
               type="button"
               onClick={onDelete}
               title="Delete"
-              className="hover:text-danger-primary rounded p-1 text-tertiary hover:bg-layer-transparent-hover"
+              className="rounded p-1 text-tertiary hover:bg-layer-transparent-hover hover:text-danger-primary"
             >
               <Trash2 className="size-3.5" />
             </button>
@@ -2996,7 +3110,7 @@ function HelpdeskMemberRow({
       {d.avatar_url ? (
         <img src={d.avatar_url} alt={displayName} className="size-7 rounded-full object-cover" />
       ) : (
-        <div className="bg-accent-primary/20 text-accent-primary flex size-7 items-center justify-center rounded-full text-11 font-medium">
+        <div className="flex size-7 items-center justify-center rounded-full bg-accent-primary/20 text-11 font-medium text-accent-primary">
           {displayName.charAt(0).toUpperCase()}
         </div>
       )}
@@ -3012,7 +3126,7 @@ function HelpdeskMemberRow({
         <option value={15}>Member</option>
         <option value={5}>Guest</option>
       </select>
-      <button type="button" onClick={onRemove} className="hover:text-danger-primary text-tertiary transition-colors">
+      <button type="button" onClick={onRemove} className="text-tertiary transition-colors hover:text-danger-primary">
         <Trash2 className="size-4" />
       </button>
     </div>

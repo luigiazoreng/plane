@@ -47,6 +47,7 @@ const HelpdeskPublicRequestPage = observer(() => {
   const [request, setRequest] = useState<IHelpdeskRequest | null>(null);
   const [comments, setComments] = useState<IHelpdeskRequestComment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requiresLogin, setRequiresLogin] = useState(false);
 
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -59,29 +60,36 @@ const HelpdeskPublicRequestPage = observer(() => {
       const rId = requestId.toString();
       const token = publicHelpdeskStore.customerToken || undefined;
 
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      Promise.all([
-        publicHelpdeskService.getPublicPortal(pSlug),
-        publicHelpdeskService.getPublicRequestById(pSlug, rId, token),
-        publicHelpdeskService.getPublicRequestComments(pSlug, rId, token),
-      ])
-        .then(([portalData, reqData, commentsData]) => {
+      const loadTicketData = async () => {
+        try {
+          const portalData = await publicHelpdeskService.getPublicPortal(pSlug);
           setPortal(portalData);
+
+          if (portalData?.require_login && !token) {
+            setRequiresLogin(true);
+            setLoading(false);
+            return;
+          }
+
+          const [reqData, commentsData] = await Promise.all([
+            publicHelpdeskService.getPublicRequestById(pSlug, rId, token),
+            publicHelpdeskService.getPublicRequestComments(pSlug, rId, token),
+          ]);
           setRequest(reqData);
           setComments(commentsData);
-          return;
-        })
-        .catch((_err) => {
+        } catch (_err: any) {
           console.error(_err);
-          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to load ticket details." });
-        })
-        .finally(() => {
+          if (_err?.response?.status === 401 || _err?.response?.status === 403) {
+            setRequiresLogin(true);
+          } else {
+            setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Failed to load ticket details." });
+          }
+        } finally {
           setLoading(false);
-        });
+        }
+      };
+
+      loadTicketData();
     }
   }, [publicSlug, requestId]);
 
@@ -106,15 +114,23 @@ const HelpdeskPublicRequestPage = observer(() => {
   );
   const attachments = useAttachmentUpload(attachmentTransport);
 
+  const hasText = Boolean(newComment.trim());
+  const hasAttachments = attachments.assetIds.length > 0;
+  const canSubmit = (hasText || hasAttachments) && !attachments.isUploading;
+
   const handleAddComment = async () => {
-    if (!newComment.trim() || !publicSlug || !requestId) return;
+    if (!canSubmit || !publicSlug || !requestId) return;
     setSubmitting(true);
     try {
+      const fallbackContent =
+        attachments.pending.length === 1
+          ? `Attached: ${attachments.pending[0].name}`
+          : `Attached ${attachments.pending.length} files`;
       const response = await publicHelpdeskService.createPublicRequestComment(
         publicSlug,
         requestId,
         {
-          content: newComment,
+          content: newComment.trim() || fallbackContent,
           asset_ids: attachments.assetIds,
         },
         publicHelpdeskStore.customerToken || undefined
@@ -181,7 +197,7 @@ const HelpdeskPublicRequestPage = observer(() => {
     );
   }
 
-  if (!publicHelpdeskStore.customerToken) {
+  if (requiresLogin) {
     const loginUrl = `/helpdesk/p/${publicSlug}/login?next=/helpdesk/p/${publicSlug}/${requestId}`;
     return (
       <div className="mx-auto max-w-md py-16 text-center">
@@ -233,6 +249,7 @@ const HelpdeskPublicRequestPage = observer(() => {
 
   // Filter out internal comments from the customer view
   const publicComments = comments.filter((c) => !c.is_internal);
+  const isChatEnabled = request.form_detail ? Boolean(request.form_detail.enable_chat) : Boolean(portal?.enable_chat);
 
   return (
     <div className="space-y-6">
@@ -306,7 +323,7 @@ const HelpdeskPublicRequestPage = observer(() => {
       </div>
 
       {/* Reply Input */}
-      {portal?.enable_chat && (
+      {isChatEnabled && (
         <div className="mt-8">
           <div
             onDragOver={handleDragOver}
@@ -332,10 +349,10 @@ const HelpdeskPublicRequestPage = observer(() => {
               </div>
               <button
                 onClick={handleAddComment}
-                disabled={submitting || !newComment.trim()}
+                disabled={submitting || !canSubmit}
                 className="text-sm flex items-center gap-2 rounded-md bg-accent-primary px-4 py-2 font-medium text-white transition-all hover:bg-accent-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <span>Send Reply</span>
+                <span>{submitting ? "Sending…" : attachments.isUploading ? "Uploading…" : "Send Reply"}</span>
                 <Send className="size-4" />
               </button>
             </div>

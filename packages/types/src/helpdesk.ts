@@ -100,6 +100,7 @@ export interface IHelpdeskForm {
   slug: string;
   visibility: IHelpdeskFormVisibility;
   is_active: boolean;
+  enable_chat: boolean;
   sequence: number;
   success_message: string;
   ticket_id_pattern: string;

@@ -19,6 +19,7 @@ from plane.db.models.helpdesk import (
     HelpdeskFormField,
     HelpdeskPortal,
     HelpdeskRequest,
+    HelpdeskRequestActivity,
     HelpdeskStatus,
 )
 
@@ -829,3 +830,330 @@ class TestUploadCredentials:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "Invalid entity type."
+
+
+@pytest.mark.contract
+class TestHelpdeskFormChatToggle:
+    @pytest.mark.django_db
+    def test_form_enable_chat_allows_customer_reply_when_portal_chat_disabled(
+        self, api_client, session_client, workspace, portal, default_form, customer, customer_token
+    ):
+        portal.enable_chat = False
+        portal.save(update_fields=["enable_chat"])
+
+        # Enable chat on the form via form settings API
+        form_detail_url = reverse("helpdesk-form-detail", kwargs={"slug": workspace.slug, "pk": default_form.id})
+        patch_resp = session_client.patch(form_detail_url, {"enable_chat": True}, format="json")
+        assert patch_resp.status_code == status.HTTP_200_OK
+        assert patch_resp.data["enable_chat"] is True
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Test chat enabled on form",
+            description="Body",
+        )
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {customer_token}")
+        req_detail_url = reverse(
+            "public-helpdesk-request-detail",
+            kwargs={"public_slug": portal.public_slug, "pk": req.id},
+        )
+        req_resp = api_client.get(req_detail_url)
+        assert req_resp.status_code == status.HTTP_200_OK
+        assert req_resp.data["form_detail"]["enable_chat"] is True
+
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        comment_resp = api_client.post(comment_url, {"content": "Customer reply from form chat"}, format="json")
+        assert comment_resp.status_code == status.HTTP_201_CREATED
+        assert comment_resp.data["content"] == "Customer reply from form chat"
+        api_client.credentials()
+
+    @pytest.mark.django_db
+    def test_form_disable_chat_blocks_customer_reply(
+        self, api_client, workspace, portal, default_form, customer, customer_token
+    ):
+        portal.enable_chat = True
+        portal.save(update_fields=["enable_chat"])
+        default_form.enable_chat = False
+        default_form.save(update_fields=["enable_chat"])
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Test chat disabled on form",
+            description="Body",
+        )
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {customer_token}")
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        comment_resp = api_client.post(comment_url, {"content": "Should be blocked"}, format="json")
+        assert comment_resp.status_code == status.HTTP_403_FORBIDDEN
+        assert comment_resp.data["error"] == "Chat not enabled for this form"
+        api_client.credentials()
+
+    @pytest.mark.django_db
+    def test_fallback_to_portal_chat_when_request_has_no_form(
+        self, api_client, workspace, portal, customer, customer_token
+    ):
+        # Portal chat enabled
+        portal.enable_chat = True
+        portal.save(update_fields=["enable_chat"])
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=None,
+            customer=customer,
+            title="Request without form",
+            description="Body",
+        )
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {customer_token}")
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        comment_resp = api_client.post(comment_url, {"content": "Reply to ticket without form"}, format="json")
+        assert comment_resp.status_code == status.HTTP_201_CREATED
+
+        # Portal chat disabled
+        portal.enable_chat = False
+        portal.save(update_fields=["enable_chat"])
+        comment_resp2 = api_client.post(comment_url, {"content": "Should be blocked"}, format="json")
+        assert comment_resp2.status_code == status.HTTP_403_FORBIDDEN
+        assert comment_resp2.data["error"] == "Chat not enabled for this portal"
+        api_client.credentials()
+
+    @pytest.mark.django_db
+    def test_post_comment_records_timeline_activity(
+        self, api_client, workspace, portal, default_form, customer, customer_token
+    ):
+        default_form.enable_chat = True
+        default_form.save(update_fields=["enable_chat"])
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Request for activity check",
+            description="Body",
+        )
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {customer_token}")
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        res = api_client.post(comment_url, {"content": "Checking activity logging"}, format="json")
+        assert res.status_code == status.HTTP_201_CREATED
+
+        activity = HelpdeskRequestActivity.objects.filter(
+            request=req,
+            field="comment",
+            verb="commented",
+        ).first()
+        assert activity is not None
+        assert activity.actor is None
+        assert activity.workspace_id == workspace.id
+        api_client.credentials()
+
+    @pytest.mark.django_db
+    def test_post_comment_attachment_only_without_text(
+        self, api_client, workspace, portal, default_form, customer, customer_token
+    ):
+        from plane.app.helpdesk.attachments import COMMENT_ENTITY, synthesize_content
+
+        default_form.enable_chat = True
+        default_form.save(update_fields=["enable_chat"])
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Attachment only request",
+            description="Body",
+        )
+
+        asset = FileAsset.objects.create(
+            attributes={"name": "screenshot.png", "type": "image/png", "size": 1024},
+            asset=f"{workspace.id}/test-screenshot.png",
+            size=1024,
+            workspace=workspace,
+            entity_type=COMMENT_ENTITY,
+            entity_identifier=None,
+            is_uploaded=True,
+        )
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {customer_token}")
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        res = api_client.post(
+            comment_url,
+            {"content": "", "asset_ids": [str(asset.id)]},
+            format="json",
+        )
+        assert res.status_code == status.HTTP_201_CREATED
+        assert res.data["content"] == synthesize_content(1)
+
+        # Asset should now be bound
+        asset.refresh_from_db()
+        assert asset.entity_identifier == str(res.data["id"])
+        api_client.credentials()
+
+    @pytest.mark.django_db
+    def test_post_comment_empty_content_and_no_attachment_fails(
+        self, api_client, workspace, portal, default_form, customer, customer_token
+    ):
+        default_form.enable_chat = True
+        default_form.save(update_fields=["enable_chat"])
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Empty comment request",
+            description="Body",
+        )
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {customer_token}")
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        res = api_client.post(comment_url, {"content": "   ", "asset_ids": []}, format="json")
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert res.data["error"] == "Content or attachment is required"
+        api_client.credentials()
+
+    @pytest.mark.django_db
+    def test_post_comment_enforces_portal_require_login(
+        self, api_client, workspace, portal, default_form, customer
+    ):
+        portal.require_login = True
+        portal.save(update_fields=["require_login"])
+        default_form.enable_chat = True
+        default_form.save(update_fields=["enable_chat"])
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Require login request",
+            description="Body",
+        )
+
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        res = api_client.post(comment_url, {"content": "Anonymous attempt"}, format="json")
+        assert res.status_code == status.HTTP_401_UNAUTHORIZED
+        assert res.data["error"] == "Login required to post comments"
+
+    @pytest.mark.django_db
+    def test_post_and_get_comments_blocks_unauthorized_customer(
+        self, api_client, workspace, portal, default_form, customer, customer_token
+    ):
+        default_form.enable_chat = True
+        default_form.save(update_fields=["enable_chat"])
+
+        # Customer 1 owns the ticket
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Customer 1 Ticket",
+            description="Body",
+        )
+
+        # Customer 2 in same workspace
+        customer2 = HelpdeskCustomer.objects.create(
+            email="customer2@example.com",
+            name="Customer Two",
+            workspace=workspace,
+        )
+        token2 = jwt.encode(
+            {"customer_id": str(customer2.id), "workspace_id": str(workspace.id), "email": customer2.email},
+            settings.SECRET_KEY,
+            algorithm="HS256",
+        )
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token2}")
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+        post_res = api_client.post(comment_url, {"content": "Impersonation attempt"}, format="json")
+        assert post_res.status_code == status.HTTP_403_FORBIDDEN
+        assert post_res.data["error"] == "Forbidden"
+
+        get_res = api_client.get(comment_url)
+        assert get_res.status_code == status.HTTP_403_FORBIDDEN
+        assert get_res.data["error"] == "Forbidden"
+
+        # Customer 1 succeeds
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {customer_token}")
+        get_res_owner = api_client.get(comment_url)
+        assert get_res_owner.status_code == status.HTTP_200_OK
+        api_client.credentials()
+
+    @pytest.mark.django_db
+    def test_post_comment_expired_or_invalid_token(
+        self, api_client, workspace, portal, default_form, customer
+    ):
+        default_form.enable_chat = True
+        default_form.save(update_fields=["enable_chat"])
+
+        req = HelpdeskRequest.objects.create(
+            workspace=workspace,
+            portal=portal,
+            form=default_form,
+            customer=customer,
+            title="Token check request",
+            description="Body",
+        )
+
+        comment_url = reverse(
+            "public-helpdesk-comment",
+            kwargs={"public_slug": portal.public_slug, "request_pk": req.id},
+        )
+
+        # Invalid token
+        api_client.credentials(HTTP_AUTHORIZATION="Bearer invalid.token.payload")
+        res_invalid = api_client.post(comment_url, {"content": "Hi"}, format="json")
+        assert res_invalid.status_code == status.HTTP_401_UNAUTHORIZED
+        assert res_invalid.data["error"] == "Invalid token"
+
+        # Expired token
+        expired_token = jwt.encode(
+            {
+                "customer_id": str(customer.id),
+                "workspace_id": str(workspace.id),
+                "exp": timezone.now() - timedelta(days=1),
+            },
+            settings.SECRET_KEY,
+            algorithm="HS256",
+        )
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {expired_token}")
+        res_expired = api_client.post(comment_url, {"content": "Hi"}, format="json")
+        assert res_expired.status_code == status.HTTP_401_UNAUTHORIZED
+        assert res_expired.data["error"] == "Token expired"
+        api_client.credentials()

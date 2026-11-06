@@ -9,8 +9,9 @@ from plane.db.models.helpdesk import HelpdeskRequestComment, HelpdeskRequest, He
 from plane.app.serializers.helpdesk import HelpdeskRequestCommentSerializer
 from plane.app.helpdesk.sse_broker import publish
 from plane.app.helpdesk.permissions import get_helpdesk_role, MEMBER, GUEST
-from plane.app.helpdesk.attachments import COMMENT_ENTITY, assets_for, bind_assets
+from plane.app.helpdesk.attachments import COMMENT_ENTITY, assets_for, bind_assets, synthesize_content
 from plane.app.helpdesk.activity import record_helpdesk_comment_activity
+from .form import get_customer_from_token
 
 
 class HelpdeskRequestCommentViewSet(BaseViewSet):
@@ -126,27 +127,44 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
     """Comentários para customers no portal público."""
     permission_classes = [AllowAny]
 
-    def _get_customer_from_token(self, request):
-        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        if not auth_header.startswith("Bearer "):
-            return None
-        token = auth_header.split(" ")[1]
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            return HelpdeskCustomer.objects.filter(id=payload.get("customer_id")).first()
-        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-            return None
-
     def get(self, request, public_slug, request_pk):
-        portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
+        portal = (
+            HelpdeskPortal.objects.select_related("workspace")
+            .filter(public_slug=public_slug, is_public=True)
+            .first()
+        )
         if not portal:
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        comments = HelpdeskRequestComment.objects.filter(
-            request_id=request_pk,
-            request__portal=portal,
-            is_internal=False,
-        ).select_related("actor", "customer").order_by("created_at")
+        customer, error = get_customer_from_token(request)
+        if error:
+            return error
+
+        if customer and str(customer.workspace_id) != str(portal.workspace_id):
+            return Response({"error": "Invalid token for this workspace"}, status=status.HTTP_403_FORBIDDEN)
+
+        if portal.require_login and not customer:
+            return Response({"error": "Login required to view comments"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        hd_request = (
+            HelpdeskRequest.objects.select_related("customer")
+            .filter(id=request_pk, portal=portal)
+            .first()
+        )
+        if not hd_request:
+            return Response({"error": "Request not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if hd_request.customer and hd_request.customer != customer:
+            return Response({"error": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        comments = (
+            HelpdeskRequestComment.objects.filter(
+                request=hd_request,
+                is_internal=False,
+            )
+            .select_related("actor", "customer")
+            .order_by("created_at")
+        )
         serializer = HelpdeskRequestCommentSerializer(
             comments,
             many=True,
@@ -160,24 +178,48 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
         return Response(serializer.data)
 
     def post(self, request, public_slug, request_pk):
-        portal = HelpdeskPortal.objects.filter(public_slug=public_slug, is_public=True).first()
+        portal = (
+            HelpdeskPortal.objects.select_related("workspace")
+            .filter(public_slug=public_slug, is_public=True)
+            .first()
+        )
         if not portal:
             return Response({"error": "Portal not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not portal.enable_chat:
-            return Response({"error": "Chat not enabled for this portal"}, status=status.HTTP_403_FORBIDDEN)
+        customer, error = get_customer_from_token(request)
+        if error:
+            return error
 
-        customer = self._get_customer_from_token(request)
         if customer and str(customer.workspace_id) != str(portal.workspace_id):
-            return Response({"error": "Invalid token"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Invalid token for this workspace"}, status=status.HTTP_403_FORBIDDEN)
 
-        hd_request = HelpdeskRequest.objects.filter(id=request_pk, portal=portal).first()
+        if portal.require_login and not customer:
+            return Response({"error": "Login required to post comments"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        hd_request = (
+            HelpdeskRequest.objects.select_related("form", "customer")
+            .filter(id=request_pk, portal=portal)
+            .first()
+        )
         if not hd_request:
             return Response({"error": "Request not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        if hd_request.customer and hd_request.customer != customer:
+            return Response({"error": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        chat_enabled = hd_request.form.enable_chat if hd_request.form else portal.enable_chat
+        if not chat_enabled:
+            error_msg = "Chat not enabled for this form" if hd_request.form else "Chat not enabled for this portal"
+            return Response({"error": error_msg}, status=status.HTTP_403_FORBIDDEN)
+
         content = request.data.get("content", "").strip()
-        if not content:
-            return Response({"error": "Content is required"}, status=status.HTTP_400_BAD_REQUEST)
+        asset_ids = request.data.get("asset_ids", [])
+        has_assets = bool(asset_ids and isinstance(asset_ids, (list, tuple)) and len(asset_ids) > 0)
+        if not content and not has_assets:
+            return Response({"error": "Content or attachment is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not content and has_assets:
+            content = synthesize_content(len(asset_ids))
 
         comment = HelpdeskRequestComment.objects.create(
             request=hd_request,
@@ -191,11 +233,16 @@ class PublicHelpdeskCommentEndpoint(BaseAPIView):
         # itself rather than sharing perform_create's hook. Both call the same
         # helper so the claim rules cannot drift apart.
         bind_assets(
-            request.data.get("asset_ids"),
+            asset_ids,
             workspace_id=portal.workspace_id,
             entity_type=COMMENT_ENTITY,
             entity_identifier=comment.id,
         )
+
+        # Record activity for the timeline
+        record_helpdesk_comment_activity(hd_request, None, is_internal=False)
+
+        publish(str(portal.workspace.slug), {"type": "comment.created", "request_id": str(hd_request.id)})
 
         serializer = HelpdeskRequestCommentSerializer(comment, context={"public_slug": public_slug})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
