@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react";
 // plane imports
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
@@ -24,6 +24,10 @@ type Props = {
 
 export const OnboardingRoot = observer(function OnboardingRoot({ invitations = [] }: Props) {
   const [currentStep, setCurrentStep] = useState<TOnboardingStep>(EOnboardingSteps.PROFILE_SETUP);
+  // refs
+  const hasUserActedRef = useRef(false);
+  const hasResolvedInitialStepRef = useRef(false);
+  const hasAutoFinishedRef = useRef(false);
   // store hooks
   const { data: user } = useUser();
   const { data: userProfile, updateUserProfile, finishUserOnboarding } = useUserProfile();
@@ -69,6 +73,9 @@ export const OnboardingRoot = observer(function OnboardingRoot({ invitations = [
 
   const handleStepChange = useCallback(
     (step: EOnboardingSteps, skipInvites?: boolean) => {
+      // Once the user drives the flow themselves, the auto-resolution below must stay out of
+      // the way — creating a workspace here makes the workspace list non-empty mid-flow.
+      hasUserActedRef.current = true;
       switch (step) {
         case EOnboardingSteps.PROFILE_SETUP:
           if (isSelfManaged) {
@@ -107,26 +114,37 @@ export const OnboardingRoot = observer(function OnboardingRoot({ invitations = [
   const updateCurrentStep = (step: EOnboardingSteps) => setCurrentStep(step);
 
   useEffect(() => {
-    const handleInitialStep = () => {
-      if (
-        userProfile?.onboarding_step?.profile_complete &&
-        !userProfile?.onboarding_step?.workspace_create &&
-        !userProfile?.onboarding_step?.workspace_join
-      ) {
-        setCurrentStep(EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN);
-      }
-      if (
-        userProfile?.onboarding_step?.profile_complete &&
-        userProfile?.onboarding_step?.workspace_create &&
-        !userProfile?.onboarding_step?.workspace_invite
-      ) {
-        setCurrentStep(EOnboardingSteps.INVITE_MEMBERS);
-      }
-    };
+    const onboardingStep = userProfile?.onboarding_step;
+    if (!onboardingStep) return;
 
-    handleInitialStep();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // A user who already belongs to a workspace has nothing left to create or join, so
+    // onboarding is done. Without this the create/join step is a dead end for them: the invite
+    // that got them in has already been consumed, so no invite is listed, and on an instance
+    // where the admin restricted workspace creation there is no way forward at all. This runs
+    // on every workspace-list update because the list is still being fetched on mount.
+    if (
+      !hasUserActedRef.current &&
+      !hasAutoFinishedRef.current &&
+      workspacesList.length > 0 &&
+      onboardingStep.profile_complete &&
+      !onboardingStep.workspace_create &&
+      !onboardingStep.workspace_join
+    ) {
+      hasAutoFinishedRef.current = true;
+      void finishOnboarding();
+      return;
+    }
+
+    if (hasResolvedInitialStepRef.current) return;
+    hasResolvedInitialStepRef.current = true;
+
+    if (onboardingStep.profile_complete && !onboardingStep.workspace_create && !onboardingStep.workspace_join) {
+      setCurrentStep(EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN);
+    }
+    if (onboardingStep.profile_complete && onboardingStep.workspace_create && !onboardingStep.workspace_invite) {
+      setCurrentStep(EOnboardingSteps.INVITE_MEMBERS);
+    }
+  }, [userProfile?.onboarding_step, workspacesList.length, finishOnboarding]);
 
   return (
     <div className="flex h-full flex-col">

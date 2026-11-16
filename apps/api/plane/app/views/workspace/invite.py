@@ -27,7 +27,7 @@ from plane.app.serializers import (
 from plane.app.views.base import BaseAPIView
 from plane.bgtasks.event_tracking_task import track_event
 from plane.bgtasks.workspace_invitation_task import workspace_invitation
-from plane.db.models import User, Workspace, WorkspaceMember, WorkspaceMemberInvite
+from plane.db.models import Profile, User, Workspace, WorkspaceMember, WorkspaceMemberInvite
 from plane.utils.cache import invalidate_cache, invalidate_cache_directly
 from plane.utils.host import base_host
 from plane.utils.analytics_events import USER_JOINED_WORKSPACE, USER_INVITED_TO_WORKSPACE
@@ -200,9 +200,22 @@ class WorkspaceJoinEndpoint(BaseAPIView):
                             role=workspace_invite.role,
                         )
 
-                    # Set the user last_workspace_id to the accepted workspace
-                    user.last_workspace_id = workspace_invite.workspace.id
-                    user.save()
+                    # Record the accepted workspace on the user's profile. Both
+                    # `last_workspace_id` and the onboarding flags live on Profile, not on
+                    # User — assigning them to the user object silently dropped them, which
+                    # left invitees with `is_onboarded=False` and no pending invite, trapping
+                    # them on the onboarding create/join step.
+                    profile = Profile.objects.filter(user=user).first()
+                    if profile is not None:
+                        onboarding_step = profile.onboarding_step or {}
+                        onboarding_step["workspace_join"] = True
+                        profile.onboarding_step = onboarding_step
+                        profile.last_workspace_id = workspace_invite.workspace.id
+                        # Joining a workspace is the last onboarding step for an invited
+                        # user, so finish onboarding once profile setup is already done.
+                        if onboarding_step.get("profile_complete"):
+                            profile.is_onboarded = True
+                        profile.save()
                     track_event.delay(
                         user_id=user.id,
                         event_name=USER_JOINED_WORKSPACE,
