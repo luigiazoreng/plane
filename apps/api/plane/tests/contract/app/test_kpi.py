@@ -5,6 +5,7 @@
 """Contract tests for the KPI module (config, attributes, issue scoring, preview)."""
 
 from datetime import date, datetime, time, timedelta, timezone as dt_timezone
+from unittest.mock import patch
 
 import pytest
 from django.urls import reverse
@@ -67,6 +68,101 @@ def _make_issue(project, workspace, state, create_user, **overrides):
     )
     issue.refresh_from_db()
     return issue
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+class TestCompletedIssueEdits:
+    @pytest.fixture(autouse=True)
+    def app_base_url(self, settings):
+        settings.APP_BASE_URL = "http://localhost:3000"
+
+    @pytest.mark.parametrize("route", ["app", "api-legacy", "api-work-items"])
+    def test_priority_patch_preserves_delivery_date_and_kpi_window(
+        self, route, session_client, api_key_client, workspace, project, state, create_user
+    ):
+        state.group = "completed"
+        state.save()
+        delivered_at = timezone.now() - timedelta(days=90)
+        issue = _make_issue(
+            project, workspace, state, create_user,
+            completed_at=delivered_at, target_date=delivered_at.date(),
+        )
+        if route == "app":
+            client = session_client
+            url = reverse("project-issue", kwargs={"slug": workspace.slug, "project_id": project.id, "pk": issue.id})
+        else:
+            client = api_key_client
+            resource = "issues" if route == "api-legacy" else "work-items"
+            url = f"/api/v1/workspaces/{workspace.slug}/projects/{project.id}/{resource}/{issue.id}/"
+
+        response = client.patch(url, {"priority": "urgent"}, format="json")
+        expected_status = status.HTTP_204_NO_CONTENT if route == "app" else status.HTTP_200_OK
+        assert response.status_code == expected_status
+        issue.refresh_from_db()
+        assert issue.priority == "urgent"
+        assert issue.completed_at == delivered_at
+
+        kpi_url = reverse("kpi-issues", kwargs={"slug": workspace.slug, "project_id": project.id})
+        all_response = session_client.get(kpi_url, {"period": "all"})
+        assert all_response.status_code == status.HTTP_200_OK
+        row = next(row for row in all_response.json()["results"] if row["id"] == str(issue.id))
+        assert row["d"] == 0
+        recent_response = session_client.get(kpi_url, {"period": "30d"})
+        assert recent_response.status_code == status.HTTP_200_OK
+        assert all(row["id"] != str(issue.id) for row in recent_response.json()["results"])
+
+    @pytest.mark.parametrize("is_default", [True, False])
+    def test_estimate_property_put_preserves_completion(
+        self, session_client, workspace, project, state, create_user, is_default
+    ):
+        state.group = "completed"
+        state.save()
+        delivered_at = timezone.now() - timedelta(days=90)
+        issue = _make_issue(project, workspace, state, create_user, completed_at=delivered_at)
+        estimate = Estimate.objects.create(name="Points", project=project, workspace=workspace, type="points")
+        point = EstimatePoint.objects.create(estimate=estimate, project=project, workspace=workspace, key=0, value="8")
+        prop = EstimateProperty.objects.create(
+            name="Difficulty", estimate=estimate, project=project, workspace=workspace,
+            is_estimate_default=is_default, kpi_role=None if is_default else "difficulty",
+        )
+        project.estimate = estimate
+        project.save(update_fields=["estimate"])
+        url = reverse(
+            "issue-estimate-property-value",
+            kwargs={"slug": workspace.slug, "project_id": project.id, "issue_id": issue.id, "property_id": prop.id},
+        )
+        response = session_client.put(url, {"estimate_point": str(point.id)}, format="json")
+        assert response.status_code == status.HTTP_200_OK
+        issue.refresh_from_db()
+        assert issue.completed_at == delivered_at
+        assert issue.estimate_point_id == (point.id if is_default else None)
+
+        response = session_client.put(url, {"estimate_point": None}, format="json")
+        assert response.status_code == status.HTTP_200_OK
+        issue.refresh_from_db()
+        assert issue.completed_at == delivered_at
+        assert issue.estimate_point_id is None
+
+    def test_app_state_patch_reopens_and_completes_with_new_date(
+        self, session_client, workspace, project, state, create_user
+    ):
+        done = State.objects.create(name="Done", group="completed", project=project, workspace=workspace)
+        issue = _make_issue(project, workspace, state, create_user)
+        url = reverse("project-issue", kwargs={"slug": workspace.slug, "project_id": project.id, "pk": issue.id})
+        first_delivery = timezone.now() - timedelta(days=90)
+        second_delivery = timezone.now()
+        for new_state, at, expected in [
+            (done, first_delivery, first_delivery),
+            (state, second_delivery, None),
+            (done, second_delivery, second_delivery),
+        ]:
+            with patch("plane.db.models.issue.timezone.now", return_value=at):
+                response = session_client.patch(url, {"state": str(new_state.id)}, format="json")
+            assert response.status_code == status.HTTP_204_NO_CONTENT
+            issue.refresh_from_db()
+            assert issue.state_id == new_state.id
+            assert issue.completed_at == expected
 
 
 @pytest.mark.contract

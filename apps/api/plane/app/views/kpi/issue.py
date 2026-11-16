@@ -698,8 +698,8 @@ class KpiIssuePriorityEndpoint(BaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Direct queryset update: Issue.save() re-derives completed_at from the
-        # state, which is unrelated to this priority change.
+        # Update only priority; this edit does not need to touch issue metadata
+        # or delivery dates.
         Issue.objects.filter(id=issue.id).update(priority=priority)
         return Response({"issue": str(issue_id), "priority": priority})
 

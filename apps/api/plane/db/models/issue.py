@@ -191,16 +191,24 @@ class Issue(ProjectBaseModel):
                     self.state = default_state
             except ImportError:
                 pass
-        else:
-            try:
-                from plane.db.models import State
 
-                if self.state.group == "completed":
+        update_fields = kwargs.get("update_fields")
+        state_fields = {"state", "state_id"}
+        # Derive completion only from fields being persisted. In particular, a
+        # partial estimate/priority update must not apply an unsaved state change.
+        if self.state is not None and (
+            update_fields is None or state_fields.union({"completed_at"}).intersection(update_fields)
+        ):
+            if self.state.group == "completed":
+                # Editing a completed issue (including moving between completed
+                # states) must preserve its delivery date for KPI scoring.
+                if self.completed_at is None:
                     self.completed_at = timezone.now()
-                else:
-                    self.completed_at = None
-            except ImportError:
-                pass
+            else:
+                self.completed_at = None
+
+            if update_fields is not None and state_fields.intersection(update_fields):
+                kwargs["update_fields"] = set(update_fields).union({"completed_at"})
 
         if self._state.adding:
             with transaction.atomic():
